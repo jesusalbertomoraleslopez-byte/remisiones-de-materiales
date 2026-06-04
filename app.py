@@ -463,61 +463,118 @@ elif opcion_menu == "🔍 Centro de Consultas":
     if tipo_filtro == "SKU" and valor_filtro: res = res[res['SKU'].str.contains(valor_filtro, case=False)]
     elif tipo_filtro == "PO" and valor_filtro: res = res[res['PO'].str.contains(valor_filtro, case=False)]
     st.dataframe(res, use_container_width=True)
+
 elif opcion_menu == "📦 Módulo Tarimas":
     st.title("📦 Carga de Tarimas")
     st.subheader("📋 Formato Requerido (Versión Proyectos y Parcialidades)")
-    df_p = pd.DataFrame([{"Tarima": "Bulto_1", "Producto/SKU": "12-B-9016-01", "PO": "PO-10001", "Proyecto": "PROY-METALES-2026", "Parcialidad": "Entrega_P1", "Descripcion": "Estructuras base planta norte", "Cantidad": 191}])
-    buf_p = io.BytesIO()
-    with pd.ExcelWriter(buf_p, engine='openpyxl') as wr: df_p.to_excel(wr, index=False)
-    st.download_button(label="📥 Descargar Nueva Plantilla Autogestionable (.xlsx)", data=buf_p.getvalue(), file_name="nueva_plantilla_proyectos.xlsx")
     
+    # 1. ENCAPSULADO DE DATOS MUESTRA DE LA PLANTILLA
+    df_p = pd.DataFrame([
+        {
+            "Tarima": "Bulto_1", "Producto/SKU": "12-B-9016-01", "PO": "PO-10001", 
+            "Proyecto": "INT-001", "Parcialidad": "Entrega_P1", 
+            "Descripcion": "Reno 6", "Cantidad": 191
+        }
+    ])
+    
+    # 2. MOTOR DE DISEÑO CORPORATIVO REQUERIDO (OPENPYXL)
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    buf_p = io.BytesIO()
+    with pd.ExcelWriter(buf_p, engine='openpyxl') as wr: 
+        df_p.to_excel(wr, index=False, sheet_name='Plantilla_Tarimas')
+        workbook, worksheet = wr.book, wr.sheets['Plantilla_Tarimas']
+        
+        fill_rojo = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
+        font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        font_data = Font(name="Calibri", size=11, bold=False, color="000000")
+        align_center = Alignment(horizontal="center", vertical="center")
+        align_left = Alignment(horizontal="left", vertical="center")
+        borde_t = Side(border_style="thin", color="D3D3D3")
+        borde_c = Border(left=borde_t, right=borde_t, top=borde_t, bottom=borde_t)
+        
+        worksheet.row_dimensions[1].height = 24
+        for col_idx in range(1, 8):
+            cell = worksheet.cell(row=1, column=col_idx)
+            cell.fill, cell.font, cell.alignment = fill_rojo, font_header, align_center
+            
+        worksheet.row_dimensions[2].height = 20
+        for col_idx in range(1, 8):
+            cell = worksheet.cell(row=2, column=col_idx)
+            cell.font, cell.border = font_data, borde_c
+            if col_idx in [1, 3, 4, 5, 7]: cell.alignment = align_center
+            else: cell.alignment = align_left
+                
+        for col in worksheet.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            worksheet.column_dimensions[col.column_letter].width = max(max_len + 4, 15)
+            
+    buf_p.seek(0)
+    st.download_button(label="📥 Descargar Formato de Plantilla Corporativa (.xlsx)", data=buf_p.getvalue(), file_name="plantilla_carga_tarimas_sigrama.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.write("---")
+    
+    # 3. RECEPCIÓN Y FILTRADO POR PASSWORD DE ARCHIVOS MAESTROS
     if not st.session_state.BD_Tarimas.empty and "Es_Nueva" not in st.session_state.BD_Tarimas.columns:
         st.session_state.BD_Tarimas["Es_Nueva"] = False
 
-    if not is_admin: st.error("🔒 Área Bloqueada: Requiere contraseña de Administrador.")
+    if not is_admin: 
+        st.error("🔒 Área Bloqueada: Requiere contraseña de Administrador.")
     else:
         st.success("🔓 Acceso Autorizado.")
         arch = st.file_uploader("Suba el Excel con Formato de Proyectos", type=["xlsx"])
         col_t1, col_t2 = st.columns(2)
         with col_t1: tipo_t = st.selectbox("Tipo:", ["Cuadrada", "Rectangular"])
         with col_t2: oper = st.text_input("Líder:", "Jesus Morales")
+        
         if arch and st.button("Procesar e Integrar Plantilla Avanzada"):
             try:
                 df_ex = pd.read_excel(arch)
                 columnas_requeridas = ["Tarima", "Producto/SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"]
-                if not all(col in df_ex.columns for col in columnas_requeridas): st.error("❌ Columnas incorrectas.")
+                if not all(col in df_ex.columns for col in columnas_requeridas):
+                    st.error("❌ Error: Columnas incompatibles con el nuevo formato de proyectos.")
                 else:
                     if not st.session_state.BD_Tarimas.empty: st.session_state.BD_Tarimas["Es_Nueva"] = False
                     for t_orig in df_ex['Tarima'].unique():
                         nuevo_id_tpm = f"TPM-{(len(st.session_state.BD_Tarimas) + 1):04d}"
                         n_t = {"ID_Tarima": nuevo_id_tpm, "Tarima_Origen_Excel": t_orig, "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"), "Ubicacion_Actual": "Metales", "Creado_Por": oper, "Tipo_Tarima": tipo_t, "Estatus": "Disponible", "Es_Nueva": True}
                         st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, pd.DataFrame([n_t])], ignore_index=True)
+                        
                         items = df_ex[df_ex['Tarima'] == t_orig]
                         for _, item in items.iterrows():
-                            st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas) + 1, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": item['PO'], "Proyecto": item['Proyecto'], "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']}])], ignore_index=True)
+                            st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{
+                                "ID_Detalle": len(st.session_state.BD_Detalle_Tarimas) + 1, "ID_Tarima": nuevo_id_tpm, 
+                                "SKU": item['Producto/SKU'], "PO": item['PO'], "Proyecto": item['Proyecto'],
+                                "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']
+                            }])], ignore_index=True)
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
-                    st.success("¡Inventario respaldado!"); st.rerun()
+                    st.success("¡Inventario guardado y respaldado con éxito!")
+                    st.rerun()
             except Exception as e: st.error(f"Error: {e}")
             
+    # 4. CUADRÍCULA INTERACTIVA DE IMPRESIÓN SELECCIONADA EN MEMORIA
     if not st.session_state.BD_Tarimas.empty:
         st.write("---")
+        st.subheader("🖨️ Panel de Impresión Masiva de Tarimas")
         df_estilado = st.session_state.BD_Tarimas.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
-        sel_t = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
-        filas = sel_t.get("selection", {}).get("rows", [])
-        if filas:
-            elegidas = st.session_state.BD_Tarimas.iloc[filas]['ID_Tarima'].tolist()
-            if len(elegidas) == 1:
-                st.download_button(label=f"📥 Descargar PDF Tarima #{elegidas[0]}", data=generar_pdf_tarima(elegidas[0]), file_name=f"Tarima_{elegidas[0]}.pdf")
+        seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
+        filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
+        
+        if filas_seleccionadas:
+            tarimas_elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
+            if len(tarimas_elegidas) == 1:
+                t_imp = tarimas_elegidas[0]
+                st.download_button(label=f"📥 Descargar PDF Tarima #{t_imp}", data=generar_pdf_tarima(t_imp), file_name=f"Tarima_{t_imp}.pdf", mime="application/pdf")
             else:
                 if st.button("📦 Unificar y Preparar Lote de Impresión"):
                     buf_l = io.BytesIO()
                     doc_l = SimpleDocTemplate(buf_l, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
                     story_l, styles = [], getSampleStyleSheet()
-                    for t_imp in elegidas:
+                    for t_imp in tarimas_elegidas:
                         det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
                         t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp].iloc[0]
-                        story_l.append(Spacer(1, 1.8 * inch)); story_l.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=54, leading=60, alignment=1))); story_l.append(PageBreak())
+                        story_l.append(Spacer(1, 1.8 * inch))
+                        story_l.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=54, leading=60, alignment=1)))
+                        story_l.append(PageBreak())
                         story_l.append(Paragraph(f"<b>Detalle Interno - Tarima #{t_imp}</b>", styles['Heading2']))
                         story_l.append(Paragraph(f"<b>Operador:</b> {t_info['Creado_Por']} | <b>Fecha:</b> {t_info['Fecha_Creacion']}", styles['Normal']))
                         story_l.append(Spacer(1, 0.3 * inch))
@@ -525,11 +582,18 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
                             nom_art = art.iloc[0]['Nombre'] if not art.empty else "Desconocido"
                             story_l.append(Paragraph(f"<b>PO:</b> {item['PO']} | <b>SKU:</b> {item['SKU']} - {nom_art}", styles['Normal']))
-                            story_l.append(Spacer(1, 0.4 * inch)); story_l.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", ParagraphStyle('NG_L', parent=styles['Heading2'], fontSize=28, leading=34, alignment=1)))
+                            story_l.append(Spacer(1, 0.4 * inch))
+                            story_l.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", ParagraphStyle('NG_L', parent=styles['Heading2'], fontSize=28, leading=34, alignment=1)))
                         story_l.append(PageBreak())
                     if story_l: story_l.pop()
                     doc_l.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
-                    st.download_button(label="📥 Descargar Lote Completo (PDF)", data=buf_l.getvalue(), file_name="Lote_Tarimas.pdf")
+                    st.download_button(label="📥 Descargar Lote Completo (PDF)", data=buf_l.getvalue(), file_name="Lote_Tarimas.pdf", mime="application/pdf")
+        else:
+            st.warning("Seleccione una o más filas en la tabla usando las casillas de verificación para activar la descarga.")
+
+
+
+
 # =============================================================================
 # SECCIÓN 14: PANEL DE MANTENIMIENTO, EDICIÓN EN CALIENTE Y PURGA DE REGISTROS
 # =============================================================================
