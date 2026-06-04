@@ -29,17 +29,42 @@ REPO_OWNER = "jesusalbertomoraleslopez-byte"
 REPO_NAME = "remisiones-de-materiales"
 BRANCH = "main"
 
-def cargar_excel_desde_github(file_name):
-    """Descarga el archivo Excel de forma directa y en crudo (RAW) desde GitHub sin pasar por la API JSON."""
+def subir_excel_a_github(file_name, dataframe_to_save):
+    """Sincroniza y sobrescribe el DataFrame directamente en el repositorio mediante la API."""
     try:
-        # Construcción de URL Raw directa libre de restricciones de la API
-        url_raw = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
-        res = requests.get(url_raw)
-        if res.status_code == 200:
-            return pd.read_excel(io.BytesIO(res.content))
-    except Exception:
-        pass
-    return None
+        # Verifica si cuentas con el token de acceso en tus secretos de Streamlit
+        if "github_token" not in st.secrets:
+            st.error("❌ Token 'github_token' no configurado en los Secrets de Streamlit.")
+            return False
+            
+        GITHUB_TOKEN = st.secrets["github_token"]
+        url = f"https://github.com{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+
+        # Convertir DataFrame a bytes de Excel en memoria
+        buffer_git = io.BytesIO()
+        with pd.ExcelWriter(buffer_git, engine='openpyxl') as writer:
+            dataframe_to_save.to_excel(writer, index=False, sheet_name='Datos_Sistema')
+
+        base64_content = base64.b64encode(buffer_git.getvalue()).decode("utf-8")
+        
+        # Obtener el SHA del archivo existente (obligatorio en la API de GitHub para poder reemplazar)
+        res_get = requests.get(url, headers=headers)
+        sha = res_get.json().get("sha") if res_get.status_code == 200 else None
+
+        payload = {
+            "message": f"Sincronizacion App: {file_name}", 
+            "content": base64_content, 
+            "branch": BRANCH
+        }
+        if sha: 
+            payload["sha"] = sha
+
+        res_put = requests.put(url, json=payload, headers=headers)
+        return res_put.status_code in [200, 201]
+    except Exception as e:
+        st.error(f"⚠️ Error al subir archivo a GitHub: {e}")
+        return False
 
 
 # =============================================================================
