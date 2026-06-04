@@ -342,48 +342,34 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                     subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
                     st.success(f"✅ ¡Remisión {fol} Generada!"); st.rerun()
                     
+        # Bloque de descargas de remisiones (se ejecuta si ya hay datos registrados)
     if not st.session_state.BD_Datos_Generales_Remision.empty:
         st.write("---")
-        r_sel = st.selectbox("Seleccione Folio:", st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique())
+        st.subheader("🖨️ Descarga Documental de Remisiones")
+        r_sel = st.selectbox("Seleccione Folio para Descarga:", st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique())
+        
+        # Corrección de la línea cortada
         row = st.session_state.BD_Datos_Generales_Remision[st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel].iloc[0]
-        df_det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(row['Tarimas
-        # (Continuación de línea 349) -> Filtrar el detalle relacional de las piezas
         df_det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(row['Tarimas_Asociadas'])]
         
-        # Botones en paralelo para descargar la documentación formal del envío
         c1, c2 = st.columns(2)
-        with c1: 
-            st.download_button(
-                label="📥 Descargar Remisión (PDF)", 
-                data=generar_pdf_remision_general(row, df_det), 
-                file_name=f"Remision_{r_sel}.pdf", 
-                mime="application/pdf"
-            )
-        with c2: 
-            st.download_button(
-                label="📥 Descargar Anexo Tarimas (PDF)", 
-                data=generar_pdf_anexo_tarimas(row['Tarimas_Asociadas'], df_det), 
-                file_name=f"Anexo_{r_sel}.pdf", 
-                mime="application/pdf"
-            )
-        # Lógica para procesar la impresión múltiple si se seleccionaron varias filas
+        with c1: st.download_button(label="📥 Descargar Remisión (PDF)", data=generar_pdf_remision_general(row, df_det), file_name=f"Remision_{r_sel}.pdf", mime="application/pdf")
+        with c2: st.download_button(label="📥 Descargar Anexo Tarimas (PDF)", data=generar_pdf_anexo_tarimas(row['Tarimas_Asociadas'], df_det), file_name=f"Anexo_{r_sel}.pdf", mime="application/pdf")
+        # Manejo de descargas masivas en lote continuo
         if 'elegidas' in locals() and len(elegidas) > 1:
             if st.button("📦 Unificar y Preparar Lote de Impresión"):
                 buf_l = io.BytesIO()
                 doc_l = SimpleDocTemplate(buf_l, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
                 story_l, styles = [], getSampleStyleSheet()
-                
                 for t_imp in elegidas:
                     det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
                     t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp].iloc[0]
-                    
                     story_l.append(Spacer(1, 1.8 * inch))
                     story_l.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=54, leading=60, alignment=1)))
                     story_l.append(PageBreak())
                     story_l.append(Paragraph(f"<b>Detalle Interno - Tarima #{t_imp}</b>", styles['Heading2']))
                     story_l.append(Paragraph(f"<b>Operador:</b> {t_info['Creado_Por']} | <b>Fecha:</b> {t_info['Fecha_Creacion']}", styles['Normal']))
                     story_l.append(Spacer(1, 0.3 * inch))
-                    
                     for _, item in det.iterrows():
                         art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
                         nom_art = art.iloc[0]['Nombre'] if not art.empty else "Desconocido"
@@ -391,7 +377,6 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                         story_l.append(Spacer(1, 0.4 * inch))
                         story_l.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", ParagraphStyle('NG_L', parent=styles['Heading2'], fontSize=28, leading=34, alignment=1)))
                     story_l.append(PageBreak())
-                    
                 if story_l: story_l.pop()
                 doc_l.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
                 st.download_button(label="📥 Descargar Lote Completo (PDF)", data=buf_l.getvalue(), file_name="Lote_Tarimas_Sigrama.pdf", mime="application/pdf")
@@ -401,7 +386,6 @@ elif opcion_menu == "🚚 Módulo Remisiones":
 elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
     st.title("⚙️ Panel de Mantenimiento Avanzado del Sistema")
     st.warning("⚠️ Acción Crítica: Las modificaciones realizadas impactan directamente en GitHub.")
-    
     if "BD_Lideres" not in st.session_state:
         st.session_state.BD_Lideres = pd.DataFrame([{"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}])
 
