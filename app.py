@@ -420,15 +420,14 @@ elif opcion_menu == "🔍 Centro de Consultas":
             st.metric("🔢 Total Piezas en Selección:", f"{int(df_rep['Cantidad (Pzs)'].sum()):,} PZS")
             st.dataframe(df_rep, use_container_width=True, hide_index=True)
             
-            # 5. MOTOR DE GENERACIÓN DE REPORTE EXCEL CON METADATOS Y CONTROL DE FECHAS (REPARADO)
+            # 5. MOTOR DE REPORTE MULTI-HOJA REPARADO CON AUTO-AJUSTE SEGURO DE COLUMNAS
             from openpyxl.styles import Font, PatternFill, Alignment
             from openpyxl.utils import get_column_letter
             
             buf_c = io.BytesIO()
             
-            # PASO 1: Inyección limpia de las dos hojas con Pandas
+            # PASO 1: Grabación limpia de los DataFrames en las dos pestañas correspondientes
             with pd.ExcelWriter(buf_c, engine='openpyxl') as writer_c:
-                # Hoja 1: Resumen de Criterios y Fechas de Auditoría
                 df_metadatos = pd.DataFrame([
                     {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO POR PIEZA"},
                     {"Concepto": "EMPRESA", "Valor": "INDUSTRIA SIGRAMA S.A. DE C.V."},
@@ -443,46 +442,45 @@ elif opcion_menu == "🔍 Centro de Consultas":
                     {"Concepto": "TOTAL PIEZAS EN SELECCIÓN", "Valor": int(total_piezas_consulta)}
                 ])
                 df_metadatos.to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
-                
-                # Hoja 2: Listado de Materiales Filtrados
                 df_rep.to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
                 
-                # Extraemos el libro de trabajo activo para la capa de diseño
-                wb_c = writer_c.book
+                # PASO 2: Capa de Formato Visual Avanzado (Bordados y Colores Corporativos)
+                workbook = writer_c.book
                 
-                # ---- ESTILOS DE LA HOJA DE RESUMEN (PORTADA GRIS) ----
+                # ---- DISEÑO DE HOJA 1: RESUMEN DE FILTROS ----
                 ws_m = writer_c.sheets['Resumen_Filtros']
-                ws_m.row_dimensions[1].height = 24
+                ws_m.row_dimensions.height = 24
                 fill_m = PatternFill(start_color="333333", end_color="333333", fill_type="solid")
                 font_hm = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-                
-                # Formatear encabezados de la primera hoja de forma segura
                 for col_idx in range(1, 3):
                     cell = ws_m.cell(row=1, column=col_idx)
                     cell.fill, cell.font, cell.alignment = fill_m, font_hm, Alignment(horizontal="center", vertical="center")
                 ws_m.column_dimensions['A'].width = 30
                 ws_m.column_dimensions['B'].width = 50
                 
-                # ---- ESTILOS DE LA HOJA DE INVENTARIO (ROJO SIGRAMA) ----
+                # ---- DISEÑO DE HOJA 2: LISTADO DE INVENTARIO ----
                 ws_c = writer_c.sheets['Listado_Inventario']
-                fill_h = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
+                fill_h = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid") # Rojo Sigrama
                 font_h = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
                 
-                ws_c.row_dimensions[1].height = 24
-                # Formatear de forma dinámica basándonos exactamente en la longitud real de las columnas de df_rep
+                ws_c.row_dimensions.height = 24
                 for col_idx in range(1, len(df_rep.columns) + 1):
                     cell = ws_c.cell(row=1, column=col_idx)
                     cell.fill, cell.font, cell.alignment = fill_h, font_h, Alignment(horizontal="center", vertical="center")
                 
-                # Ajustar anchos automáticamente iterando de forma segura
-                for col in ws_c.columns:
-                    max_len = max(len(str(cell.value or '')) for cell in col)
-                    col_letter = get_column_letter(col[0].column) # <-- Indexación segura de celda para evitar IndexError
+                # PASO 3: AUTO-AJUSTE SEGURO DE ANCHOS SIN RECORRER ws_c.columns (EVITA EL INDEXERROR)
+                for idx, col_name in enumerate(df_rep.columns):
+                    # Medimos el largo máximo basándonos en los datos del DataFrame de Pandas
+                    max_len = max(
+                        df_rep[col_name].astype(str).map(len).max(),
+                        len(str(col_name))
+                    )
+                    col_letter = get_column_letter(idx + 1)
                     ws_c.column_dimensions[col_letter].width = max(max_len + 4, 15)
                     
             buf_c.seek(0)
             
-            # Botón de Descarga Avanzado
+            # Botón de Descarga Avanzado Corregido con el formato strftime correcto
             st.download_button(
                 label="📥 Generar Reporte de Inventario con Filtros y Fechas (.xlsx)",
                 data=buf_c.getvalue(),
@@ -490,6 +488,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="btn_download_consulta_piezas_excel_final_master"
             )
+
         else:
             st.warning("⚠️ No existen registros que coincidan con los filtros seleccionados.")
 
