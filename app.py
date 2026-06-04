@@ -57,7 +57,7 @@ def subir_excel_a_github(file_name, dataframe_to_save):
             return False
             
         GITHUB_TOKEN = st.secrets["github_token"]
-        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}""
+        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
 
         buffer_git = io.BytesIO()
