@@ -432,9 +432,12 @@ elif opcion_menu == "🔍 Centro de Consultas":
                 for col_idx in range(1, len(df_rep.columns) + 1):
                     cell = ws_c.cell(row=1, column=col_idx)
                     cell.fill, cell.font, cell.alignment = fill_h, font_h, Alignment(horizontal="center", vertical="center")
+                # Bucle corregido con indexación directa sobre la primera celda de la columna
                 for col in ws_c.columns:
                     max_len = max(len(str(cell.value or '')) for cell in col)
-                    ws_c.column_dimensions[get_column_letter(col.column)].width = max(max_len + 4, 15)
+                    col_letter = get_column_letter(col[0].column) # <-- SOLUCIÓN: col[0].column
+                    ws_c.column_dimensions[col_letter].width = max(max_len + 4, 15)
+
             buf_c.seek(0)
             st.download_button(label="📥 Descargar Inventario Filtrado por Pieza (.xlsx)", data=buf_c.getvalue(), file_name="Inventario_Detallado_Piezas.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="btn_download_consulta_piezas_excel_m")
         else:
