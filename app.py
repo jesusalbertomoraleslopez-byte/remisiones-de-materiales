@@ -411,15 +411,21 @@ if opcion_menu == "📊 Dashboard e Históricos":
     
     with col_x1:
         opciones_proy = ["Todos"] + df_c_filtro['Proyecto'].dropna().unique().tolist() if not df_c_filtro.empty and 'Proyecto' in df_c_filtro.columns else ["Todos"]
-        proy_sel = st.selectbox("Filtrar por Proyecto Interno:", opciones_proy)
+        # SE AÑADE KEY ÚNICO PARA EL PROYECTO
+        proy_sel = st.selectbox("Filtrar por Proyecto Interno:", opciones_proy, key="dash_filt_proyecto_unique")
+        
     with col_x2:
         if proy_sel != "Todos": df_c_filtro = df_c_filtro[df_c_filtro['Proyecto'] == proy_sel]
         opciones_po = ["Todas"] + df_c_filtro['PO'].dropna().unique().tolist() if not df_c_filtro.empty else ["Todas"]
-        po_sel = st.selectbox("Filtrar por Orden de Compra (PO):", opciones_po)
+        # SE AÑADE KEY ÚNICO PARA LA PO
+        po_sel = st.selectbox("Filtrar por Orden de Compra (PO):", opciones_po, key="dash_filt_po_unique")
+        
     with col_x3:
         if po_sel != "Todas": df_c_filtro = df_c_filtro[df_c_filtro['PO'] == po_sel]
         opciones_parc = ["Todas"] + df_c_filtro['Parcialidad'].dropna().unique().tolist() if not df_c_filtro.empty and 'Parcialidad' in df_c_filtro.columns else ["Todas"]
-        parc_sel = st.selectbox("Filtrar por Parcialidad:", opciones_parc)
+        # SE AÑADE KEY ÚNICO PARA LA PARCIALIDAD
+        parc_sel = st.selectbox("Filtrar por Parcialidad:", opciones_parc, key="dash_filt_parcialidad_unique")
+
 
     st.write("---")
     st.subheader("📋 Resumen de Cumplimiento y Parcialidades")
