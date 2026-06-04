@@ -100,27 +100,27 @@ def subir_excel_a_github(file_name, dataframe_to_save):
 # =============================================================================
 # CAPA DE CONTROL DOCUMENTAL Y DISEÑO IMPRESO CORPORATIVO (INDUSTRIA SIGRAMA)
 # =============================================================================
-def draw_sigrama_decorations(canvas, doc):
-    """Dibuja los elementos de marca institucionales y códigos de sistema fijos."""
+def draw_sigrama_reporte_decorations(canvas, doc):
+    """Dibuja los elementos de marca institucionales y códigos de sistema fijos para el formato FO-MET-11."""
     canvas.saveState()
     # Franja superior roja Sigrama
     canvas.setFillColor(colors.HexColor("#D32F2F"))
     canvas.rect(36, 745, 540, 4, fill=1, stroke=0)
     
-    # Marcador de Control de Calidad Superior Izquierdo (FO-MET-10)
+    # Marcador de Control de Calidad Superior Izquierdo Oficial (FO-MET-11)
     canvas.setFont("Helvetica-Bold", 11)
     canvas.setFillColor(colors.HexColor("#D32F2F"))
-    canvas.drawString(36, 765, "FO-MET-10")
+    canvas.drawString(36, 765, "FO-MET-11")
     
-    # Metadatos de Revisión de Control
+    # Metadatos de Revisión de Control Documental
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.black)
     canvas.drawString(36, 753, "Revisión 01")
-    canvas.drawString(36, 741, "04 de octubre 2018")
+    canvas.drawString(36, 741, datetime.date.today().strftime("%d de %B %Y"))
     
     # Título Central del Formato Oficial
-    canvas.setFont("Helvetica-Bold", 14)
-    canvas.drawCentredString(285, 755, "EMBARQUE-RECEPCIÓN DE MERCANCÍA")
+    canvas.setFont("Helvetica-Bold", 13)
+    canvas.drawCentredString(285, 755, "REPORTE CONSOLIDADO DE INVENTARIO POR FILTRO")
     
     # Pie de Página Legal y Control del SGC (FO-SGC-02)
     canvas.setStrokeColor(colors.HexColor("#D32F2F"))
@@ -128,46 +128,86 @@ def draw_sigrama_decorations(canvas, doc):
     canvas.line(36, 45, 36, 25)
     canvas.setFont("Helvetica-Bold", 7)
     canvas.drawString(42, 37, "FO-SGC-02")
-    
     canvas.setFont("Helvetica", 6)
     canvas.setFillColor(colors.HexColor("#424242"))
     texto_legal = "PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, POR CUALQUIER MEDIO O PROCEDIMIENTO, SIN AUTORIZACIÓN DE INDUSTRIA SIGRAMA S.A. DE C.V."
     canvas.drawString(95, 37, texto_legal)
     canvas.restoreState()
 
-def generar_pdf_tarima(id_tarima):
-    """Genera la carátula de identificación y desglose interno para un bulto/tarima específico."""
+def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
+    """Construye el documento PDF oficial FO-MET-11 con el panel de filtros y la cuadrícula de inventario."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
     story, styles = [], getSampleStyleSheet()
     
-    # Extracción segura de metadatos de almacenamiento relacional
-    tarima_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == id_tarima].iloc[0]
-    detalles = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == id_tarima]
+    # Estilos de texto especializados para tablas y párrafos
+    style_blanco_bold = ParagraphStyle('BB_Rep', parent=styles['Normal'], textColor=colors.white, fontName="Helvetica-Bold", alignment=1, fontSize=9)
+    style_normal_bold = ParagraphStyle('NB_Rep', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=8)
+    style_normal_text = ParagraphStyle('NT_Rep', parent=styles['Normal'], fontSize=8)
     
-    # Hoja 1: Indicador gigante para identificación rápida en patio/almacén
-    style_g = ParagraphStyle('G_Tar', parent=styles['Heading1'], fontSize=54, leading=60, alignment=1)
-    story.append(Spacer(1, 1.8 * inch))
-    story.append(Paragraph(f"TARIMA<br/><br/><b>#{id_tarima}</b>", style_g))
-    story.append(PageBreak())
+    story.append(Spacer(1, 0.1 * inch))
     
-    # Hoja 2: Ficha técnica de control interno y cantidades
-    style_n = styles['Normal']
-    style_ng = ParagraphStyle('NG_Tar', parent=styles['Heading2'], fontSize=28, leading=34, alignment=1)
-    story.append(Paragraph(f"<b>Detalle Interno - Tarima #{id_tarima}</b>", styles['Heading2']))
-    story.append(Paragraph(f"<b>Operador / Líder:</b> {tarima_info['Creado_Por']} | <b>Fecha:</b> {tarima_info['Fecha_Creacion']}", style_n))
-    story.append(Spacer(1, 0.3 * inch))
+    # --- PANEL LOGÍSTICO DE FILTROS APLICADOS ---
+    t_header_filtros = Table([[Paragraph("CRITERIOS DE FILTRADO ACTIVO EN CONSULTA", style_blanco_bold)]], colWidths=[7.5 * inch])
+    t_header_filtros.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#757575")), ('ALIGN', (0,0), (-1,-1), 'CENTER')]))
+    story.append(t_header_filtros)
     
-    for _, item in detalles.iterrows():
-        art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
-        nom_art = art.iloc[0]['Nombre'] if not art.empty else "Desconocido"
-        story.append(Paragraph(f"<b>PO:</b> {item['PO']} | <b>SKU:</b> {item['SKU']} - {nom_art}", style_n))
-        story.append(Spacer(1, 0.4 * inch))
-        story.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", style_ng))
+    datos_panel_filtros = [
+        [Paragraph("ORDEN DE COMPRA (PO):", style_normal_bold), Paragraph(str(filtros_dict['PO']), style_normal_text),
+         Paragraph("SKU / PRODUCTO:", style_normal_bold), Paragraph(str(filtros_dict['SKU']), style_normal_text)],
+        [Paragraph("PROYECTO INTERNO:", style_normal_bold), Paragraph(str(filtros_dict['Proyecto']), style_normal_text),
+         Paragraph("ID TARIMA:", style_normal_bold), Paragraph(str(filtros_dict['Tarima']), style_normal_text)],
+        [Paragraph("PARCIALIDAD:", style_normal_bold), Paragraph(str(filtros_dict['Parcialidad']), style_normal_text),
+         Paragraph("ESTATUS ENVÍO:", style_normal_bold), Paragraph(str(filtros_dict['Estatus']), style_normal_text)],
+        [Paragraph("DESCRIPCIÓN DE PROYECTO:", style_normal_bold), Paragraph(str(filtros_dict['Descripcion']), style_normal_text),
+         Paragraph("TOTAL PIEZAS EN SELECCIÓN:", style_normal_bold), Paragraph(f"<b>{int(df_resultado_piezas['Cantidad'].sum()):,} PZS</b>", style_normal_bold)]
+    ]
+    
+    t_panel = Table(datos_panel_filtros, colWidths=[2.0 * inch, 1.75 * inch, 2.0 * inch, 1.75 * inch])
+    t_panel.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BACKGROUND', (0,0), (0,-1), colors.HexColor("#F5F5F5")),
+        ('BACKGROUND', (2,0), (2,-1), colors.HexColor("#F5F5F5"))
+    ]))
+    story.append(t_panel)
+    story.append(Spacer(1, 0.2 * inch))
+    
+    # --- CUADRÍCULA FORMAL DE MATERIALES FILTRADOS ---
+    tabla_materiales = [[
+        Paragraph("ID TARIMA", style_blanco_bold),
+        Paragraph("OC (PO)", style_blanco_bold),
+        Paragraph("PROYECTO", style_blanco_bold),
+        Paragraph("SKU / PRODUCTO", style_blanco_bold),
+        Paragraph("CANTIDAD", style_blanco_bold),
+        Paragraph("ESTATUS", style_blanco_bold)
+    ]]
+    
+    for _, row in df_resultado_piezas.iterrows():
+        art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == row['SKU']]
+        nom_art = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
         
-    doc.build(story, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+        tabla_materiales.append([
+            Paragraph(str(row['ID_Tarima']), style_normal_text),
+            Paragraph(str(row['PO']), style_normal_text),
+            Paragraph(str(row['Proyecto']), style_normal_text),
+            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{nom_art}</font>", style_normal_text),
+            Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text),
+            Paragraph(str(row['Estatus_Envio']), style_normal_text)
+        ])
+        
+    t_mat = Table(tabla_materiales, colWidths=[1.0 * inch, 1.1 * inch, 1.2 * inch, 2.3 * inch, 0.9 * inch, 1.0 * inch])
+    t_mat.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#D32F2F")),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#757575")),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+    ]))
+    story.append(t_mat)
+    
+    doc.build(story, onFirstPage=draw_sigrama_reporte_decorations, onLaterPages=draw_sigrama_reporte_decorations)
     buffer.seek(0)
     return buffer
+
 
 
 def generar_pdf_remision_general(datos_remision, df_detalles_remision):
@@ -396,7 +436,9 @@ elif opcion_menu == "🔍 Centro de Consultas":
     
     if not st.session_state.BD_Detalle_Tarimas.empty:
         # Cruce relacional para anexar estatus de envío desde el catálogo de tarimas
-        df_maestro_piezas = pd.merge(st.session_state.BD_Detalle_Tarimas, st.session_state.BD_Tarimas[['ID_Tarima', 'Estatus', 'Fecha_Creacion']], on='ID_Tarima', how='left')
+        df_maestro_piezas = pd.merge(st.session_state.BD_Detalle_Tarimas, 
+                                     st.session_state.BD_Tarimas[['ID_Tarima', 'Estatus', 'Fecha_Creacion']], 
+                                     on='ID_Tarima', how='left')
         df_maestro_piezas['Estatus_Envio'] = df_maestro_piezas['Estatus'].apply(lambda x: "Remesado" if x == "Remesada" else "No Remesado")
         
         # Cuadrícula interactiva de 4 columnas en paralelo
@@ -407,7 +449,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
             opc_sku = ["Todos"] + df_maestro_piezas['SKU'].dropna().unique().tolist()
             f_sku = st.selectbox("SKU / Producto:", opc_sku, key="query_sku_filter_u")
         with c_filt2:
-            opc_proy = ["Todos"] + df_maestro_piezas['Project' if 'Project' in df_maestro_piezas.columns else 'Proyecto'].dropna().unique().tolist()
+            opc_proy = ["Todos"] + df_maestro_piezas['Proyecto'].dropna().unique().tolist()
             f_proy = st.selectbox("Proyecto Interno:", opc_proy, key="query_proy_filter_u")
             opc_tar = ["Todos"] + df_maestro_piezas['ID_Tarima'].dropna().unique().tolist()
             f_tar = st.selectbox("ID Tarima:", opc_tar, key="query_tar_filter_u")
@@ -418,7 +460,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
             opc_desc = ["Todos"] + df_maestro_piezas['Descripcion'].dropna().unique().tolist()
             f_desc = st.selectbox("Descripción de Proyecto:", opc_desc, key="query_desc_filter_u")
             f_est = st.selectbox("Estatus de Envío:", ["Todos", "Remesado", "No Remesado"], key="query_est_filter_u")
-
+            
         # Ejecución de la cascada de filtrado
         df_resultado = df_maestro_piezas.copy()
         if f_po != "Todos": df_resultado = df_resultado[df_resultado['PO'] == f_po]
@@ -428,6 +470,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
         if f_parc != "Todos": df_resultado = df_resultado[df_resultado['Parcialidad'] == f_parc]
         if f_desc != "Todos": df_resultado = df_resultado[df_resultado['Descripcion'] == f_desc]
         if f_est != "Todos": df_resultado = df_resultado[df_resultado['Estatus_Envio'] == f_est]
+        
         if not df_resultado.empty:
             df_rep = df_resultado[["ID_Tarima", "PO", "Proyecto", "Parcialidad", "Descripcion", "SKU", "Cantidad", "Estatus_Envio", "Fecha_Creacion"]].copy()
             df_rep.columns = ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Cantidad (Pzs)", "Estatus de Envío", "Fecha de Ingreso"]
@@ -436,61 +479,86 @@ elif opcion_menu == "🔍 Centro de Consultas":
             st.metric("🔢 Total Piezas en Selección:", f"{total_piezas_consulta:,} PZS")
             st.dataframe(df_rep, use_container_width=True, hide_index=True)
             
-            # Construcción del reporte de auditoría multi-hoja con openpyxl
-            from openpyxl.styles import Font, PatternFill, Alignment
-            from openpyxl.utils import get_column_letter
+            # --- PANEL DE ACCIONES DE DESCARGA MULTIFORMATO ---
+            st.write("### 📥 Descarga Documental Certificada")
+            btn_col1, btn_col2 = st.columns(2)
             
-            buf_c = io.BytesIO()
-            with pd.ExcelWriter(buf_c, engine='openpyxl') as writer_c:
-                # Hoja 1: Portada institucional de criterios de control
-                df_metadatos = pd.DataFrame([
-                    {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO POR PIEZA"},
-                    {"Concepto": "EMPRESA", "Valor": "INDUSTRIA SIGRAMA S.A. DE C.V."},
-                    {"Concepto": "FECHA DE GENERACIÓN", "Valor": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
-                    {"Concepto": "FILTRO: ORDEN DE COMPRA (PO)", "Valor": str(f_po)},
-                    {"Concepto": "FILTRO: PROYECTO INTERNO", "Valor": str(f_proy)},
-                    {"Concepto": "FILTRO: PARCIALIDAD", "Valor": str(f_parc)},
-                    {"Concepto": "FILTRO: DESCRIPCIÓN PROYECTO", "Valor": str(f_desc)},
-                    {"Concepto": "FILTRO: SKU / PRODUCTO", "Valor": str(f_sku)},
-                    {"Concepto": "FILTRO: ID TARIMA", "Valor": str(f_tar)},
-                    {"Concepto": "FILTRO: ESTATUS DE ENVÍO", "Valor": str(f_est)},
-                    {"Concepto": "TOTAL PIEZAS EN SELECCIÓN", "Valor": int(total_piezas_consulta)}
-                ])
-                df_metadatos.to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
-                df_rep.to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
-                
-                # Estilos de Portada (Gris de Control de Almacén)
-                ws_m = writer_c.sheets['Resumen_Filtros']
-                ws_m.row_dimensions.height = 24
-                fill_m = PatternFill(start_color="333333", end_color="333333", fill_type="solid")
-                font_hm = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-                for col_idx in range(1, 3):
-                    cell = ws_m.cell(row=1, column=col_idx)
-                    cell.fill, cell.font, cell.alignment = fill_m, font_hm, Alignment(horizontal="center", vertical="center")
-                ws_m.column_dimensions['A'].width = 30
-                ws_m.column_dimensions['B'].width = 50
-                
-                # Estilos de Lista de Datos (Rojo Sigrama Corporativo)
-                ws_c = writer_c.sheets['Listado_Inventario']
-                fill_h = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
-                font_h = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-                ws_c.row_dimensions.height = 24
-                for col_idx in range(1, len(df_rep.columns) + 1):
-                    cell = ws_c.cell(row=1, column=col_idx)
-                    cell.fill, cell.font, cell.alignment = fill_h, font_h, Alignment(horizontal="center", vertical="center")
-                
-                # Auto-ajuste seguro de anchos computado desde Pandas (Evita IndexError)
-                for idx, col_name in enumerate(df_rep.columns):
-                    max_len = max(df_rep[col_name].astype(str).map(len).max(), len(str(col_name)))
-                    col_letter = get_column_letter(idx + 1)
-                    ws_c.column_dimensions[col_letter].width = max(max_len + 4, 15)
+            with btn_col1:
+                # Diccionario compilado de filtros para inyectar en el reporte estático
+                filtros_aplicados = {
+                    "PO": f_po, "SKU": f_sku, "Proyecto": f_proy, 
+                    "Tarima": f_tar, "Parcialidad": f_parc, 
+                    "Descripcion": f_desc, "Estatus": f_est
+                }
+                pdf_data = generar_pdf_reporte_filtrado(filtros_aplicados, df_resultado)
+                st.download_button(
+                    label="📄 Descargar Reporte Oficial en PDF (FO-MET-11)",
+                    data=pdf_data.getvalue(),
+                    file_name=f"FO-MET-11_Reporte_Inventario_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
+                    mime="application/pdf",
+                    key="btn_download_consulta_piezas_pdf_final"
+                )
+            
+            with btn_col2:
+                # Construcción del reporte de auditoría multi-hoja con openpyxl
+                from openpyxl.styles import Font, PatternFill, Alignment
+                from openpyxl.utils import get_column_letter
+                buf_c = io.BytesIO()
+                with pd.ExcelWriter(buf_c, engine='openpyxl') as writer_c:
+                    df_metadatos = pd.DataFrame([
+                        {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO (FO-MET-11)"},
+                        {"Concepto": "EMPRESA", "Valor": "INDUSTRIA SIGRAMA S.A. DE C.V."},
+                        {"Concepto": "FECHA DE GENERACIÓN", "Valor": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
+                        {"Concepto": "FILTRO: ORDEN DE COMPRA (PO)", "Valor": str(f_po)},
+                        {"Concepto": "FILTRO: PROYECTO INTERNO", "Valor": str(f_proy)},
+                        {"Concepto": "FILTRO: PARCIALIDAD", "Valor": str(f_parc)},
+                        {"Concepto": "FILTRO: DESCRIPCIÓN PROYECTO", "Valor": str(f_desc)},
+                        {"Concepto": "FILTRO: SKU / PRODUCTO", "Valor": str(f_sku)},
+                        {"Concepto": "FILTRO: ID TARIMA", "Valor": str(f_tar)},
+                        {"Concepto": "FILTRO: ESTATUS DE ENVÍO", "Valor": str(f_est)},
+                        {"Concepto": "TOTAL PIEZAS EN SELECCIÓN", "Valor": int(total_piezas_consulta)}
+                    ])
+                    df_metadatos.to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
+                    df_rep.to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
                     
-            buf_c.seek(0)
-            st.download_button(label="📥 Generar Reporte de Inventario con Filtros y Fechas (.xlsx)", data=buf_c.getvalue(), file_name=f"Reporte_Inventario_Filtrado_{datetime.date.today().strftime('%d_%m_%Y')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="btn_download_consulta_piezas_excel_final_master")
+                    # Estilos de Portada (Gris de Control de Almacén)
+                    ws_m = writer_c.sheets['Resumen_Filtros']
+                    ws_m.row_dimensions.height = 24
+                    fill_m = PatternFill(start_color="333333", end_color="333333", fill_type="solid")
+                    font_hm = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                    for col_idx in range(1, 3):
+                        cell = ws_m.cell(row=1, column=col_idx)
+                        cell.fill, cell.font, cell.alignment = fill_m, font_hm, Alignment(horizontal="center", vertical="center")
+                    ws_m.column_dimensions['A'].width = 30
+                    ws_m.column_dimensions['B'].width = 50
+                    
+                    # Estilos de Lista de Datos (Rojo Sigrama Corporativo)
+                    ws_c = writer_c.sheets['Listado_Inventario']
+                    fill_h = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
+                    font_h = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                    ws_c.row_dimensions.height = 24
+                    for col_idx in range(1, len(df_rep.columns) + 1):
+                        cell = ws_c.cell(row=1, column=col_idx)
+                        cell.fill, cell.font, cell.alignment = fill_h, font_h, Alignment(horizontal="center", vertical="center")
+                    
+                    for idx, col_name in enumerate(df_rep.columns):
+                        max_len = max(df_rep[col_name].astype(str).map(len).max(), len(str(col_name)))
+                        col_letter = get_column_letter(idx + 1)
+                        ws_c.column_dimensions[col_letter].width = max(max_len + 4, 15)
+                buf_c.seek(0)
+                
+                st.download_button(
+                    label="📥 Generar Reporte de Inventario en Excel (.xlsx)",
+                    data=buf_c.getvalue(),
+                    file_name=f"Reporte_Inventario_Filtrado_{datetime.date.today().strftime('%d_%m_%Y')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_download_consulta_piezas_excel_final_master"
+                )
         else:
             st.warning("⚠️ No existen registros que coincidan con los filtros seleccionados.")
     else:
         st.info("No hay datos de inventario registrados para realizar consultas por pieza.")
+
 # =============================================================================
 # 11. MÓDULO DE EMBAJALJE: CARGA MASIVA DE TARIMAS (DISEÑO CORPORATIVO REQUERIDO)
 # =============================================================================
