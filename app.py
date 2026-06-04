@@ -32,7 +32,7 @@ BRANCH = "main"
 def cargar_excel_desde_github(file_name):
     """Descarga el archivo Excel desde GitHub en crudo si existe, de lo contrario devuelve None."""
     try:
-        raw_url = f"https://githubusercontent.com{REPO_OWNER}/{REPO_NAME}/{BRANCH}/{file_name}"
+        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
         res = requests.get(raw_url)
         if res.status_code == 200:
             return pd.read_excel(io.BytesIO(res.content))
