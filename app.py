@@ -22,6 +22,7 @@ except FileNotFoundError:
     st.warning("⚠️ Cargando interfaz gráfica del banner superior corporativo...")
 st.write("")
 
+
 # =============================================================================
 # 2. MOTOR DE PERSISTENCIA OPTIMIZADO (CONEXIÓN DIRECTA RAW GITHUB)
 # =============================================================================
