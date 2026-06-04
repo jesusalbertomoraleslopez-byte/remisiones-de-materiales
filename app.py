@@ -513,6 +513,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
         else: st.info("No hay registros para modificar.")
 
     # --- PESTAÑA 2: ADMINISTRACIÓN DE LÍDERES CON CARGA MASIVA EXCEL ---
+    # --- PESTAÑA 2: ADMINISTRACIÓN DE LÍDERES CON CARGA MASIVA EXCEL (CORREGIDO) ---
     with tab2:
         st.subheader("👤 Administración del Personal de Líderes")
         
@@ -522,15 +523,24 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             {"Nombre_Lider": "Nombre Ejemplo 2", "Area": "Embarques"}
         ])
         
+        # Importaciones requeridas explícitas dentro del bloque de control
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        
         buf_l = io.BytesIO()
         with pd.ExcelWriter(buf_l, engine='openpyxl') as wr_l:
             df_l_plantilla.to_excel(wr_l, index=False, sheet_name='Plantilla_Lideres')
-            # Aplicar formato básico rápido al encabezado
+            
+            # Obtener hoja activa
             ws_l = wr_l.sheets['Plantilla_Lideres']
+            
+            # CORRECCIÓN DE SINTAXIS AUTOMÁTICA (Se eliminó el prefijo 'openpyxl.')
+            fill_header_lider = PatternFill(start_color="757575", end_color="757575", fill_type="solid")
+            font_header_lider = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            
             for col_idx in range(1, 3):
                 cell = ws_l.cell(row=1, column=col_idx)
-                cell.font = openpyxl.styles.Font(bold=True, color="FFFFFF")
-                cell.fill = openpyxl.styles.PatternFill(start_color="757575", end_color="757575", fill_type="solid")
+                cell.font = font_header_lider
+                cell.fill = fill_header_lider
         
         st.write("Descarga el formato base para rellenar la lista de personal en Excel:")
         st.download_button(
@@ -540,6 +550,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="btn_download_plantilla_lideres_u"
         )
+
         
         st.write("---")
         
