@@ -29,7 +29,7 @@ REPO_OWNER = "jesusalbertomoraleslopez-byte"
 REPO_NAME = "remisiones-de-materiales"
 BRANCH = "main"
 
-ddef subir_excel_a_github(file_name, dataframe_to_save):
+def subir_excel_a_github(file_name, dataframe_to_save):
     """Sincroniza y sobrescribe el DataFrame directamente en el repositorio mediante la API."""
     try:
         if "github_token" not in st.secrets:
