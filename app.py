@@ -208,7 +208,10 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
     ]))
     story.append(t_mat)
     
-    doc.build(story, onFirstPage=draw_sigrama_reporte_decorations, onLaterPages=draw_sigrama_reporte_decorations)
+    # CORRECTO
+    doc.build(story, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+
+
     buffer.seek(0)
     return buffer
 
