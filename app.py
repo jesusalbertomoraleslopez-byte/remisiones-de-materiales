@@ -455,13 +455,26 @@ if opcion_menu == "📊 Dashboard e Históricos":
     col_sync1, col_sync2 = st.columns([3, 1])
     with col_sync2:
         if st.button("⚡ Sincronizar GitHub", use_container_width=True):
-            # Eliminamos las variables congeladas del navegador para forzar al sistema a leer el archivo de la nube
+            # 1. Eliminamos las variables congeladas de la memoria local
             if "BD_Tarimas" in st.session_state: del st.session_state.BD_Tarimas
             if "BD_Detalle_Tarimas" in st.session_state: del st.session_state.BD_Detalle_Tarimas
             if "BD_Datos_Generales_Remision" in st.session_state: del st.session_state.BD_Datos_Generales_Remision
             if "BD_Lideres" in st.session_state: del st.session_state.BD_Lideres
             
-            st.success("¡Caché de red eliminado!")
+            # 2. Rompemos el caché de red inyectando tiempo en segundos a la URL
+            import time
+            nocache_param = int(time.time())
+            
+            df_tarimas_frescas = cargar_excel_desde_github(f"BD_Tarimas.xlsx?v={nocache_param}")
+            df_detalles_frescos = cargar_excel_desde_github(f"BD_Detalle_Tarimas.xlsx?v={nocache_param}")
+            df_remisiones_frescas = cargar_excel_desde_github(f"BD_Datos_Generales_Remision.xlsx?v={nocache_param}")
+            
+            # 3. Forzamos la asignación de los datos reales descargados
+            if df_tarimas_frescas is not None: st.session_state.BD_Tarimas = df_tarimas_frescas
+            if df_detalles_frescos is not None: st.session_state.BD_Detalle_Tarimas = df_detalles_frescos
+            if df_remisiones_frescas is not None: st.session_state.BD_Datos_Generales_Remision = df_remisiones_frescas
+            
+            st.success("¡Datos actualizados desde GitHub!")
             st.rerun()
 
     # =============================================================================
