@@ -324,11 +324,18 @@ elif opcion_menu == "🚚 Módulo Remisiones":
         t_sel = st.multiselect("Seleccione Tarimas:", options=t_disp)
         col_e, col_r = st.columns(2)
         with col_e:
-            nom_e = st.text_input("Líder / Emisor:", "Jesus Morales")
+            if "BD_Lideres" in st.session_state and not st.session_state.BD_Lideres.empty:
+                lista_nombres_lideres = st.session_state.BD_Lideres['Nombre_Lider'].unique().tolist()
+                nom_e = st.selectbox("Líder / Emisor Autorizado:", options=lista_nombres_lideres)
+            else:
+                nom_e = st.selectbox("Líder / Emisor Autorizado:", options=["Jesus Morales", "Supervisor General"])
+                
             dir_e = st.text_input("Almacén de Origen:", "Metales")
+            
         with col_r:
             nom_r = st.text_input("Receptor / Cliente:", "Galvatec Industrias")
             dir_r = st.text_input("Dirección Destino:", "Prol. Valle Guadiana 919, Parque Industrial II, 35078 Gómez Palacio, Dgo.")
+
         if not is_admin: st.error("🔒 Operación Bloqueada.")
         else:
             if st.button("🚀 Confirmar Salida y Generar Nueva Remisión"):
