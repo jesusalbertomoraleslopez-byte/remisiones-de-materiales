@@ -173,7 +173,9 @@ def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
     doc.build(story, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
     buffer.seek(0)
     return buffer
+# =============================================================================
 # 5. RENDERIZADO DE VISTAS (PANELES PÚBLICOS)
+# =============================================================================
 if opcion_menu == "📊 Dashboard e Históricos":
     st.title("📊 Dashboard General de Operaciones")
     col_f1, col_f2 = st.columns(2)
@@ -186,7 +188,12 @@ if opcion_menu == "📊 Dashboard e Históricos":
     m1.metric("Total Tarimas", t_tar)
     m2.metric("🟢 Disponibles", disp)
     m3.metric("🚚 Remesadas", rem)
-    st.dataframe(st.session_state.BD_Tarimas, use_container_width=True)
+    
+    if not st.session_state.BD_Tarimas.empty:
+        vista_dash = st.session_state.BD_Tarimas.drop(columns=["Es_Nueva"], errors="ignore")
+        st.dataframe(vista_dash, use_container_width=True)
+    else:
+        st.dataframe(st.session_state.BD_Tarimas, use_container_width=True)
 
 elif opcion_menu == "🔍 Centro de Consultas":
     st.title("🔍 Centro de Consultas Avanzado")
@@ -205,7 +212,6 @@ elif opcion_menu == "🔍 Centro de Consultas":
         towrite = io.BytesIO()
         with pd.ExcelWriter(towrite, engine='openpyxl') as writer: res.to_excel(writer, index=False, sheet_name='Reporte')
         st.download_button(label="📥 Descargar Reporte en Excel (.xlsx)", data=towrite.getvalue(), file_name="Reporte_Consolidado.xlsx")
-# 6. MÓDULOS OPERATIVOS RESTRINGIDOS POR CONTRASEÑA (SISTEMA DE ASIGNACIÓN TPM)
 elif opcion_menu == "📦 Módulo Tarimas":
     st.title("📦 Carga de Tarimas")
     st.subheader("📋 Formato Requerido")
@@ -213,6 +219,10 @@ elif opcion_menu == "📦 Módulo Tarimas":
     buf_p = io.BytesIO()
     with pd.ExcelWriter(buf_p, engine='openpyxl') as wr: df_p.to_excel(wr, index=False)
     st.download_button(label="📥 Descargar Plantilla de Ejemplo (.xlsx)", data=buf_p.getvalue(), file_name="plantilla_tarimas.xlsx")
+    
+    if not st.session_state.BD_Tarimas.empty and "Es_Nueva" not in st.session_state.BD_Tarimas.columns:
+        st.session_state.BD_Tarimas["Es_Nueva"] = False
+
     if not is_admin: st.error("🔒 Área Bloqueada: Requiere contraseña de Administrador.")
     else:
         st.success("🔓 Acceso Autorizado.")
@@ -223,22 +233,56 @@ elif opcion_menu == "📦 Módulo Tarimas":
         if arch and st.button("Procesar e Integrar Plantilla"):
             try:
                 df_ex = pd.read_excel(arch)
+                if not st.session_state.BD_Tarimas.empty: st.session_state.BD_Tarimas["Es_Nueva"] = False
                 for t_orig in df_ex['Tarima'].unique():
                     num_consecutivo = len(st.session_state.BD_Tarimas) + 1
-                    # NUEVA LÓGICA: Renombrar a formato TPM-0001 (Tarima Planta Metales)
                     nuevo_id_tpm = f"TPM-{num_consecutivo:04d}"
-                    
-                    n_t = {"ID_Tarima": nuevo_id_tpm, "Tarima_Origen_Excel": t_orig, "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"), "Ubicacion_Actual": "Metales", "Creado_Por": oper, "Tipo_Tarima": tipo_t, "Estatus": "Disponible"}
+                    n_t = {"ID_Tarima": nuevo_id_tpm, "Tarima_Origen_Excel": t_orig, "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"), "Ubicacion_Actual": "Metales", "Creado_Por": oper, "Tipo_Tarima": tipo_t, "Estatus": "Disponible", "Es_Nueva": True}
                     st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, pd.DataFrame([n_t])], ignore_index=True)
                     items = df_ex[df_ex['Tarima'] == t_orig]
                     for _, item in items.iterrows():
                         st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas)+1, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": item['PO'], "Cantidad": item['Cantidad']}])], ignore_index=True)
                 st.success("¡Plantilla integrada correctamente con folios corporativos TPM!")
             except Exception as e: st.error(f"Error: {e}")
+            
     if not st.session_state.BD_Tarimas.empty:
-        t_imp = st.selectbox("Seleccione Tarima a Imprimir:", st.session_state.BD_Tarimas['ID_Tarima'].unique())
-        if st.checkbox("Preparar Archivo"): st.download_button(label=f"📥 Descargar PDF Tarima #{t_imp}", data=generar_pdf_tarima(t_imp), file_name=f"Tarima_{t_imp}.pdf", mime="application/pdf")
-
+        st.write("---")
+        st.subheader("🖨️ Panel de Impresión Masiva de Tarimas")
+        def resaltar_nuevas(row):
+            return ['background-color: #FFF59D' if row['Es_Nueva'] else '' for _ in row]
+        df_estilado = st.session_state.BD_Tarimas.style.apply(resaltar_nuevas, axis=1)
+        seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
+        filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
+        
+        if filas_seleccionadas:
+            tarimas_elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
+            if len(tarimas_elegidas) == 1:
+                t_imp = tarimas_elegidas
+                st.download_button(label=f"📥 Descargar PDF Tarima #{t_imp}", data=generar_pdf_tarima(t_imp), file_name=f"Tarima_{t_imp}.pdf", mime="application/pdf")
+            else:
+                if st.button("📦 Unificar y Preparar Lote de Impresión"):
+                    buffer_lote = io.BytesIO()
+                    doc_lote = SimpleDocTemplate(buffer_lote, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
+                    story_lote, styles = [], getSampleStyleSheet()
+                    for t_imp in tarimas_elegidas:
+                        detalles = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
+                        tarima_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp].iloc
+                        style_g = ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=54, leading=60, alignment=1)
+                        story_lote.append(Spacer(1, 1.8 * inch)); story_lote.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", style_g)); story_lote.append(PageBreak())
+                        style_n, style_ng = styles['Normal'], ParagraphStyle('NG_L', parent=styles['Heading2'], fontSize=28, leading=34, alignment=1)
+                        story_lote.append(Paragraph(f"<b>Detalle Interno - Tarima #{t_imp}</b>", styles['Heading2']))
+                        story_lote.append(Paragraph(f"<b>Operador:</b> {tarima_info['Creado_Por']} | <b>Fecha:</b> {tarima_info['Fecha_Creacion']}", style_n))
+                        story_lote.append(Spacer(1, 0.3 * inch))
+                        for _, item in detalles.iterrows():
+                            art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
+                            nom_art = art.iloc['Nombre'] if not art.empty else "Desconocido"
+                            story_lote.append(Paragraph(f"<b>PO:</b> {item['PO']} | <b>SKU:</b> {item['SKU']} - {nom_art}", style_n))
+                            story_lote.append(Spacer(1, 0.4 * inch)); story_lote.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", style_ng))
+                        story_lote.append(PageBreak())
+                    if story_lote: story_lote.pop()
+                    doc_lote.build(story_lote, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+                    st.download_button(label="📥 Descargar Lote Completo (PDF)", data=buffer_lote.getvalue(), file_name="Lote_Tarimas.pdf", mime="application/pdf")
+        else: st.warning("Seleccione una o más filas en la tabla para descargar.")
 elif opcion_menu == "🚚 Módulo Remisiones":
     st.title("🚚 Generación de Remisiones de Salida")
     t_disp = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['Estatus'] == 'Disponible']['ID_Tarima'].tolist()
@@ -263,7 +307,10 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                     st.session_state.BD_Datos_Generales_Remision = pd.concat([st.session_state.BD_Datos_Generales_Remision, pd.DataFrame([reg])], ignore_index=True)
                     st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(t_sel), 'Estatus'] = 'Remesada'
                     st.success(f"✅ ¡Remisión {fol} Generada!")
+                    
     if not st.session_state.BD_Datos_Generales_Remision.empty:
+        st.write("---")
+        st.subheader("🖨️ Descarga Documental de Remisiones")
         r_sel = st.selectbox("Seleccione Folio para Descarga:", st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique())
         row = st.session_state.BD_Datos_Generales_Remision[st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel].iloc
         df_det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(row['Tarimas_Asociadas'])]
