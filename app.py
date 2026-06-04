@@ -41,14 +41,13 @@ def cargar_excel_desde_github(file_name):
         pass
     return None
 
-# --- INICIALIZACIÓN DE VARIABLES DE SESIÓN (GARANTIZA QUE SIEMPRE EXISTAN) ---
+# --- INICIALIZACIÓN DE VARIABLES DE SESIÓN (BLINDAJE ANTI-PANTALLA ROJA) ---
 if "BD_Articulos" not in st.session_state:
     st.session_state.BD_Articulos = pd.DataFrame([
         {"SKU": "12-B-9016-01", "Nombre": "Lámina Galvanizada Sigrama", "Calibre_Espesor": "Calibre 22", "Dimensiones_Pieza": "3x10 ft", "Acabado_Superficial": "Zintro"},
         {"SKU": "SKU-002", "Nombre": "Placa de Acero Comercial", "Calibre_Espesor": "1/4 pulgada", "Dimensiones_Pieza": "4x8 ft", "Acabado_Superficial": "Negro"}
     ])
 
-# Validación Estricta: Si el archivo no baja de GitHub, se inicializa vacío para evitar la pantalla roja
 if "BD_Tarimas" not in st.session_state:
     df_git = cargar_excel_desde_github("BD_Tarimas.xlsx")
     if df_git is not None:
@@ -61,7 +60,7 @@ if "BD_Detalle_Tarimas" not in st.session_state:
     if df_git is not None:
         st.session_state.BD_Detalle_Tarimas = df_git
     else:
-        # Esto previene directamente el error de la línea 410 observada en tu pantalla
+        # CORRECCIÓN DIRECTA: Si falla GitHub, crea la estructura vacía para que la línea 410 no falle
         st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"])
 
 if "BD_Datos_Generales_Remision" not in st.session_state:
@@ -77,6 +76,7 @@ if "BD_Lideres" not in st.session_state:
         st.session_state.BD_Lideres = df_git
     else:
         st.session_state.BD_Lideres = pd.DataFrame([{"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}])
+
 
 
 
