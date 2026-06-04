@@ -419,14 +419,105 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             subir_excel_a_github("BD_Lideres.xlsx", st.session_state.BD_Lideres)
             st.success("Catálogo de líderes sincronizado.")
 
+    # --- PESTAÑA 3: PURGA SELECCIONADA Y MASIVA DE DATOS (ACTUALIZADO CON CASILLAS) ---
     with tab3:
-        st.subheader("🚨 Reset de Fábrica y Purga de Datos")
-        if st.checkbox("Entiendo los riesgos y deseo vaciar todas las bases de datos."):
-            if st.button("🗑️ EJECUTAR PURGA TOTAL DEL SISTEMA"):
-                st.session_state.BD_Tarimas = pd.DataFrame(columns=st.session_state.BD_Tarimas.columns)
-                st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=st.session_state.BD_Detalle_Tarimas.columns)
-                st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=st.session_state.BD_Datos_Generales_Remision.columns)
-                subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
-                subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
-                subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-                st.success("💥 Sistema y repositorio purgados por completo a ceros."); st.rerun()
+        st.subheader("🚨 Reset de Fábrica y Purga de Datos Controlada")
+        st.write("Seleccione el método de purga que desea aplicar sobre las bases de datos maestras:")
+        
+        metodo_purga = st.radio(
+            "Método de Purga:",
+            ["❌ Purga Total Automática (Reset Completo)", "🔍 Seleccionar Registros Específicos para Eliminar"],
+            horizontal=True
+        )
+        
+        st.write("---")
+        
+        # OPCIÓN 1: VACIADO ABSOLUTO AUTOMÁTICO
+        if metodo_purga == "❌ Purga Total Automática (Reset Completo)":
+            st.error("⚠️ Peligro: Esta acción vaciará por completo todos los registros históricos del sistema y limpiará los archivos de GitHub a ceros.")
+            confirmar_total = st.checkbox("Confirmo que deseo aplicar un Reset de Fábrica Total.", key="chk_total")
+            
+            if confirmar_total:
+                if st.button("🗑️ EJECUTAR PURGA MAESTRA TOTAL"):
+                    st.session_state.BD_Tarimas = pd.DataFrame(columns=st.session_state.BD_Tarimas.columns)
+                    st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=st.session_state.BD_Detalle_Tarimas.columns)
+                    st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=st.session_state.BD_Datos_Generales_Remision.columns)
+                    
+                    subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                    subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
+                    subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
+                    st.success("💥 Sistema y repositorio purgados por completo a ceros de forma masiva."); st.rerun()
+
+        # OPCIÓN 2: SELECCIÓN DETALLADA MEDIANTE CASILLAS DE VERIFICACIÓN NATIVAS
+        else:
+            st.info("💡 Consejo: Seleccione una o más casillas en las tablas inferiores para habilitar los botones de remoción parcial.")
+            
+            # --- SUBSECCIÓN A: SELECCIÓN DE TARIMAS ---
+            st.markdown("### 📦 1. Eliminar Tarimas del Inventario")
+            if not st.session_state.BD_Tarimas.empty:
+                # Quitamos la columna técnica de color para no ensuciar la tabla visual
+                df_tar_vista = st.session_state.BD_Tarimas.copy().drop(columns=["Es_Nueva"], errors="ignore")
+                
+                sel_tarimas = st.dataframe(
+                    df_tar_vista,
+                    use_container_width=True,
+                    on_select="rerun",
+                    selection_mode="multi-row",
+                    key="tabla_purga_tarimas"
+                )
+                filas_tar = sel_tarimas.get("selection", {}).get("rows", [])
+                
+                if filas_tar:
+                    ids_tar_eliminar = st.session_state.BD_Tarimas.iloc[filas_tar]['ID_Tarima'].tolist()
+                    st.warning(f"⚠️ Seleccionadas para eliminar: {', '.join(ids_tar_eliminar)}")
+                    
+                    if st.button("🗑️ Eliminar Tarimas Seleccionadas"):
+                        # Filtrar y remover en caliente conservando el resto de registros
+                        st.session_state.BD_Tarimas = st.session_state.BD_Tarimas[~st.session_state.BD_Tarimas['ID_Tarima'].isin(ids_tar_eliminar)]
+                        # Purga en cascada opcional para limpiar sus respectivos detalles relacionales
+                        st.session_state.BD_Detalle_Tarimas = st.session_state.BD_Detalle_Tarimas[~st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(ids_tar_eliminar)]
+                        
+                        # Actualizar repositorios en GitHub
+                        subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                        subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
+                        st.success("✅ Registros de Tarimas removidos e inyectados en GitHub."); st.rerun()
+            else:
+                st.write("No hay tarimas registradas en el inventario activo.")
+                
+            st.write("---")
+            
+            # --- SUBSECCIÓN B: SELECCIÓN DE REMISIONES ---
+            st.markdown("### 🚚 2. Eliminar Remisiones de Salida")
+            if not st.session_state.BD_Datos_Generales_Remision.empty:
+                sel_remisiones = st.dataframe(
+                    st.session_state.BD_Datos_Generales_Remision,
+                    use_container_width=True,
+                    on_select="rerun",
+                    selection_mode="multi-row",
+                    key="tabla_purga_remisiones"
+                )
+                filas_rem = sel_remisiones.get("selection", {}).get("rows", [])
+                
+                if filas_rem:
+                    ids_rem_eliminar = st.session_state.BD_Datos_Generales_Remision.iloc[filas_rem]['Folio_Remision'].tolist()
+                    # Rescatamos los IDs de las tarimas de esas remisiones para devolverles su estatus 'Disponible'
+                    tarimas_afectadas = []
+                    for idx in filas_rem:
+                        tarimas_afectadas.extend(st.session_state.BD_Datos_Generales_Remision.iloc[idx]['Tarimas_Asociadas'])
+                        
+                    st.warning(f"⚠️ Seleccionadas para eliminar: {', '.join(ids_rem_eliminar)}")
+                    
+                    if st.button("🗑️ Eliminar Remisiones Seleccionadas"):
+                        # Restaurar el estatus de las tarimas asociadas a 'Disponible' antes de borrar la remisión
+                        st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(tarimas_afectadas), 'Estatus'] = 'Disponible'
+                        
+                        # Remover físicamente el folio de la remisión
+                        st.session_state.BD_Datos_Generales_Remision = st.session_state.BD_Datos_Generales_Remision[~st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].isin(ids_rem_eliminar)]
+                        
+                        # Sincronizar bases de datos afectadas con GitHub
+                        subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
+                        subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                        st.success("✅ Folios de remisión eliminados y tarimas restauradas a Disponible."); st.rerun()
+            else:
+                st.write("No hay folios de remisiones emitidos en el historial.")
+
