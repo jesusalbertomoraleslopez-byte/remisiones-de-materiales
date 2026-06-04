@@ -222,25 +222,42 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
 # =============================================================================
 
 def draw_sigrama_decorations(canvas, doc):
-    """Dibuja los elementos del formato original FO-MET-10 para REMISIONES."""
+    """Dibuja los elementos de marca institucionales y códigos de sistema fijos para el formato FO-MET-10."""
     canvas.saveState()
+    # Franja superior roja Sigrama
     canvas.setFillColor(colors.HexColor("#D32F2F"))
     canvas.rect(36, 745, 540, 4, fill=1, stroke=0)
+    
+    # Marcador de Control de Calidad Superior Izquierdo (FO-MET-10)
     canvas.setFont("Helvetica-Bold", 11)
     canvas.setFillColor(colors.HexColor("#D32F2F"))
-    canvas.drawString(36, 765, "FO-MET-10") # <-- Código original de remisión
+    canvas.drawString(36, 765, "FO-MET-10")
+    
+    # Metadatos de Revisión de Control
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.black)
     canvas.drawString(36, 753, "Revisión 01")
-    canvas.drawString(36, 741, "04 de octubre 2018")
+    
+    # --- CAMBIO AQUÍ: Fecha desplazada hacia abajo (coordenada 730) y tipografía más grande (font size 10) ---
+    canvas.setFont("Helvetica-Bold", 10)
+    canvas.drawString(36, 730, datetime.date.today().strftime("%d de %B %Y"))
+    
+    # Título Central del Formato Oficial
     canvas.setFont("Helvetica-Bold", 14)
     canvas.drawCentredString(285, 755, "EMBARQUE-RECEPCIÓN DE MERCANCÍA")
+    
+    # Pie de Página Legal y Control del SGC (FO-SGC-02)
     canvas.setStrokeColor(colors.HexColor("#D32F2F"))
     canvas.setLineWidth(1)
     canvas.line(36, 45, 36, 25)
     canvas.setFont("Helvetica-Bold", 7)
     canvas.drawString(42, 37, "FO-SGC-02")
+    canvas.setFont("Helvetica", 6)
+    canvas.setFillColor(colors.HexColor("#424242"))
+    texto_legal = "PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, POR CUALQUIER MEDIO O PROCEDIMIENTO, SIN AUTORIZACIÓN DE INDUSTRIA SIGRAMA S.A. DE C.V."
+    canvas.drawString(95, 37, texto_legal)
     canvas.restoreState()
+
 
 
 # =============================================================================
