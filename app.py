@@ -30,15 +30,22 @@ REPO_NAME = "remisiones-de-materiales"
 BRANCH = "main"
 
 def cargar_excel_desde_github(file_name):
-    """Descarga el archivo Excel de forma directa y en crudo (RAW) desde GitHub sin pasar por la API JSON."""
+    """Descarga el archivo Excel de forma directa e ignora el caché para traer datos en tiempo real."""
     try:
-        url_raw = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
+        # Generamos un timestamp único por segundo para obligar a GitHub y Streamlit a darnos el archivo más nuevo
+        import time
+        nocache_param = int(time.time())
+        
+        # AGREGAMOS EL PARÁMETRO AL FINAL DE LA URL (?v=...)
+        url_raw = f"https://githubusercontent.com{REPO_OWNER}/{REPO_NAME}/{BRANCH}/{file_name}?v={nocache_param}"
+        
         res = requests.get(url_raw)
         if res.status_code == 200:
             return pd.read_excel(io.BytesIO(res.content))
     except Exception:
         pass
     return None
+
 
 def subir_excel_a_github(file_name, dataframe_to_save):
     """Sincroniza y sobrescribe el DataFrame directamente en el repositorio mediante la API."""
