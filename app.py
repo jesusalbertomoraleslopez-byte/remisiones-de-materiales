@@ -507,6 +507,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
         for col in worksheet.columns:
             max_len = max(len(str(cell.value or '')) for cell in col)
             worksheet.column_dimensions[col.column_letter].width = max(max_len + 4, 15)
+
             
     buf_p.seek(0)
     st.download_button(label="📥 Descargar Formato de Plantilla Corporativa (.xlsx)", data=buf_p.getvalue(), file_name="plantilla_carga_tarimas_sigrama.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
