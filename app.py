@@ -218,7 +218,7 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
 
 
 # =============================================================================
-# DECORADORES BASE SEPARADOS PARA EVITAR NAMEERROR
+# DECORADORES BASE SEPARADOS PARA EVITAR NAMEERROR (FO-MET-10)
 # =============================================================================
 
 def draw_sigrama_decorations(canvas, doc):
@@ -238,12 +238,12 @@ def draw_sigrama_decorations(canvas, doc):
     canvas.setFillColor(colors.black)
     canvas.drawString(36, 753, "Revisión 01")
     
-    # --- CAMBIO APLICADO: Coordenada vertical en 730 y tamaño de letra 10 en negrita ---
+    # --- CAMBIO SOLICITADO: Fecha más grande (font 10) y desplazada hacia abajo (coordenada 730) ---
     canvas.setFont("Helvetica-Bold", 10)
     canvas.drawString(36, 730, datetime.date.today().strftime("%d de %B %Y"))
     
     # Título Central del Formato Oficial
-    canvas.setFont("Helvetica-Bold", 14)
+    canvas.setFont("Helvetica-Bold", 13)
     canvas.drawCentredString(285, 755, "EMBARQUE-RECEPCIÓN DE MERCANCÍA")
     
     # Pie de Página Legal y Control del SGC (FO-SGC-02)
@@ -259,22 +259,80 @@ def draw_sigrama_decorations(canvas, doc):
     canvas.restoreState()
 
 
-
 # =============================================================================
-# FUNCIÓN DE REMISIÓN CORREGIDA (Línea 222-225 de tu doc.build)
+# FUNCIÓN DE REMISIÓN GENERAL TOTALMENTE RECONSTRUIDA (FO-MET-10)
 # =============================================================================
 def generar_pdf_remision_general(datos_remision, df_detalles_remision):
-    """Construye el documento oficial de despacho con panel logístico."""
+    """Construye el documento oficial de despacho rellenando las páginas de ReportLab con datos válidos."""
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=95, bottomMargin=60)
     story, styles = [], getSampleStyleSheet()
     
-    # ... (Aquí va todo tu código intermedio de t_header_embarque y datos_panel) ...
+    # Estilos tipográficos especializados
+    style_blanco_bold = ParagraphStyle('WB_Rem', parent=styles['Normal'], textColor=colors.white, fontName="Helvetica-Bold", alignment=1, fontSize=9)
+    style_normal_bold = ParagraphStyle('NB_Rem', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=8)
+    style_normal_text = ParagraphStyle('NT_Rem', parent=styles['Normal'], fontSize=8)
     
-    # Asegúrate de que las dos últimas líneas de esta función llamen a 'draw_sigrama_decorations'
+    story.append(Spacer(1, 0.1 * inch))
+    
+    # --- PANEL 1: ENCABEZADO LOGÍSTICO OPERATIVO ---
+    t_header = Table([[Paragraph("DATOS GENERALES DE EMBARQUE Y DESPACHO", style_blanco_bold)]], colWidths=[7.5 * inch])
+    t_header.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#757575")), ('ALIGN', (0,0), (-1,-1), 'CENTER')]))
+    story.append(t_header)
+    
+    datos_panel = [
+        [Paragraph("FOLIO REMISIÓN:", style_normal_bold), Paragraph(f"<b>{str(datos_remision['Folio_Remision'])}</b>", style_normal_bold),
+         Paragraph("FECHA EMISIÓN:", style_normal_bold), Paragraph(str(datos_remision['Fecha_Hora_Salida']), style_normal_text)],
+        [Paragraph("EMISOR / ALMACÉN:", style_normal_bold), Paragraph(str(datos_remision['Nombre_Emisor']), style_normal_text),
+         Paragraph("ORIGEN:", style_normal_bold), Paragraph(str(datos_remision['Direccion_Emisor']), style_normal_text)],
+        [Paragraph("RECEPTOR / CLIENTE:", style_normal_bold), Paragraph(str(datos_remision['Nombre_Receptor']), style_normal_text),
+         Paragraph("DESTINO PLANTA:", style_normal_bold), Paragraph(str(datos_remision['Direccion_Receptor']), style_normal_text)]
+    ]
+    t_panel = Table(datos_panel, colWidths=[1.8 * inch, 1.95 * inch, 1.8 * inch, 1.95 * inch])
+    t_panel.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BACKGROUND', (0,0), (0,-1), colors.HexColor("#F5F5F5")),
+        ('BACKGROUND', (2,0), (2,-1), colors.HexColor("#F5F5F5"))
+    ]))
+    story.append(t_panel)
+    story.append(Spacer(1, 0.2 * inch))
+    
+    # --- PANEL 2: TABLA DE MATERIALES ASOCIADOS EN DESPACHO ---
+    tabla_materiales = [[
+        Paragraph("ID TARIMA", style_blanco_bold),
+        Paragraph("ORDEN COMPRA", style_blanco_bold),
+        Paragraph("PROYECTO", style_blanco_bold),
+        Paragraph("SKU / PRODUCTO", style_blanco_bold),
+        Paragraph("CANTIDAD", style_blanco_bold)
+    ]]
+    
+    for _, row in df_detalles_remision.iterrows():
+        # Búsqueda segura del nombre comercial del artículo
+        art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == row['SKU']]
+        nom_art = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
+        
+        tabla_materiales.append([
+            Paragraph(str(row['ID_Tarima']), style_normal_text),
+            Paragraph(str(row['PO']), style_normal_text),
+            Paragraph(str(row['Proyecto']), style_normal_text),
+            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{nom_art}</font>", style_normal_text),
+            Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
+        ])
+        
+    t_mat = Table(tabla_materiales, colWidths=[1.2 * inch, 1.3 * inch, 1.3 * inch, 2.7 * inch, 1.0 * inch])
+    t_mat.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#D32F2F")),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#757575")),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+    ]))
+    story.append(t_mat)
+    
+    # Compilación forzando la inyección de páginas en el objeto Canvas
     doc.build(story, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
     buffer.seek(0)
     return buffer
+
 
 def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
     """Genera las hojas de desglose técnico complementario para el operador receptor sin empalmes de texto."""
