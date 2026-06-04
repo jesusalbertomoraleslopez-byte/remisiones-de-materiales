@@ -23,11 +23,22 @@ except FileNotFoundError:
 st.write("")
 
 # =============================================================================
-# 2. MOTOR DE PERSISTENCIA OPTIMIZADO (CONEXIÓN DIRECTA RAW GITHUB)
+# 2. MOTOR DE PERSISTENCIA COMPLETADO Y CORREGIDO (LECTURA RAW Y ESCRITURA API)
 # =============================================================================
 REPO_OWNER = "jesusalbertomoraleslopez-byte"
 REPO_NAME = "remisiones-de-materiales"
 BRANCH = "main"
+
+def cargar_excel_desde_github(file_name):
+    """Descarga el archivo Excel de forma directa y en crudo (RAW) desde GitHub sin pasar por la API JSON."""
+    try:
+        url_raw = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
+        res = requests.get(url_raw)
+        if res.status_code == 200:
+            return pd.read_excel(io.BytesIO(res.content))
+    except Exception:
+        pass
+    return None
 
 def subir_excel_a_github(file_name, dataframe_to_save):
     """Sincroniza y sobrescribe el DataFrame directamente en el repositorio mediante la API."""
