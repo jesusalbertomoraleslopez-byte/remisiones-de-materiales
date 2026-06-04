@@ -420,30 +420,72 @@ elif opcion_menu == "🔍 Centro de Consultas":
             st.metric("🔢 Total Piezas en Selección:", f"{int(df_rep['Cantidad (Pzs)'].sum()):,} PZS")
             st.dataframe(df_rep, use_container_width=True, hide_index=True)
             
-            from openpyxl.styles import Font, PatternFill, Alignment
+            # 5. MOTOR DE GENERACIÓN DE REPORTE EXCEL CON METADATOS Y CONTROL DE FECHAS
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
             from openpyxl.utils import get_column_letter
+            
             buf_c = io.BytesIO()
             with pd.ExcelWriter(buf_c, engine='openpyxl') as writer_c:
-                df_rep.to_excel(writer_c, index=False, sheet_name='Inventario_Detallado')
-                ws_c = writer_c.sheets['Inventario_Detallado']
-                fill_h = PatternFill(start_color="555555", end_color="555555", fill_type="solid")
+                # Hoja 1: Resumen de Criterios y Fechas de Auditoría
+                df_metadatos = pd.DataFrame([
+                    {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO POR PIEZA"},
+                    {"Concepto": "EMPRESA", "Valor": "INDUSTRIA SIGRAMA S.A. DE C.V."},
+                    {"Concepto": "FECHA DE GENERACIÓN", "Valor": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
+                    {"Concepto": "FILTRO: ORDEN DE COMPRA (PO)", "Valor": str(f_po)},
+                    {"Concepto": "FILTRO: PROYECTO INTERNO", "Valor": str(f_proy)},
+                    {"Concepto": "FILTRO: PARCIALIDAD", "Valor": str(f_parc)},
+                    {"Concepto": "FILTRO: DESCRIPCIÓN PROYECTO", "Valor": str(f_desc)},
+                    {"Concepto": "FILTRO: SKU / PRODUCTO", "Valor": str(f_sku)},
+                    {"Concepto": "FILTRO: ID TARIMA", "Valor": str(f_tar)},
+                    {"Concepto": "FILTRO: ESTATUS DE ENVÍO", "Valor": str(f_est)},
+                    {"Concepto": "TOTAL PIEZAS EN SELECCIÓN", "Valor": int(total_piezas_consulta)}
+                ])
+                df_metadatos.to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
+                
+                # Hoja 2: Listado de Materiales Filtrados
+                df_rep.to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
+                
+                wb_c = writer_c.book
+                
+                # ---- ESTILOS DE LA HOJA DE RESUMEN ----
+                ws_m = writer_c.sheets['Resumen_Filtros']
+                ws_m.row_dimensions[1].height = 24
+                fill_m = PatternFill(start_color="333333", end_color="333333", fill_type="solid")
+                font_hm = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                for col_idx in range(1, 3):
+                    cell = ws_m.cell(row=1, column=col_idx)
+                    cell.fill, cell.font, cell.alignment = fill_m, font_hm, Alignment(horizontal="center", vertical="center")
+                ws_m.column_dimensions['A'].width = 30
+                ws_m.column_dimensions['B'].width = 50
+                
+                # ---- ESTILOS DE LA HOJA DE INVENTARIO (SIGRAMA) ----
+                ws_c = writer_c.sheets['Listado_Inventario']
+                fill_h = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid") # Rojo Corporativo
                 font_h = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-                ws_c.row_dimensions.height = 24
+                
+                ws_c.row_dimensions[1].height = 24
                 for col_idx in range(1, len(df_rep.columns) + 1):
                     cell = ws_c.cell(row=1, column=col_idx)
                     cell.fill, cell.font, cell.alignment = fill_h, font_h, Alignment(horizontal="center", vertical="center")
-                # Bucle corregido con indexación directa sobre la primera celda de la columna
+                
+                # Ajustar anchos automáticamente para evitar cortes de texto
                 for col in ws_c.columns:
                     max_len = max(len(str(cell.value or '')) for cell in col)
-                    col_letter = get_column_letter(col[0].column) # <-- SOLUCIÓN: col[0].column
-                    ws_c.column_dimensions[col_letter].width = max(max_len + 4, 15)
-
+                    ws_c.column_dimensions[get_column_letter(col.column)].width = max(max_len + 4, 15)
+                    
             buf_c.seek(0)
-            st.download_button(label="📥 Descargar Inventario Filtrado por Pieza (.xlsx)", data=buf_c.getvalue(), file_name="Inventario_Detallado_Piezas.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="btn_download_consulta_piezas_excel_m")
+            
+            # Botón de Descarga Avanzado
+            st.download_button(
+                label="📥 Generar Reporte de Inventario con Filtros y Fechas (.xlsx)",
+                data=buf_c.getvalue(),
+                file_name=f"Reporte_Inventario_Filtrado_{datetime.date.today().strftime('%d_%m_%Y')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_download_consulta_piezas_excel_final_master"
+            )
         else:
             st.warning("⚠️ No existen registros que coincidan con los filtros seleccionados.")
-    else:
-        st.info("No hay datos de inventario registrados para realizar consultas por pieza.")
+
 
 
 
