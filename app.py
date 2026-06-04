@@ -463,7 +463,18 @@ if opcion_menu == "📊 Dashboard e Históricos":
             
             st.success("¡Caché de red eliminado!")
             st.rerun()
-   
+
+    # =============================================================================
+    # 🔍 PANEL DE DIAGNÓSTICO EN TIEMPO REAL (TEMPORAL)
+    # =============================================================================
+    st.info("🛠️ Analizando datos recibidos de GitHub...")
+    if "BD_Tarimas" in st.session_state and isinstance(st.session_state.BD_Tarimas, pd.DataFrame):
+        st.write(f"📋 **Tarimas Maestras** - Renglones: {len(st.session_state.BD_Tarimas)} | Columnas: {list(st.session_state.BD_Tarimas.columns)}")
+    if "BD_Detalle_Tarimas" in st.session_state and isinstance(st.session_state.BD_Detalle_Tarimas, pd.DataFrame):
+        st.write(f"📦 **Detalle de Piezas** - Renglones: {len(st.session_state.BD_Detalle_Tarimas)} | Columnas: {list(st.session_state.BD_Detalle_Tarimas.columns)}")
+
+
+    
     # --- CONTROL DE SEGURIDAD INTERNO ---
     # --- AUTO-REPARACIÓN DE CACHÉ EN LÍNEA 410 ---
     # Si por cookies o caché de Streamlit la variable no se encuentra, la forzamos a existir aquí
