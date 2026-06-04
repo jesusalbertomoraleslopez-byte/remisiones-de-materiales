@@ -10,52 +10,27 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-# 1. CONFIGURACIÓN DE LA PÁGINA WEB RESPONSIVA
+# 1. CONFIGURACIÓN DE LA PÁGINA WEB CORPORATIVA
 st.set_page_config(page_title="Remisiones de Materiales", layout="wide", page_icon="📦")
 
-# DESPLIEGUE DEL BANNER CORPORATIVO LOCAL
+# Renderizado responsivo del banner superior
 try:
     banner_img = Image.open("REMISIONES APP.png")
     st.image(banner_img, use_container_width=True)
 except FileNotFoundError:
-    st.warning("⚠️ Cargando interfaz gráfica del banner...")
+    st.warning("⚠️ Cargando interfaz gráfica corporativa...")
 st.write("")
-# =============================================================================
-# 3. CONTROL DE SEGURIDAD MÚLTIPLE (SECRETS Y SUPERUSUARIO)
-# =============================================================================
-st.sidebar.title("🔐 Control de Acceso")
-admin_pass_input = st.sidebar.text_input("Contraseña Administrador:", type="password")
+# 2. MODELO RELACIONAL EN MEMORIA (PANDAS + SESSION STATE)
+if "BD_Articulos" not in st.session_state:
+    st.session_state.BD_Articulos = pd.DataFrame([
+        {"SKU": "12-B-9016-01", "Nombre": "Lámina Galvanizada Sigrama", "Calibre_Espesor": "Calibre 22", "Dimensiones_Pieza": "3x10 ft", "Acabado_Superficial": "Zintro"},
+        {"SKU": "SKU-002", "Nombre": "Placa de Acero Comercial", "Calibre_Espesor": "1/4 pulgada", "Dimensiones_Pieza": "4x8 ft", "Acabado_Superficial": "Negro"}
+    ])
 
-def es_admin():
-    try:
-        return admin_pass_input == st.secrets["admin_password"]
-    except KeyError:
-        st.sidebar.error("Error: 'admin_password' no configurado.")
-        return False
-
-is_admin = es_admin()
-if is_admin:
-    st.sidebar.success("Modo Administrador Activo")
-else:
-    st.sidebar.warning("Modo Consulta Activo")
-
-# --- NUEVA VALIDACIÓN: SUPERUSUARIO MANTENIMIENTO ---
-st.sidebar.write("---")
-st.sidebar.title("🛠️ Área de Soporte")
-super_pass_input = st.sidebar.text_input("Contraseña de Soporte / IT:", type="password")
-is_super = (super_pass_input == "SigramaMetales2025")
-
-if is_super:
-    st.sidebar.success("⚡ Modo Superusuario Activo")
-
-# MENÚ LATERAL ACTUALIZADO CON LA NUEVA SECCIÓN
-st.sidebar.title("🧭 Navegación")
-lista_modulos = ["📊 Dashboard e Históricos", "🔍 Centro de Consultas", "📦 Módulo Tarimas", "🚚 Módulo Remisiones"]
-if is_super:
-    lista_modulos.append("⚙️ Mantenimiento y Catálogos")
-
-opcion_menu = st.sidebar.radio("Seleccione un Módulo:", lista_modulos)
-
+if "BD_Ordenes_Compra" not in st.session_state:
+    st.session_state.BD_Ordenes_Compra = pd.DataFrame([
+        {"PO": "PO-10001", "SKU": "12-B-9016-01", "Cantidad_Solicitada": 500}
+    ])
 if "BD_Tarimas" not in st.session_state:
     st.session_state.BD_Tarimas = pd.DataFrame(columns=[
         "ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus", "Es_Nueva"
@@ -68,7 +43,7 @@ if "BD_Datos_Generales_Remision" not in st.session_state:
     st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=[
         "ID_Remision", "Folio_Remision", "Fecha_Hora_Salida", "Nombre_Emisor", "Direccion_Emisor", "Nombre_Receptor", "Direccion_Receptor", "Tarimas_Asociadas"
     ])
-# 3. SISTEMA DE SEGURIDAD (SECRETS) Y NAVEGACIÓN
+# 3. CONTROL DE SEGURIDAD MEDIANTE CONTRASEÑAS RESTRINGIDAS
 st.sidebar.title("🔐 Control de Acceso")
 admin_pass_input = st.sidebar.text_input("Contraseña Administrador:", type="password")
 
@@ -76,7 +51,7 @@ def es_admin():
     try:
         return admin_pass_input == st.secrets["admin_password"]
     except KeyError:
-        st.sidebar.error("Error: 'admin_password' no configurado en Secrets.")
+        st.sidebar.error("Error: 'admin_password' no configurado en Secrets de Streamlit.")
         return False
 
 is_admin = es_admin()
@@ -85,11 +60,21 @@ if is_admin:
 else:
     st.sidebar.warning("Modo Consulta Activo")
 
+# Autenticación secundaria para Superusuario de Soporte
+st.sidebar.write("---")
+st.sidebar.title("🛠️ Área de Soporte")
+super_pass_input = st.sidebar.text_input("Contraseña de Soporte / IT:", type="password")
+is_super = (super_pass_input == "SigramaMetales2025")
+
+if is_super:
+    st.sidebar.success("⚡ Modo Superusuario Activo")
+# MENÚ DE NAVEGACIÓN BASADO EN ROLES
 st.sidebar.title("🧭 Navegación")
-opcion_menu = st.sidebar.radio(
-    "Seleccione un Módulo:",
-    ["📊 Dashboard e Históricos", "🔍 Centro de Consultas", "📦 Módulo Tarimas", "🚚 Módulo Remisiones"]
-)
+lista_modulos = ["📊 Dashboard e Históricos", "🔍 Centro de Consultas", "📦 Módulo Tarimas", "🚚 Módulo Remisiones"]
+if is_super:
+    lista_modulos.append("⚙️ Mantenimiento y Catálogos")
+
+opcion_menu = st.sidebar.radio("Seleccione un Módulo:", lista_modulos)
 # 4. CONECTOR DE PERSISTENCIA AUTOMÁTICA CON GITHUB API
 def subir_excel_a_github(file_name, dataframe_to_save):
     try:
@@ -103,27 +88,30 @@ def subir_excel_a_github(file_name, dataframe_to_save):
             dataframe_to_save.to_excel(writer, index=False, sheet_name='Datos_Sistema')
         
         base64_content = base64.b64encode(buffer_git.getvalue()).decode("utf-8")
-        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
+        url = f"https://github.com{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
         
         res_get = requests.get(url, headers=headers)
         sha = res_get.json().get("sha") if res_get.status_code == 200 else None
-            
+        
         payload = {"message": f"Sincronización: {file_name}", "content": base64_content, "branch": BRANCH}
         if sha: payload["sha"] = sha
-            
+        
         res_put = requests.put(url, json=payload, headers=headers)
         return res_put.status_code in [200, 201]
     except Exception:
         return False
-# 5. MOTOR DE RENDERIZADO PDF (FORMATO CORPORATIVO SIGRAMA)
+# 5. MOTOR DE RENDIMIENTO DOCUMENTAL REPORTLAB
 def draw_sigrama_decorations(canvas, doc):
     canvas.saveState()
     canvas.setFillColor(colors.HexColor("#D32F2F"))
     canvas.rect(36, 745, 540, 4, fill=1, stroke=0)
+    
+    # Formato de Control Documental Solicitado
     canvas.setFont("Helvetica-Bold", 11)
     canvas.setFillColor(colors.HexColor("#D32F2F"))
     canvas.drawString(36, 765, "FO-MET-10")
+    
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.black)
     canvas.drawString(36, 753, "Revisión 01")
@@ -136,29 +124,34 @@ def draw_sigrama_decorations(canvas, doc):
     canvas.drawString(42, 37, "FO-SGC-02")
     canvas.setFont("Helvetica", 6)
     canvas.setFillColor(colors.HexColor("#424242"))
-    texto_legal = "PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL SIN AUTORIZACIÓN DE INDUSTRIA SIGRAMA S.A. DE C.V."
+    texto_legal = "PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, POR CUALQUIER MEDIO O PROCEDIMIENTO, SIN AUTORIZACIÓN DE INDUSTRIA SIGRAMA S.A. DE C.V."
     canvas.drawString(95, 37, texto_legal)
     canvas.restoreState()
 def generar_pdf_tarima(id_tarima):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
     story, styles = [], getSampleStyleSheet()
+    
     tarima_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == id_tarima].iloc[0]
     detalles = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == id_tarima]
+    
     style_g = ParagraphStyle('G', parent=styles['Heading1'], fontSize=54, leading=60, alignment=1)
     story.append(Spacer(1, 1.8 * inch))
     story.append(Paragraph(f"TARIMA<br/><br/><b>#{id_tarima}</b>", style_g))
     story.append(PageBreak())
+    
     style_n, style_ng = styles['Normal'], ParagraphStyle('NG', parent=styles['Heading2'], fontSize=28, leading=34, alignment=1)
     story.append(Paragraph(f"<b>Detalle Interno - Tarima #{id_tarima}</b>", styles['Heading2']))
     story.append(Paragraph(f"<b>Operador:</b> {tarima_info['Creado_Por']} | <b>Fecha:</b> {tarima_info['Fecha_Creacion']}", style_n))
     story.append(Spacer(1, 0.3 * inch))
+    
     for _, item in detalles.iterrows():
         art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
         nom_art = art.iloc[0]['Nombre'] if not art.empty else "Desconocido"
         story.append(Paragraph(f"<b>PO:</b> {item['PO']} | <b>SKU:</b> {item['SKU']} - {nom_art}", style_n))
         story.append(Spacer(1, 0.4 * inch))
         story.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", style_ng))
+        
     doc.build(story, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
     buffer.seek(0)
     return buffer.getvalue()
@@ -166,68 +159,72 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
     story, styles = [], getSampleStyleSheet()
-    style_blanco_bold = ParagraphStyle('BB', parent=styles['Normal'], textColor=colors.white, fontName="Helvetica-Bold", alignment=1, fontSize=10)
-    style_normal_bold = ParagraphStyle('NB', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=9)
-    style_normal_text = ParagraphStyle('NT', parent=styles['Normal'], fontSize=9)
+    style_bb = ParagraphStyle('BB', parent=styles['Normal'], textColor=colors.white, fontName="Helvetica-Bold", alignment=1, fontSize=10)
+    style_nb = ParagraphStyle('NB', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=9)
+    style_nt = ParagraphStyle('NT', parent=styles['Normal'], fontSize=9)
+    
     story.append(Spacer(1, 0.1 * inch))
-    t_header_embarque = Table([[Paragraph("LISTADO DE EMBARQUE", style_blanco_bold)]], colWidths=[540])
-    t_header_embarque.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#D32F2F")), ('ALIGN', (0,0), (-1,-1), 'CENTER')]))
-    story.append(t_header_embarque)
-    datos_panel = [
-        [Paragraph("FOLIO:", style_normal_bold), Paragraph(str(datos_remision['Folio_Remision']), style_normal_text), Paragraph("FECHA:", style_normal_bold), Paragraph(str(datos_remision['Fecha_Hora_Salida']), style_normal_text)],
-        [Paragraph("LÍDER:", style_normal_bold), Paragraph(str(datos_remision['Nombre_Emisor']), style_normal_text), Paragraph("ALMACÉN:", style_normal_bold), Paragraph(str(datos_remision['Direccion_Emisor']), style_normal_text)],
-        [Paragraph("DESTINO:", style_normal_bold), Paragraph(str(datos_remision['Nombre_Receptor']), style_normal_text), "", ""],
-        [Paragraph("DIRECCIÓN:", style_normal_bold), Paragraph(str(datos_remision['Direccion_Receptor']), style_normal_text), "", ""]
+    t_header = Table([[Paragraph("LISTADO DE EMBARQUE", style_bb)]], colWidths=[540])
+    t_header.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#D32F2F")), ('ALIGN', (0,0), (-1,-1), 'CENTER')]))
+    story.append(t_header)
+    
+    datos_p = [
+        [Paragraph("FOLIO:", style_nb), Paragraph(str(datos_remision['Folio_Remision']), style_nt), Paragraph("FECHA:", style_nb), Paragraph(str(datos_remision['Fecha_Hora_Salida']), style_nt)],
+        [Paragraph("LÍDER:", style_nb), Paragraph(str(datos_remision['Nombre_Emisor']), style_nt), Paragraph("NO. ALMACÉN:", style_nb), Paragraph(str(datos_remision['Direccion_Emisor']), style_nt)],
+        [Paragraph("DESTINO:", style_nb), Paragraph(str(datos_remision['Nombre_Receptor']), style_nt), "", ""],
+        [Paragraph("DIRECCIÓN:", style_nb), Paragraph(str(datos_remision['Direccion_Receptor']), style_nt), "", ""]
     ]
-    t_panel = Table(datos_panel, colWidths=[100, 170, 90, 180])
+    t_panel = Table(datos_p, colWidths=[90, 180, 90, 180])
     t_panel.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")), ('SPAN', (1,2), (3,2)), ('SPAN', (1,3), (3,3))]))
     story.append(t_panel)
     story.append(Spacer(1, 0.2 * inch))
-    tabla_materiales = [[Paragraph("CANTIDAD", style_blanco_bold), Paragraph("UNIDAD", style_blanco_bold), Paragraph("CLAVE", style_blanco_bold), Paragraph("DESCRIPCIÓN", style_blanco_bold), Paragraph("OBSERVACIONES", style_blanco_bold)]]
+    
+    tabla_m = [[Paragraph("CANTIDAD", style_bb), Paragraph("UNIDAD", style_bb), Paragraph("CLAVE / MODELO", style_bb), Paragraph("DESCRIPCIÓN", style_bb), Paragraph("OBSERVACIONES", style_bb)]]
     for _, row in df_detalles_remision.iterrows():
         art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == row['SKU']]
         nom_art = art.iloc[0]['Nombre'] if not art.empty else "Material"
-        tabla_materiales.append([Paragraph(str(int(row['Cantidad'])), style_normal_text), Paragraph("Piezas", style_normal_text), Paragraph(str(row['SKU']), style_normal_text), Paragraph(nom_art, style_normal_text), Paragraph(f"Tarima: #{row['ID_Tarima']}", style_normal_text)])
-    for _ in range(max(1, 6 - len(df_detalles_remision))): tabla_materiales.append([Paragraph("", style_normal_text)] * 5)
-    t_mat = Table(tabla_materiales, colWidths=[70, 60, 100, 180, 130])
+        tabla_m.append([Paragraph(str(int(row['Cantidad'])), style_nt), Paragraph("Piezas", style_nt), Paragraph(str(row['SKU']), style_nt), Paragraph(nom_art, style_nt), Paragraph(f"Tarima: #{row['ID_Tarima']}", style_nt)])
+    
+    t_mat = Table(tabla_m, colWidths=[70, 60, 110, 170, 130])
     t_mat.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#D32F2F")), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#757575"))]))
     story.append(t_mat)
-    story.append(Spacer(1, 0.3 * inch))
-    t_firmas = Table([[Paragraph("ENTREGA", style_normal_bold), Paragraph("RECIBE", style_normal_bold)]], colWidths=[270, 270])
-    t_firmas.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('LINEBELOW', (0,0), (0,0), 1, colors.black), ('LINEBELOW', (1,0), (1,0), 1, colors.black), ('TOPPADDING', (0,0), (-1,-1), 25)]))
-    story.append(t_firmas)
+    
     doc.build(story, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
     buffer.seek(0)
     return buffer.getvalue()
+
 def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
     story, styles = [], getSampleStyleSheet()
     style_b = ParagraphStyle('ABB', parent=styles['Normal'], textColor=colors.white, fontName="Helvetica-Bold", alignment=1, fontSize=10)
     style_t = ParagraphStyle('ANT', parent=styles['Normal'], fontSize=9)
+    
     for t_id in lista_tarimas_id:
-        style_c = ParagraphStyle('C', parent=styles['Heading1'], fontSize=42, alignment=1)
         story.append(Spacer(1, 1.8 * inch))
-        story.append(Paragraph(f"ANEXO: TARIMA #{t_id}", style_c))
-        story.append(Spacer(1, 0.4 * inch))
+        story.append(Paragraph(f"ANEXO: TARIMA #{t_id}", ParagraphStyle('C', parent=styles['Heading1'], fontSize=42, alignment=1)))
         t_bar = Table([["|||||||||||||||||||||||||||||||"], [f"*TARIMA-{t_id}*"]], colWidths=[540])
         t_bar.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('TEXTCOLOR', (0,0), (-1,1), colors.darkgray)]))
         story.append(t_bar)
         story.append(PageBreak())
+        
         story.append(Paragraph(f"<b>DETALLE ESPECÍFICO - TARIMA {t_id}</b>", styles['Heading2']))
         sub_det = df_detalles_remision[df_detalles_remision['ID_Tarima'] == t_id]
-        tabla_anexo = [[Paragraph("PO ASOCIADA", style_b), Paragraph("SKU / PRODUCTO", style_b), Paragraph("CANTIDAD", style_b)]]
+        tabla_a = [[Paragraph("PO ASOCIADA", style_b), Paragraph("SKU / PRODUCTO", style_b), Paragraph("CANTIDAD", style_b)]]
         for _, s_row in sub_det.iterrows():
-            tabla_anexo.append([Paragraph(str(s_row['PO']), style_t), Paragraph(str(s_row['SKU']), style_t), Paragraph(str(int(s_row['Cantidad'])), style_t)])
-        t_det = Table(tabla_anexo, colWidths=[150, 240, 150])
+            tabla_a.append([Paragraph(str(s_row['PO']), style_t), Paragraph(str(s_row['SKU']), style_t), Paragraph(str(int(s_row['Cantidad'])), style_t)])
+        t_det = Table(tabla_a, colWidths=[180, 180, 180])
         t_det.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")), ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#F5F5F5")), ('GRID', (0,0), (-1,-1), 1, colors.white)]))
         story.append(t_det)
         story.append(PageBreak())
+        
     if story: story.pop()
     doc.build(story, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
     buffer.seek(0)
     return buffer.getvalue()
-# 6. RENDERIZADO DE LAS VISTAS ACTIVAS
+# =============================================================================
+# 6. RENDERIZADO DE LAS VISTAS ACTIVAS DE LA APLICACIÓN
+# =============================================================================
 if opcion_menu == "📊 Dashboard e Históricos":
     st.title("📊 Dashboard Planta Metales Inventario Producto")
     col_f1, col_f2 = st.columns(2)
@@ -263,8 +260,6 @@ if opcion_menu == "📊 Dashboard e Históricos":
         ).reset_index()
         resumen_po.columns = ["Orden de Compra (PO)", "Cant. Tarimas", "Total Piezas", "Piezas Disponibles", "Piezas Remesadas"]
         st.dataframe(resumen_po, use_container_width=True, hide_index=True)
-    else:
-        st.info("No hay datos cargados para resumir por PO.")
 elif opcion_menu == "🔍 Centro de Consultas":
     st.title("🔍 Centro de Consultas Avanzado")
     col_sel, col_val = st.columns(2)
@@ -310,7 +305,6 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
                 st.success("¡Plantilla integrada y respaldada en GitHub!")
             except Exception as e: st.error(f"Error: {e}")
-            
     if not st.session_state.BD_Tarimas.empty:
         st.write("---")
         df_estilado = st.session_state.BD_Tarimas.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
@@ -319,7 +313,8 @@ elif opcion_menu == "📦 Módulo Tarimas":
         if filas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas]['ID_Tarima'].tolist()
             if len(elegidas) == 1:
-                st.download_button(label=f"📥 Descargar PDF Tarima #{elegidas[0]}", data=generar_pdf_tarima(elegidas[0]), file_name=f"Tarima_{elegidas[0]}.pdf")
+                t_single = elegidas[0]
+                st.download_button(label=f"📥 Descargar PDF Tarima #{t_single}", data=generar_pdf_tarima(t_single), file_name=f"Tarima_{t_single}.pdf", mime="application/pdf")
             else:
                 if st.button("📦 Unificar y Preparar Lote de Impresión"):
                     buf_l = io.BytesIO()
@@ -340,169 +335,100 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         story_l.append(PageBreak())
                     if story_l: story_l.pop()
                     doc_l.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
-                    st.download_button(label="📥 Descargar Lote Completo (PDF)", data=buf_l.getvalue(), file_name="Lote_Tarimas.pdf")
-        else: st.warning("Seleccione filas en la tabla para descargar.")
-        # Entrada de datos logísticos para el encabezado del documento formal
-        col_e, col_r = st.columns(2)
-        with col_e:
-            nom_e = st.text_input("Líder / Emisor:", "Jesus Morales")
-            dir_e = st.text_input("Almacén de Origen:", "Metales")
-        with col_r:
-            nom_r = st.text_input("Receptor / Cliente:", "Galvatec Industrias")
-            dir_r = st.text_input(
-                "Dirección Destino:", 
-                "Prol. Valle Guadiana 919, Parque Industrial II, 35078 Gómez Palacio, Dgo."
-            )
-        # Bloque de validación y acción restringida para el Administrador
-        if not is_admin: 
-            st.error("🔒 Operación Bloqueada: Ingrese la contraseña de Administrador para confirmar.")
-        else:
-            if st.button("🚀 Confirmar Salida y Generar Nueva Remisión"):
-                if not t_sel or not nom_r: 
-                    st.error("Por favor, complete todos los campos obligatorios antes de continuar.")
-                else:
-                    # Lógica de cálculo de folios automáticos del sistema
-                    fol = f"E00{27 + len(st.session_state.BD_Datos_Generales_Remision)}"
-                    reg = {
-                        "ID_Remision": len(st.session_state.BD_Datos_Generales_Remision) + 1, 
-                        "Folio_Remision": fol, 
-                        "Fecha_Hora_Salida": datetime.datetime.now().strftime("%d/%m/%Y"), 
-                        "Nombre_Emisor": nom_e, "Direccion_Emisor": dir_e, 
-                        "Nombre_Receptor": nom_r, "Direccion_Receptor": dir_r, 
-                        "Tarimas_Asociadas": t_sel
-                    }
-                    
-                    # Actualización de estados relacionales en la memoria caché
-                    st.session_state.BD_Datos_Generales_Remision = pd.concat(
-                        [st.session_state.BD_Datos_Generales_Remision, pd.DataFrame([reg])], 
-                        ignore_index=True
-                    )
-                    st.session_state.BD_Tarimas.loc[
-                        st.session_state.BD_Tarimas['ID_Tarima'].isin(t_sel), 'Estatus'
-                    ] = 'Remesada'
-                    
-                    # PERSISTENCIA EN GITHUB: Inyección física e inmediata de los archivos actualizados
-                    subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
-                    subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-                    st.success(f"✅ ¡Remisión {fol} Generada y Respaldada Exitosamente en GitHub!")
-    # Módulo de descargas históricas (Visible si ya existen registros en el sistema)
-    if not st.session_state.BD_Datos_Generales_Remision.empty:
-        st.write("---")
-        st.subheader("🖨️ Descarga Documental de Remisiones")
-        
-        # Selector dinámico de Folio emitido
-        r_sel = st.selectbox(
-            "Seleccione Folio para Descarga:", 
-            st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique()
-        )
-        
-        # Recuperación de registros y cruce de datos
-        row = st.session_state.BD_Datos_Generales_Remision[st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel].iloc[0]
-        df_det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(row['Tarimas_Asociadas'])]
-        
-        # Botones asíncronos finales para la obtención del PDF
-        c1, c2 = st.columns(2)
-        with c1: 
-            st.download_button(
-                label="📥 Descargar Remisión (PDF)", 
-                data=generar_pdf_remision_general(row, df_det), 
-                file_name=f"Remision_{r_sel}.pdf", 
-                mime="application/pdf"
-            )
-        with c2: 
-            st.download_button(
-                label="📥 Descargar Anexo Tarimas (PDF)", 
-                data=generar_pdf_anexo_tarimas(row['Tarimas_Asociadas'], df_det), 
-                file_name=f"Anexo_{r_sel}.pdf", 
-                mime="application/pdf"
-            )
+                    st.download_button(label="📥 Descargar Lote Completo (PDF)", data=buf_l.getvalue(), file_name="Lote_Tarimas.pdf", mime="application/pdf")
+                    # Si se marcan varias filas en la tabla, el sistema procesa el lote unificado de hojas
+                    else:
+                        if st.button("📦 Unificar y Preparar Lote de Impresión"):
+                            buf_l = io.BytesIO()
+                            doc_l = SimpleDocTemplate(buf_l, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
+                            story_l, styles = [], getSampleStyleSheet()
+                            
+                            for t_imp in elegidas:
+                                det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
+                                t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp].iloc[0]
+                                
+                                # Carátula de la tarima actual en el ciclo
+                                story_l.append(Spacer(1, 1.8 * inch))
+                                story_l.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=54, leading=60, alignment=1)))
+                                story_l.append(PageBreak())
+                                
+                                # Detalle de artículos e inventario de la tarima actual
+                                story_l.append(Paragraph(f"<b>Detalle Interno - Tarima #{t_imp}</b>", styles['Heading2']))
+                                story_l.append(Paragraph(f"<b>Operador:</b> {t_info['Creado_Por']} | <b>Fecha:</b> {t_info['Fecha_Creacion']}", styles['Normal']))
+                                story_l.append(Spacer(1, 0.3 * inch))
+                                
+                                for _, item in det.iterrows():
+                                    art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
+                                    nom_art = art.iloc[0]['Nombre'] if not art.empty else "Desconocido"
+                                    story_l.append(Paragraph(f"<b>PO:</b> {item['PO']} | <b>SKU:</b> {item['SKU']} - {nom_art}", styles['Normal']))
+                                    story_l.append(Spacer(1, 0.4 * inch))
+                                    story_l.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", ParagraphStyle('NG_L', parent=styles['Heading2'], fontSize=28, leading=34, alignment=1)))
+                                story_l.append(PageBreak())
+                                
+                            if story_l: 
+                                story_l.pop()  # Eliminar el último salto de página sobrante del ciclo
+                            doc_l.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+                            
+                            st.download_button(
+                                label="📥 Descargar Lote Completo (PDF)", 
+                                data=buf_l.getvalue(), 
+                                file_name="Lote_Tarimas_Sigrama.pdf", 
+                                mime="application/pdf"
+                            )
+        else: 
+            st.warning("Seleccione una o más filas en la tabla para habilitar los botones de descarga de PDFs.")
 # =============================================================================
-# NUEVO MÓDULO: MANTENIMIENTO, EDICIÓN DE CANTIDADES Y PURGA DE DATOS (SUPERUSUARIO)
+# SECCIÓN 16: MÓDULO DE MANTENIMIENTO, EDICIÓN Y PURGA DE DATOS MAESTROS
 # =============================================================================
 elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
     st.title("⚙️ Panel de Mantenimiento Avanzado del Sistema")
-    st.warning("⚠️ Atención: Las modificaciones realizadas en este panel impactan directamente los archivos maestros en GitHub.")
+    st.warning("⚠️ Acción Crítica: Las modificaciones realizadas impactan directamente en GitHub.")
     
-    # Inicialización del Catálogo Semilla de Líderes/Operadores en memoria si no existe
     if "BD_Lideres" not in st.session_state:
         st.session_state.BD_Lideres = pd.DataFrame([
-            {"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"},
-            {"ID_Lider": "LID-02", "Nombre_Lider": "Supervisor General", "Area": "Embarques", "Estatus": "Activo"}
+            {"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}
         ])
 
     tab1, tab2, tab3 = st.tabs(["📝 Ajustar Cantidades", "👤 Catálogo de Líderes", "🚨 Purga de Datos"])
 
-    # --- PESTAÑA 1: AJUSTAR CANTIDADES EN CASO DE ERROR ---
     with tab1:
         st.subheader("✏️ Edición Rápida de Inventario (Detalle Tarimas)")
         if not st.session_state.BD_Detalle_Tarimas.empty:
-            st.write("Seleccione el registro de la tarima que desea modificar:")
-            
-            # Editor interactivo en formato de tabla para modificar cantidades directamente en pantalla
-            df_editable = st.data_editor(
-                st.session_state.BD_Detalle_Tarimas,
-                use_container_width=True,
-                disabled=["ID_Detalle", "ID_Tarima", "SKU", "PO"], # Bloquear llaves relacionales
-                hide_index=True
-            )
-            
+            df_editable = st.data_editor(st.session_state.BD_Detalle_Tarimas, use_container_width=True, disabled=["ID_Detalle", "ID_Tarima", "SKU", "PO"], hide_index=True)
             if st.button("💾 Guardar Cambios de Cantidades en GitHub"):
                 st.session_state.BD_Detalle_Tarimas = df_editable
-                # Sincronización inmediata con el repositorio
                 subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
-                st.success("✅ Cantidades corregidas y actualizadas con éxito en el servidor y GitHub.")
+                st.success("✅ Cantidades corregidas y sincronizadas con éxito.")
                 st.rerun()
         else:
             st.info("No hay registros en el detalle de tarimas para modificar.")
 
-    # --- PESTAÑA 2: CREAR, VER Y MODIFICAR BASE DE DATOS DE LÍDERES ---
     with tab2:
         st.subheader("👤 Administración del Personal de Líderes")
-        
-        # Formulario compacto para registrar un nuevo líder
-        with st.expander("➕ Dar de Alta Nuevo Líder / Operador"):
+        with st.expander("➕ Dar de Alta Nuevo Líder"):
             c_l1, c_l2 = st.columns(2)
-            with c_l1:
-                nuevo_nom = st.text_input("Nombre Completo del Líder:")
-            with c_l2:
-                nueva_area = st.text_input("Área de Adscripción:", "Metales")
-            
+            with c_l1: nuevo_nom = st.text_input("Nombre Completo:")
+            with c_l2: nueva_area = st.text_input("Área:", "Metales")
             if st.button("➕ Registrar Líder"):
                 if nuevo_nom:
-                    n_id_l = f"LID-{(len(st.session_state.BD_Lideres) + 1):02d}"
-                    n_l_row = {"ID_Lider": n_id_l, "Nombre_Lider": nuevo_nom, "Area": nueva_area, "Estatus": "Activo"}
-                    st.session_state.BD_Lideres = pd.concat([st.session_state.BD_Lideres, pd.DataFrame([n_l_row])], ignore_index=True)
+                    n_row = {"ID_Lider": f"LID-{(len(st.session_state.BD_Lideres) + 1):02d}", "Nombre_Lider": nuevo_nom, "Area": nueva_area, "Estatus": "Activo"}
+                    st.session_state.BD_Lideres = pd.concat([st.session_state.BD_Lideres, pd.DataFrame([n_row])], ignore_index=True)
                     subir_excel_a_github("BD_Lideres.xlsx", st.session_state.BD_Lideres)
-                    st.success(f"Líder {nuevo_nom} registrado y respaldado.")
-                    st.rerun()
-                else:
-                    st.error("El nombre es un campo obligatorio.")
-
-        st.write("📋 Catálogo Actual de Líderes Autorizados (Editable):")
-        df_lideres_edit = st.data_editor(st.session_state.BD_Lideres, use_container_width=True, hide_index=True)
+                    st.success("Líder registrado."); st.rerun()
+        df_l_edit = st.data_editor(st.session_state.BD_Lideres, use_container_width=True, hide_index=True)
         if st.button("💾 Sincronizar Cambios de Líderes"):
-            st.session_state.BD_Lideres = df_lideres_edit
+            st.session_state.BD_Lideres = df_l_edit
             subir_excel_a_github("BD_Lideres.xlsx", st.session_state.BD_Lideres)
-            st.success("Catálogo de líderes sincronizado en GitHub.")
+            st.success("Catálogo de líderes sincronizado.")
 
-    # --- PESTAÑA 3: BORRAR REGISTROS (PURGA ABSOLUTA DE BASE DE DATOS) ---
     with tab3:
         st.subheader("🚨 Reset de Fábrica y Purga de Datos")
-        st.error("⚠️ Peligro: Esta acción eliminará permanentemente todos los registros históricos del sistema y limpiará los archivos de GitHub.")
-        
-        confirmar_purga = st.checkbox("Entiendo los riesgos y deseo vaciar todas las bases de datos.")
-        
-        if confirmar_purga:
+        if st.checkbox("Entiendo los riesgos y deseo vaciar todas las bases de datos."):
             if st.button("🗑️ EJECUTAR PURGA TOTAL DEL SISTEMA"):
-                # Limpieza absoluta de estructuras relacionales en memoria
                 st.session_state.BD_Tarimas = pd.DataFrame(columns=st.session_state.BD_Tarimas.columns)
                 st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=st.session_state.BD_Detalle_Tarimas.columns)
                 st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=st.session_state.BD_Datos_Generales_Remision.columns)
-                
-                # Sincronizar los archivos vacíos a GitHub para resetear el repositorio
                 subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                 subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
                 subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-                
-                st.success("💥 Sistema purgado por completo. El repositorio en GitHub se ha restablecido a ceros.")
-                st.rerun()
+                st.success("💥 Sistema y repositorio purgados por completo a ceros."); st.rerun()
