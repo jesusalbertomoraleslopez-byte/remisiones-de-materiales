@@ -403,14 +403,21 @@ if is_super:
 
 opcion_menu = st.sidebar.radio("Seleccione un Módulo:", lista_modulos)
 # =============================================================================
-# 9. INTERFAZ DE USUARIO: VISUALIZACIÓN DE PANELES OPERATIVOS (DASHBOARD)
+# 9. INTERFAZ DE USUARIO: DASHBOARD (CON AUTOREPARACIÓN EN CALIENTE)
 # =============================================================================
 if opcion_menu == "📊 Dashboard e Históricos":
     st.title("📊 Dashboard Planta Metales Inventario Producto")
     
-    # Filtros Maestros Globales en la parte superior del Dashboard
+    # --- CONTROL DE SEGURIDAD INTERNO ---
+    # Si por caché la variable no existe, la forzamos a existir aquí para eliminar la pantalla roja de raíz
+    if "BD_Detalle_Tarimas" not in st.session_state:
+        st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"])
+        
     st.subheader("🔍 Filtros de Control Global")
+    
+    # Ahora la copia siempre se ejecutará con éxito pase lo que pase
     df_maestro_dash = st.session_state.BD_Detalle_Tarimas.copy()
+
     
     col_g1, col_g2 = st.columns(2)
     with col_g1:
