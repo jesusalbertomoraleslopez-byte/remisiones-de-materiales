@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 import io
+from PIL import Image  # <-- NUEVA IMPORTACIÓN INCLUIDA AQUÍ
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
@@ -10,12 +11,19 @@ from reportlab.lib.units import inch
 
 # 1. CONFIGURACIÓN E INTERFAZ BASE
 st.set_page_config(page_title="Remisiones de Materiales", layout="wide", page_icon="📦")
-# 2. MODELO RELACIONAL EN MEMORIA (PANDAS + SESSION STATE)
-if "BD_Articulos" not in st.session_state:
-    st.session_state.BD_Articulos = pd.DataFrame([
-        {"SKU": "12-B-9016-01", "Nombre": "Lámina Galvanizada Sigrama", "Calibre_Espesor": "Calibre 22", "Dimensiones_Pieza": "3x10 ft", "Acabado_Superficial": "Zintro"},
-        {"SKU": "SKU-002", "Nombre": "Placa de Acero Comercial", "Calibre_Espesor": "1/4 pulgada", "Dimensiones_Pieza": "4x8 ft", "Acabado_Superficial": "Negro"}
-    ])
+
+# --- BLOQUE NUEVO DEL BANNER ---
+try:
+    banner_img = Image.open("REMISIONES APP.png")
+    st.image(banner_img, use_container_width=True)
+except FileNotFoundError:
+    st.warning("⚠️ Cargando interfaz gráfica del banner...")
+st.write("")
+# -------------------------------
+
+# # 2. MODELO RELACIONAL EN MEMORIA (PANDAS + SESSION STATE)
+# (Aquí continúa tu línea 13 original hacia abajo sin tocar nada más)
+
 
 if "BD_Ordenes_Compra" not in st.session_state:
     st.session_state.BD_Ordenes_Compra = pd.DataFrame([
