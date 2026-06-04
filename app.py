@@ -695,21 +695,45 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                     subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
                     st.success(f"✅ ¡Remisión {fol} Generada y Guardada de Forma Permanente!"); st.rerun()
                     
+    # =============================================================================
+    # BLOQUE DE DESCARGA DOCUMENTAL DE REMISIONES CORREGIDO (FO-MET-10)
+    # =============================================================================
     if not st.session_state.BD_Datos_Generales_Remision.empty:
         st.write("---")
-        st.subheader("🖨️ Descarga Documental de Remisiones")
-        r_sel = st.selectbox("Seleccione Folio para Descarga:", st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique(), key="rem_download_folio_sel")
-
-        # SOLUCIÓN DE RAÍZ: Extraer la fila como un diccionario nativo de Python para eliminar indexadores de Pandas
-        lista_remisiones = st.session_state.BD_Datos_Generales_Remision[st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel].to_dict('records')
+        st.subheader("📋 Descarga Documental de Remisiones")
+        r_sel = st.selectbox("Seleccione Folio para Descarga:", 
+                             st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique(), 
+                             key="rem_download_folio_sel")
+        
+        # Extracción nativa y segura para evitar que el DataFrame rompa el flujo de ReportLab
+        lista_remisiones = st.session_state.BD_Datos_Generales_Remision[
+            st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel
+        ].to_dict('records')
         
         if lista_remisiones:
-            row_dict = lista_remisiones[0]
-            df_det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(row_dict['Tarimas_Asociadas'])]
+            row_dict = lista_remisiones[0] # <--- CORRECCIÓN: Extrae el diccionario limpio [0]
+            df_det = st.session_state.BD_Detalle_Tarimas[
+                st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(row_dict['Tarimas_Asociadas'])
+            ]
             
             c1, c2 = st.columns(2)
-            with c1: st.download_button("📥 Descargar Remisión (PDF)", data=generar_pdf_remision_general(row_dict, df_det), file_name=f"Remision_{r_sel}.pdf", key="btn_dl_rem_pdf", mime="application/pdf")
-            with c2: st.download_button("📥 Descargar Anexo Tarimas (PDF)", data=generar_pdf_anexo_tarimas(row_dict['Tarimas_Asociadas'], df_det), file_name=f"Anexo_{r_sel}.pdf", key="btn_dl_anexo_pdf", mime="application/pdf")
+            with c1: 
+                # Se cambia el texto a FO-MET-10 y se inyectan correctamente las variables
+                st.download_button(
+                    label="📄 Descargar Remisión Oficial (FO-MET-10)", 
+                    data=generar_pdf_remision_general(row_dict, df_det), 
+                    file_name=f"FO-MET-10_Remision_{r_sel}.pdf", 
+                    key="btn_dl_rem_pdf", 
+                    mime="application/pdf"
+                )
+            with c2: 
+                st.download_button(
+                    label="📦 Descargar Anexo Tarimas (PDF)", 
+                    data=generar_pdf_anexo_tarimas(row_dict['Tarimas_Asociadas'], df_det), 
+                    file_name=f"Anexo_Remision_{r_sel}.pdf", 
+                    key="btn_dl_anexo_pdf", 
+                    mime="application/pdf"
+                )
 
 
 
