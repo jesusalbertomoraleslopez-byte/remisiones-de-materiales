@@ -382,8 +382,9 @@ def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
 if opcion_menu == "📊 Dashboard e Históricos":
     st.title("📊 Dashboard Planta Metales Inventario Producto")
     col_f1, col_f2 = st.columns(2)
-    with col_f1: f_inicio = st.date_input("Fecha Inicial", datetime.date.today() - datetime.timedelta(days=7))
-    with col_f2: f_fin = st.date_input("Fecha Final", datetime.date.today())
+    with col_f1: f_inicio = st.date_input("Fecha Inicial", datetime.date.today() - datetime.timedelta(days=7), key="dash_fecha_inicio_unique")
+    with col_f2: f_fin = st.date_input("Fecha Final", datetime.date.today(), key="dash_fecha_final_unique")
+
     
     t_tar = len(st.session_state.BD_Tarimas)
     disp = len(st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['Estatus'] == 'Disponible'])
