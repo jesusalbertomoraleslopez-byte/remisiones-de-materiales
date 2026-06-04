@@ -180,9 +180,13 @@ def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
     style_b = ParagraphStyle('ABB', parent=styles['Normal'], textColor=colors.white, fontName="Helvetica-Bold", alignment=1, fontSize=10)
     style_t = ParagraphStyle('ANT', parent=styles['Normal'], fontSize=9)
     
+    # Declaramos el estilo con interlineado (leading) para evitar que se encimen las letras
+    style_caratula = ParagraphStyle('C_Fix', parent=styles['Heading1'], fontSize=42, leading=46, alignment=1)
+    
     for t_id in lista_tarimas_id:
         story.append(Spacer(1, 1.8 * inch))
-        story.append(Paragraph(f"ANEXO: TARIMA<br/><b>{t_id}</b>", ParagraphStyle('C', parent=styles['Heading1'], fontSize=42, alignment=1)))
+        story.append(Paragraph(f"ANEXO: TARIMA<br/><b>{t_id}</b>", style_caratula))
+
         story.append(Spacer(1, 0.4 * inch))
         t_bar = Table([["|||||||||||||||||||||||||||||||"], [f"*{t_id}*"]], colWidths=[540])
         t_bar.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('TEXTCOLOR', (0,0), (-1,1), colors.darkgray)]))
