@@ -449,7 +449,21 @@ opcion_menu = st.sidebar.radio("Seleccione un Módulo:", lista_modulos)
 # =============================================================================
 if opcion_menu == "📊 Dashboard e Históricos":
     st.title("📊 Dashboard Planta Metales Inventario Producto")
-    
+        # =============================================================================
+    # 🔄 BOTÓN DE CONTROL INTEGRADO DE SEGURIDAD (FUERZA LA LECTURA REAL)
+    # =============================================================================
+    col_sync1, col_sync2 = st.columns([3, 1])
+    with col_sync2:
+        if st.button("⚡ Sincronizar GitHub", use_container_width=True):
+            # Eliminamos las variables congeladas del navegador para forzar al sistema a leer el archivo de la nube
+            if "BD_Tarimas" in st.session_state: del st.session_state.BD_Tarimas
+            if "BD_Detalle_Tarimas" in st.session_state: del st.session_state.BD_Detalle_Tarimas
+            if "BD_Datos_Generales_Remision" in st.session_state: del st.session_state.BD_Datos_Generales_Remision
+            if "BD_Lideres" in st.session_state: del st.session_state.BD_Lideres
+            
+            st.success("¡Caché de red eliminado!")
+            st.rerun()
+   
     # --- CONTROL DE SEGURIDAD INTERNO ---
     # --- AUTO-REPARACIÓN DE CACHÉ EN LÍNEA 410 ---
     # Si por cookies o caché de Streamlit la variable no se encuentra, la forzamos a existir aquí
@@ -468,6 +482,7 @@ if opcion_menu == "📊 Dashboard e Históricos":
     with col_g2:
         if proy_global_sel != "Todos":
             df_maestro_dash = df_maestro_dash[df_maestro_dash['Proyecto'] == proy_global_sel]
+
         opciones_global_desc = ["Todas"] + df_maestro_dash['Descripcion'].dropna().unique().tolist() if not df_maestro_dash.empty and 'Descripcion' in df_maestro_dash.columns else ["Todas"]
         desc_global_sel = st.selectbox("Filtrar por Descripción de Proyecto Planta Rio:", opciones_global_desc, key="dash_global_desc_select_unique")
 
