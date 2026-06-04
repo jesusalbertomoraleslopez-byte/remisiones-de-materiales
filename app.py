@@ -453,10 +453,11 @@ if opcion_menu == "📊 Dashboard e Históricos":
             df_detalles_frescos = cargar_excel_desde_github(f"BD_Detalle_Tarimas.xlsx?v={nocache_param}")
             df_remisiones_frescas = cargar_excel_desde_github(f"BD_Datos_Generales_Remision.xlsx?v={nocache_param}")
             
-            # 3. Forzamos la asignación de los datos reales descargados
-            if df_tarimas_frescas is not None: st.session_state.BD_Tarimas = df_tarimas_frescas
-            if df_detalles_frescos is not None: st.session_state.BD_Detalle_Tarimas = df_detalles_frescos
-            if df_remisiones_frescas is not None: st.session_state.BD_Datos_Generales_Remision = df_remisiones_frescas
+            # Cambia estas líneas adentro de tu botón (Líneas 461-463 aprox.)
+            df_tarimas_frescas = cargar_excel_desde_github("BD_Tarimas.xlsx")
+            df_detalles_frescos = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
+            df_remisiones_frescas = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
+
             
             st.success("¡Datos actualizados desde GitHub!")
             st.rerun()
