@@ -503,7 +503,10 @@ elif opcion_menu == "📦 Módulo Tarimas":
         for col_idx in range(1, 8):
             cell = worksheet.cell(row=2, column=col_idx)
             cell.font, cell.border = font_data, borde_c
-            if col_idx in: cell.alignment = align_center
+            # Corrección de sintaxis: se agregan los números de columna a centrar (1, 3, 4, 5, 7)
+            if col_idx in [1, 3, 4, 5, 7]:
+                cell.alignment = align_center
+
             else: cell.alignment = align_left
                 
         # Corrección definitiva del Attribute Error de la letra de la columna
