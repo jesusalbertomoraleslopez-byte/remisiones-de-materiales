@@ -29,13 +29,18 @@ REPO_OWNER = "jesusalbertomoraleslopez-byte"
 REPO_NAME = "remisiones-de-materiales"
 BRANCH = "main"
 
-def subir_excel_a_github(file_name, dataframe_to_save):
-    """Sincroniza y sobrescribe el DataFrame directamente en el repositorio mediante la API."""
+def cargar_excel_desde_github(file_name):
+    """Descarga el archivo Excel de forma directa y en crudo (RAW) desde GitHub."""
     try:
-        # Verifica si cuentas con el token de acceso en tus secretos de Streamlit
-        if "github_token" not in st.secrets:
-            st.error("❌ Token 'github_token' no configurado en los Secrets de Streamlit.")
-            return False
+        # URL en crudo directa sin restricciones de la API JSON de GitHub
+        url_raw = f"https://githubusercontent.com{REPO_OWNER}/{REPO_NAME}/{BRANCH}/{file_name}"
+        res = requests.get(url_raw)
+        if res.status_code == 200:
+            return pd.read_excel(io.BytesIO(res.content))
+    except Exception:
+        pass
+    return None
+
             
         GITHUB_TOKEN = st.secrets["github_token"]
         url = f"https://github.com{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
