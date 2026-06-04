@@ -512,23 +512,88 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 st.success("✅ Cantidades corregidas."); st.rerun()
         else: st.info("No hay registros para modificar.")
 
+    # --- PESTAÑA 2: ADMINISTRACIÓN DE LÍDERES CON CARGA MASIVA EXCEL ---
     with tab2:
-        st.subheader("👤 Administración de Personal de Líderes")
-        with st.expander("➕ Dar de Alta Nuevo Líder"):
+        st.subheader("👤 Administración del Personal de Líderes")
+        
+        # 1. GENERACIÓN Y DESCARGA DE PLANTILLA DE PERSONAL
+        df_l_plantilla = pd.DataFrame([
+            {"Nombre_Lider": "Nombre Ejemplo 1", "Area": "Metales"},
+            {"Nombre_Lider": "Nombre Ejemplo 2", "Area": "Embarques"}
+        ])
+        
+        buf_l = io.BytesIO()
+        with pd.ExcelWriter(buf_l, engine='openpyxl') as wr_l:
+            df_l_plantilla.to_excel(wr_l, index=False, sheet_name='Plantilla_Lideres')
+            # Aplicar formato básico rápido al encabezado
+            ws_l = wr_l.sheets['Plantilla_Lideres']
+            for col_idx in range(1, 3):
+                cell = ws_l.cell(row=1, column=col_idx)
+                cell.font = openpyxl.styles.Font(bold=True, color="FFFFFF")
+                cell.fill = openpyxl.styles.PatternFill(start_color="757575", end_color="757575", fill_type="solid")
+        
+        st.write("Descarga el formato base para rellenar la lista de personal en Excel:")
+        st.download_button(
+            label="📥 Descargar Plantilla de Personal (.xlsx)",
+            data=buf_l.getvalue(),
+            file_name="plantilla_lideres_sigrama.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="btn_download_plantilla_lideres_u"
+        )
+        
+        st.write("---")
+        
+        # 2. CARGADOR DE ARCHIVO EXCEL DE LÍDERES (INTEGRACIÓN MASIVA)
+        arch_lideres = st.file_uploader("Suba la Plantilla de Personal Rellenada:", type=["xlsx"], key="uploader_lideres_masivo_u")
+        
+        if arch_lideres and st.button("🚀 Procesar e Integrar Personal Masivo"):
+            try:
+                df_l_excel = pd.read_excel(arch_lideres)
+                columnas_l_req = ["Nombre_Lider", "Area"]
+                
+                if not all(col in df_l_excel.columns for col in columnas_l_req):
+                    st.error("❌ Error: Las columnas del archivo no coinciden. Use el formato: Nombre_Lider, Area")
+                else:
+                    # Bucle para estructurar e inyectar consecutivamente cada registro
+                    for _, row_l in df_l_excel.iterrows():
+                        if pd.notna(row_l['Nombre_Lider']) and str(row_l['Nombre_Lider']).strip() != "":
+                            n_id_l = f"LID-{(len(st.session_state.BD_Lideres) + 1):02d}"
+                            n_l_row = {
+                                "ID_Lider": n_id_l, 
+                                "Nombre_Lider": str(row_l['Nombre_Lider']).strip(), 
+                                "Area": str(row_l['Area']).strip() if pd.notna(row_l['Area']) else "Metales", 
+                                "Estatus": "Activo"
+                            }
+                            st.session_state.BD_Lideres = pd.concat([st.session_state.BD_Lideres, pd.DataFrame([n_l_row])], ignore_index=True)
+                    
+                    # Sincronizar y subir la base de datos de personal a GitHub
+                    subir_excel_a_github("BD_Lideres.xlsx", st.session_state.BD_Lideres)
+                    st.success("✅ ¡Personal integrado correctamente con folios LID y respaldado en GitHub!")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error al procesar el catálogo de personal: {e}")
+                
+        st.write("---")
+        
+        # 3. ALTA INDIVIDUAL TRADICIONAL Y EDICIÓN EN TABLA (CONSERVADA)
+        with st.expander("➕ Dar de Alta Nuevo Líder Individual"):
             c_l1, c_l2 = st.columns(2)
             with c_l1: nuevo_nom = st.text_input("Nombre Completo:", key="txt_input_nuevo_lider_name")
             with c_l2: nueva_area = st.text_input("Área:", "Metales", key="txt_input_nuevo_lider_area")
-            if st.button("➕ Registrar Líder"):
+            if st.button("➕ Registrar Líder Individual"):
                 if nuevo_nom:
                     n_row = {"ID_Lider": f"LID-{(len(st.session_state.BD_Lideres) + 1):02d}", "Nombre_Lider": nuevo_nom, "Area": nueva_area, "Estatus": "Activo"}
                     st.session_state.BD_Lideres = pd.concat([st.session_state.BD_Lideres, pd.DataFrame([n_row])], ignore_index=True)
                     subir_excel_a_github("BD_Lideres.xlsx", st.session_state.BD_Lideres)
                     st.success("Líder registrado."); st.rerun()
+                    
+        st.write("📋 Catálogo Maestro de Líderes Autorizados (Editable):")
         df_l_edit = st.data_editor(st.session_state.BD_Lideres, use_container_width=True, hide_index=True, key="editor_catalogo_lideres_master")
-        if st.button("💾 Sincronizar Cambios de Líderes"):
+        if st.button("💾 Sincronizar Cambios Manuales de Líderes"):
             st.session_state.BD_Lideres = df_l_edit
             subir_excel_a_github("BD_Lideres.xlsx", st.session_state.BD_Lideres)
             st.success("Catálogo de líderes sincronizado.")
+
 
     with tab3:
         st.subheader("🚨 Reset de Fábrica y Purga de Datos Controlada")
