@@ -239,23 +239,14 @@ if opcion_menu == "📊 Dashboard e Históricos":
         proy_global_sel = st.selectbox("Filtrar por Proyecto Interno:", opciones_global_proy, key="dash_global_proy_select_unique")
         
     with col_g2:
-        # Filtro cruzado: si se elige un proyecto, limita las descripciones a ese proyecto
         if proy_global_sel != "Todos":
             df_maestro_dash = df_maestro_dash[df_maestro_dash['Proyecto'] == proy_global_sel]
         opciones_global_desc = ["Todas"] + df_maestro_dash['Descripcion'].dropna().unique().tolist() if not df_maestro_dash.empty and 'Descripcion' in df_maestro_dash.columns else ["Todas"]
         desc_global_sel = st.selectbox("Filtrar por Descripción de Proyecto Planta Rio:", opciones_global_desc, key="dash_global_desc_select_unique")
 
-    # 2. FILTROS DE RANGO DE FECHAS SECUNDARIOS
-    col_f1, col_f2 = st.columns(2)
-    with col_f1: 
-        f_inicio = st.date_input("Fecha Inicial", datetime.date.today() - datetime.timedelta(days=7), key="dash_fecha_inicio_unique")
-    with col_f2: 
-        f_fin = st.date_input("Fecha Final", datetime.date.today(), key="dash_fecha_final_unique")
-    
     st.write("---")
     
-    # 3. LÓGICA DE FILTRADO DINÁMICO DE DATOS PARA COMPONENTES KPI
-    # Base de cálculo limpia cruzando el estado maestro
+    # 2. LÓGICA DE FILTRADO DINÁMICO DE DATOS PARA COMPONENTES KPI
     df_detalles_filtrados = st.session_state.BD_Detalle_Tarimas.copy()
     df_tarimas_filtradas = st.session_state.BD_Tarimas.copy()
     
@@ -269,7 +260,7 @@ if opcion_menu == "📊 Dashboard e Históricos":
         tarimas_validas_f = df_detalles_filtrados['ID_Tarima'].unique()
         df_tarimas_filtradas = df_tarimas_filtradas[df_tarimas_filtradas['ID_Tarima'].isin(tarimas_validas_f)]
 
-    # 4. RECALCULO DE MÉTRICAS EN TIEMPO REAL SEGÚN EL FILTRO SUPERIOR
+    # 3. RECALCULO DE MÉTRICAS EN TIEMPO REAL SEGÚN EL FILTRO SUPERIOR
     t_tar = len(df_tarimas_filtradas)
     disp = len(df_tarimas_filtradas[df_tarimas_filtradas['Estatus'] == 'Disponible'])
     rem = len(df_tarimas_filtradas[df_tarimas_filtradas['Estatus'] == 'Remesada'])
@@ -281,12 +272,13 @@ if opcion_menu == "📊 Dashboard e Históricos":
     else:
         total_piezas = piezas_disp = 0
 
-    # RENDERIZADO DE LOS BLOQUES KPI DEL CLIENTE ACTUALIZADOS
+    # RENDERIZADO DE LOS BLOQUES KPI ACTUALIZADOS
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("📦 Total Tarimas", f"{t_tar} Reg.")
     m2.metric("🟢 Tarimas Disponibles", disp)
     m3.metric("🚚 Tarimas Remesadas", rem)
     m4.metric("🔢 Total Piezas", f"{total_piezas:,} PZS")
+
     
     # El resto del código de la tabla analítica y del maestro de tarimas continúa abajo con normalidad...
 
