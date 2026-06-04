@@ -185,7 +185,7 @@ def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
 # 5. RENDERIZADO DE VISTAS (PANELES PÚBLICOS - DASHBOARD ACTUALIZADO)
 # =============================================================================
 if opcion_menu == "📊 Dashboard e Históricos":
-    st.title("📊 Dashboard General de Operaciones")
+    st.title("📊 Dashboard Planta Metales Inventario Producto")
     
     # Filtros de Fecha del Histórico
     col_f1, col_f2 = st.columns(2)
