@@ -477,19 +477,22 @@ if opcion_menu == "📊 Dashboard e Históricos":
             # 2. Rompemos el caché de red inyectando tiempo en segundos a la URL
             import time
             nocache_param = int(time.time())
+            import time
+            nocache_param = int(time.time())
             
-            df_tarimas_frescas = cargar_excel_desde_github(f"BD_Tarimas.xlsx?v={nocache_param}")
-            df_detalles_frescos = cargar_excel_desde_github(f"BD_Detalle_Tarimas.xlsx?v={nocache_param}")
-            df_remisiones_frescas = cargar_excel_desde_github(f"BD_Datos_Generales_Remision.xlsx?v={nocache_param}")
-            
-            # Cambia estas líneas adentro de tu botón (Líneas 461-463 aprox.)
+            # Dejamos únicamente las llamadas limpias (ya que el truco del tiempo ahora lo hace la función de arriba)
             df_tarimas_frescas = cargar_excel_desde_github("BD_Tarimas.xlsx")
             df_detalles_frescos = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
             df_remisiones_frescas = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
-
+            
+            # Asegúrate de que tu bloque continúe con las asignaciones de memoria que pusimos en el paso anterior:
+            if df_tarimas_frescas is not None: st.session_state.BD_Tarimas = df_tarimas_frescas
+            if df_detalles_frescos is not None: st.session_state.BD_Detalle_Tarimas = df_detalles_frescos
+            if df_remisiones_frescas is not None: st.session_state.BD_Datos_Generales_Remision = df_remisiones_frescas
             
             st.success("¡Datos actualizados desde GitHub!")
             st.rerun()
+
 
     # =============================================================================
     # 🔍 PANEL DE DIAGNÓSTICO EN TIEMPO REAL (TEMPORAL)
