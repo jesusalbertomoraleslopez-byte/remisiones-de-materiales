@@ -116,7 +116,10 @@ def draw_sigrama_reporte_decorations(canvas, doc):
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.black)
     canvas.drawString(36, 753, "Revisión 01")
-    canvas.drawString(36, 741, datetime.date.today().strftime("%d de %B %Y"))
+    
+    # --- CAMBIO AQUÍ: Fecha más grande, destacada en negrita y desplazada hacia abajo ---
+    canvas.setFont("Helvetica-Bold", 10) 
+    canvas.drawString(36, 730, datetime.date.today().strftime("%d de %B %Y"))
     
     # Título Central del Formato Oficial
     canvas.setFont("Helvetica-Bold", 13)
@@ -133,6 +136,7 @@ def draw_sigrama_reporte_decorations(canvas, doc):
     texto_legal = "PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, POR CUALQUIER MEDIO O PROCEDIMIENTO, SIN AUTORIZACIÓN DE INDUSTRIA SIGRAMA S.A. DE C.V."
     canvas.drawString(95, 37, texto_legal)
     canvas.restoreState()
+
 
 def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
     """Construye el documento PDF oficial FO-MET-11 con el panel de filtros y la cuadrícula de inventario."""
