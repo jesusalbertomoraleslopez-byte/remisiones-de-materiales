@@ -354,10 +354,15 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 cell.alignment = align_left
                 
         # Auto-ajuste de ancho de columnas sin errores de atributo
+        # Importación explícita del módulo de utilerías indexado de openpyxl
+        from openpyxl.utils import get_column_letter
+        
+        # Bucle corregido para iterar de manera segura extrayendo el índice de la primera celda
         for col in worksheet.columns:
             max_len = max(len(str(cell.value or '')) for cell in col)
-            col_letter = get_column_letter(col.column)
+            col_letter = get_column_letter(col[0].column)  # <-- CAMBIO CLAVE DE COMPATIBILIDAD
             worksheet.column_dimensions[col_letter].width = max(max_len + 4, 15)
+
             
     buf_p.seek(0)
     st.download_button(label="📥 Descargar Formato de Plantilla Corporativa (.xlsx)", data=buf_p.getvalue(), file_name="plantilla_carga_tarimas_sigrama.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
