@@ -257,7 +257,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
         if filas_seleccionadas:
             tarimas_elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
             if len(tarimas_elegidas) == 1:
-                t_imp = tarimas_elegidas
+                t_imp = tarimas_elegidas[0]
                 st.download_button(label=f"📥 Descargar PDF Tarima #{t_imp}", data=generar_pdf_tarima(t_imp), file_name=f"Tarima_{t_imp}.pdf", mime="application/pdf")
             else:
                 if st.button("📦 Unificar y Preparar Lote de Impresión"):
@@ -266,7 +266,10 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     story_lote, styles = [], getSampleStyleSheet()
                     for t_imp in tarimas_elegidas:
                         detalles = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
-                        tarima_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp].iloc
+                        
+                        # CORRECCIÓN AQUÍ: Se utiliza .iloc[0] para extraer la primera fila encontrada por texto
+                        tarima_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp].iloc[0]
+                        
                         style_g = ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=54, leading=60, alignment=1)
                         story_lote.append(Spacer(1, 1.8 * inch)); story_lote.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", style_g)); story_lote.append(PageBreak())
                         style_n, style_ng = styles['Normal'], ParagraphStyle('NG_L', parent=styles['Heading2'], fontSize=28, leading=34, alignment=1)
@@ -275,7 +278,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         story_lote.append(Spacer(1, 0.3 * inch))
                         for _, item in detalles.iterrows():
                             art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
-                            nom_art = art.iloc['Nombre'] if not art.empty else "Desconocido"
+                            nom_art = art.iloc[0]['Nombre'] if not art.empty else "Desconocido"
                             story_lote.append(Paragraph(f"<b>PO:</b> {item['PO']} | <b>SKU:</b> {item['SKU']} - {nom_art}", style_n))
                             story_lote.append(Spacer(1, 0.4 * inch)); story_lote.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", style_ng))
                         story_lote.append(PageBreak())
@@ -283,37 +286,3 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     doc_lote.build(story_lote, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
                     st.download_button(label="📥 Descargar Lote Completo (PDF)", data=buffer_lote.getvalue(), file_name="Lote_Tarimas.pdf", mime="application/pdf")
         else: st.warning("Seleccione una o más filas en la tabla para descargar.")
-elif opcion_menu == "🚚 Módulo Remisiones":
-    st.title("🚚 Generación de Remisiones de Salida")
-    t_disp = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['Estatus'] == 'Disponible']['ID_Tarima'].tolist()
-    if not t_disp: st.warning("⚠️ No existen tarimas disponibles.")
-    else:
-        t_sel = st.multiselect("Seleccione Tarimas:", options=t_disp)
-        col_e, col_r = st.columns(2)
-        with col_e:
-            nom_e = st.text_input("Líder / Emisor:", "Jesus Morales")
-            dir_e = st.text_input("Almacén de Origen:", "Metales")
-        with col_r:
-            nom_r = st.text_input("Receptor / Cliente:", "Galvatec Industrias")
-            dir_r = st.text_input("Dirección Destino:", "Prol. Valle Guadiana 919, Parque Industrial II, Parque Industrial, 35078 Gómez Palacio, Dgo., Mexico")
-        if not is_admin: st.error("🔒 Operación Bloqueada: Requiere contraseña de Administrador.")
-        else:
-            if st.button("🚀 Confirmar Salida y Generar Nueva Remisión"):
-                if not t_sel or not nom_r: st.error("Complete los campos obligatorios.")
-                else:
-                    n_id = len(st.session_state.BD_Datos_Generales_Remision) + 1
-                    fol = f"E00{26 + n_id}"
-                    reg = {"ID_Remision": n_id, "Folio_Remision": fol, "Fecha_Hora_Salida": datetime.datetime.now().strftime("%d/%m/%Y"), "Nombre_Emisor": nom_e, "Direccion_Emisor": dir_e, "Nombre_Receptor": nom_r, "Direccion_Receptor": dir_r, "Tarimas_Asociadas": t_sel}
-                    st.session_state.BD_Datos_Generales_Remision = pd.concat([st.session_state.BD_Datos_Generales_Remision, pd.DataFrame([reg])], ignore_index=True)
-                    st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(t_sel), 'Estatus'] = 'Remesada'
-                    st.success(f"✅ ¡Remisión {fol} Generada!")
-                    
-    if not st.session_state.BD_Datos_Generales_Remision.empty:
-        st.write("---")
-        st.subheader("🖨️ Descarga Documental de Remisiones")
-        r_sel = st.selectbox("Seleccione Folio para Descarga:", st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique())
-        row = st.session_state.BD_Datos_Generales_Remision[st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel].iloc
-        df_det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(row['Tarimas_Asociadas'])]
-        c1, c2 = st.columns(2)
-        with c1: st.download_button("📥 Descargar Remisión (PDF)", data=generar_pdf_remision_general(row, df_det), file_name=f"Remision_{r_sel}.pdf", mime="application/pdf")
-        with c2: st.download_button("📥 Descargar Anexo Tarimas (PDF)", data=generar_pdf_anexo_tarimas(row['Tarimas_Asociadas'], df_det), file_name=f"Anexo_{r_sel}.pdf", mime="application/pdf")
