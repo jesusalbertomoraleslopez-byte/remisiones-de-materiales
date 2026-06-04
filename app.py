@@ -8,9 +8,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 
-# 1. CONFIGURACIÓN DE LA PÁGINA WEB
+# 1. CONFIGURACIÓN E INTERFAZ BASE
 st.set_page_config(page_title="Remisiones de Materiales", layout="wide", page_icon="📦")
-
 # 2. MODELO RELACIONAL EN MEMORIA (PANDAS + SESSION STATE)
 if "BD_Articulos" not in st.session_state:
     st.session_state.BD_Articulos = pd.DataFrame([
@@ -35,7 +34,7 @@ if "BD_Datos_Generales_Remision" not in st.session_state:
     st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=[
         "ID_Remision", "Folio_Remision", "Fecha_Hora_Salida", "Nombre_Emisor", "Direccion_Emisor", "Nombre_Receptor", "Direccion_Receptor", "Tarimas_Asociadas"
     ])
-# 3. SISTEMA DE SEGURIDAD (SECRETS) Y NAVEGACIÓN
+# 3. CONTROL DE SEGURIDAD MEDIANTE ST.SECRETS Y ENRUTADOR
 st.sidebar.title("🔐 Control de Acceso")
 admin_pass_input = st.sidebar.text_input("Contraseña Administrador:", type="password")
 
@@ -57,14 +56,17 @@ opcion_menu = st.sidebar.radio(
     "Seleccione un Módulo:",
     ["📊 Dashboard e Históricos", "🔍 Centro de Consultas", "📦 Módulo Tarimas", "🚚 Módulo Remisiones"]
 )
-# 4. DISEÑO DE IMPRESIÓN PDF CON FORMATO CORPORATIVO SIGRAMA
+# 4. CAPA DE GENERACIÓN DOCUMENTAL (DISEÑO FO-MET-10)
 def draw_sigrama_decorations(canvas, doc):
     canvas.saveState()
     canvas.setFillColor(colors.HexColor("#D32F2F"))
     canvas.rect(36, 745, 540, 4, fill=1, stroke=0)
+    
+    # Código de control actualizado solicitado
     canvas.setFont("Helvetica-Bold", 11)
     canvas.setFillColor(colors.HexColor("#D32F2F"))
-    canvas.drawString(36, 765, "FO-ABA-10")
+    canvas.drawString(36, 765, "FO-MET-10")
+    
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.black)
     canvas.drawString(36, 753, "Revisión 01")
@@ -132,7 +134,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         tabla_materiales.append([Paragraph(str(int(row['Cantidad'])), style_normal_text), Paragraph("Piezas", style_normal_text), Paragraph(str(row['SKU']), style_normal_text), Paragraph(nom_art, style_normal_text), Paragraph(f"Tarima: #{row['ID_Tarima']}", style_normal_text)])
     for _ in range(max(1, 8 - len(df_detalles_remision))):
         tabla_materiales.append([Paragraph("", style_normal_text)] * 5)
-    t_mat = Table(tabla_materiales, colWidths=[70, 60, 110, 180, 120])
+    t_mat = Table(tabla_materiales, colWidths=[70, 60, 110, 160, 140])
     t_mat.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#D32F2F")), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#757575"))]))
     story.append(t_mat)
     story.append(Spacer(1, 0.3 * inch))
@@ -163,7 +165,7 @@ def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
         tabla_anexo = [[Paragraph("PO ASOCIADA", style_b), Paragraph("SKU / PRODUCTO", style_b), Paragraph("CANTIDAD", style_b)]]
         for _, s_row in sub_det.iterrows():
             tabla_anexo.append([Paragraph(str(s_row['PO']), style_t), Paragraph(str(s_row['SKU']), style_t), Paragraph(str(int(s_row['Cantidad'])), style_t)])
-        t_det = Table(tabla_anexo, colWidths=[180, 180, 180])
+        t_det = Table(tabla_anexo, colWidths=[150, 240, 150])
         t_det.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")), ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#F5F5F5")), ('GRID', (0,0), (-1,-1), 1, colors.white)]))
         story.append(t_det)
         story.append(PageBreak())
@@ -171,7 +173,7 @@ def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
     doc.build(story, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
     buffer.seek(0)
     return buffer
-# 5. RENDERIZADO DE LAS VISTAS DE LA APLICACIÓN
+# 5. RENDERIZADO DE VISTAS (PANELES PÚBLICOS)
 if opcion_menu == "📊 Dashboard e Históricos":
     st.title("📊 Dashboard General de Operaciones")
     col_f1, col_f2 = st.columns(2)
@@ -203,7 +205,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
         towrite = io.BytesIO()
         with pd.ExcelWriter(towrite, engine='openpyxl') as writer: res.to_excel(writer, index=False, sheet_name='Reporte')
         st.download_button(label="📥 Descargar Reporte en Excel (.xlsx)", data=towrite.getvalue(), file_name="Reporte_Consolidado.xlsx")
-
+# 6. MÓDULOS OPERATIVOS RESTINGIDOS POR CONTRASEÑA
 elif opcion_menu == "📦 Módulo Tarimas":
     st.title("📦 Carga de Tarimas")
     st.subheader("📋 Formato Requerido")
@@ -246,7 +248,7 @@ elif opcion_menu == "🚚 Módulo Remisiones":
             dir_e = st.text_input("Almacén de Origen:", "Metales")
         with col_r:
             nom_r = st.text_input("Receptor / Cliente:", "Galvatec Industrias")
-            dir_r = st.text_input("Dirección Destino:", "Prol. Valle Guadiana 919, Parque Industrial II")
+            dir_r = st.text_input("Dirección Destino:", "Prol. Valle Guadiana 919, Parque Industrial II, Parque Industrial, 35078 Gómez Palacio, Dgo., Mexico")
         if not is_admin: st.error("🔒 Operación Bloqueada: Requiere contraseña de Administrador.")
         else:
             if st.button("🚀 Confirmar Salida y Generar Nueva Remisión"):
