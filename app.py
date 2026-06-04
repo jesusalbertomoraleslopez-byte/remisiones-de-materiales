@@ -281,7 +281,12 @@ if opcion_menu == "📊 Dashboard e Históricos":
             ).reset_index()
             resumen_avanzado['% Avance Salida'] = (resumen_avanzado['Piezas_Remesadas'] / resumen_avanzado['Total_Piezas'] * 100).round(1)
             resumen_avanzado['% Avance Salida'] = resumen_avanzado['% Avance Salida'].apply(lambda x: f"{x}%")
-            resumen_avanzado.columns = ["Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción del Lote", "Cant. Tarimas", "Total Piezas", "Piezas Disponibles", "Piezas Remesadas", "% Avance Salida"]
+                       # LÍNEA CORREGIDA CON EL NUEVO NOMBRE DE ENCABEZADO DE COLUMNA
+            resumen_avanzado.columns = [
+                "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", 
+                "Descripción de Proyecto Planta Rio", "Cant. Tarimas", "Total Piezas", 
+                "Piezas Disponibles", "Piezas Remesadas", "% Avance Salida"
+            ]
             st.dataframe(resumen_avanzado, use_container_width=True, hide_index=True)
         else: st.info("No existen registros coincidentes con el filtro.")
     else: st.info("No hay datos de parcialidades.")
