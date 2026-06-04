@@ -33,7 +33,7 @@ def cargar_excel_desde_github(file_name):
     """Descarga el archivo Excel de forma directa y en crudo (RAW) desde GitHub."""
     try:
         # URL en crudo directa sin restricciones de la API JSON de GitHub
-        url_raw = f"https://githubusercontent.com{REPO_OWNER}/{REPO_NAME}/{BRANCH}/{file_name}"
+        url_raw = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
         res = requests.get(url_raw)
         if res.status_code == 200:
             return pd.read_excel(io.BytesIO(res.content))
