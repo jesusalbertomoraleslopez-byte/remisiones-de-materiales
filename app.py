@@ -89,7 +89,7 @@ def subir_excel_a_github(file_name, dataframe_to_save):
         base64_content = base64.b64encode(content_bytes).decode("utf-8")
         
         # URL CORREGIDA DE LA API OFICIAL DE GITHUB
-        url = f"https://github.com{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
+        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
         
         res_get = requests.get(url, headers=headers)
