@@ -479,6 +479,8 @@ elif opcion_menu == "📦 Módulo Tarimas":
     
     # 2. MOTOR DE DISEÑO CORPORATIVO REQUERIDO (OPENPYXL)
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter # Importación corregida de compatibilidad
+    
     buf_p = io.BytesIO()
     with pd.ExcelWriter(buf_p, engine='openpyxl') as wr: 
         df_p.to_excel(wr, index=False, sheet_name='Plantilla_Tarimas')
@@ -492,27 +494,27 @@ elif opcion_menu == "📦 Módulo Tarimas":
         borde_t = Side(border_style="thin", color="D3D3D3")
         borde_c = Border(left=borde_t, right=borde_t, top=borde_t, bottom=borde_t)
         
-        worksheet.row_dimensions[1].height = 24
+        worksheet.row_dimensions.height = 24
         for col_idx in range(1, 8):
             cell = worksheet.cell(row=1, column=col_idx)
             cell.fill, cell.font, cell.alignment = fill_rojo, font_header, align_center
             
-        worksheet.row_dimensions[2].height = 20
+        worksheet.row_dimensions.height = 20
         for col_idx in range(1, 8):
             cell = worksheet.cell(row=2, column=col_idx)
             cell.font, cell.border = font_data, borde_c
-            if col_idx in [1, 3, 4, 5, 7]: cell.alignment = align_center
+            if col_idx in: cell.alignment = align_center
             else: cell.alignment = align_left
                 
+        # Corrección definitiva del Attribute Error de la letra de la columna
         for col in worksheet.columns:
             max_len = max(len(str(cell.value or '')) for cell in col)
-            worksheet.column_dimensions[col.column_letter].width = max(max_len + 4, 15)
-
+            col_letter = get_column_letter(col.column)
+            worksheet.column_dimensions[col_letter].width = max(max_len + 4, 15)
             
     buf_p.seek(0)
     st.download_button(label="📥 Descargar Formato de Plantilla Corporativa (.xlsx)", data=buf_p.getvalue(), file_name="plantilla_carga_tarimas_sigrama.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     st.write("---")
-    
     # 3. RECEPCIÓN Y FILTRADO POR PASSWORD DE ARCHIVOS MAESTROS
     if not st.session_state.BD_Tarimas.empty and "Es_Nueva" not in st.session_state.BD_Tarimas.columns:
         st.session_state.BD_Tarimas["Es_Nueva"] = False
@@ -551,7 +553,6 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     st.success("¡Inventario guardado y respaldado con éxito!")
                     st.rerun()
             except Exception as e: st.error(f"Error: {e}")
-            
     # 4. CUADRÍCULA INTERACTIVA DE IMPRESIÓN SELECCIONADA EN MEMORIA
     if not st.session_state.BD_Tarimas.empty:
         st.write("---")
@@ -563,7 +564,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
         if filas_seleccionadas:
             tarimas_elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
             if len(tarimas_elegidas) == 1:
-                t_imp = tarimas_elegidas[0]
+                t_imp = tarimas_elegidas
                 st.download_button(label=f"📥 Descargar PDF Tarima #{t_imp}", data=generar_pdf_tarima(t_imp), file_name=f"Tarima_{t_imp}.pdf", mime="application/pdf")
             else:
                 if st.button("📦 Unificar y Preparar Lote de Impresión"):
@@ -572,7 +573,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     story_l, styles = [], getSampleStyleSheet()
                     for t_imp in tarimas_elegidas:
                         det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
-                        t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp].iloc[0]
+                        t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp].iloc
                         story_l.append(Spacer(1, 1.8 * inch))
                         story_l.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=54, leading=60, alignment=1)))
                         story_l.append(PageBreak())
@@ -581,7 +582,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         story_l.append(Spacer(1, 0.3 * inch))
                         for _, item in det.iterrows():
                             art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
-                            nom_art = art.iloc[0]['Nombre'] if not art.empty else "Desconocido"
+                            nom_art = art.iloc['Nombre'] if not art.empty else "Desconocido"
                             story_l.append(Paragraph(f"<b>PO:</b> {item['PO']} | <b>SKU:</b> {item['SKU']} - {nom_art}", styles['Normal']))
                             story_l.append(Spacer(1, 0.4 * inch))
                             story_l.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", ParagraphStyle('NG_L', parent=styles['Heading2'], fontSize=28, leading=34, alignment=1)))
@@ -591,69 +592,88 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     st.download_button(label="📥 Descargar Lote Completo (PDF)", data=buf_l.getvalue(), file_name="Lote_Tarimas.pdf", mime="application/pdf")
         else:
             st.warning("Seleccione una o más filas en la tabla usando las casillas de verificación para activar la descarga.")
+elif opcion_menu == "🚚 Módulo Remisiones":
+    st.title("🚚 Generación de Remisiones de Salida")
+    t_disp = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['Estatus'] == 'Disponible']['ID_Tarima'].tolist()
+    if not t_disp: st.warning("⚠️ No existen tarimas disponibles.")
+    else:
+        t_sel = st.multiselect("Seleccione Tarimas:", options=t_disp)
+        col_e, col_r = st.columns(2)
+        with col_e:
+            if "BD_Lideres" in st.session_state and not st.session_state.BD_Lideres.empty:
+                lista_nombres_lideres = st.session_state.BD_Lideres['Nombre_Lider'].unique().tolist()
+                nom_e = st.selectbox("Líder / Emisor Autorizado:", options=lista_nombres_lideres, key="rem_lider_sel_unique")
+            else:
+                nom_e = st.selectbox("Líder / Emisor Autorizado:", options=["Jesus Morales", "Supervisor General"], key="rem_lider_backup_unique")
+            dir_e = st.text_input("Almacén de Origen:", "Metales")
+        with col_r:
+            nom_r = st.text_input("Receptor / Cliente:", "Galvatec Industrias")
+            dir_r = st.text_input("Dirección Destino:", "Prol. Valle Guadiana 919, Parque Industrial II, 35078 Gómez Palacio, Dgo.")
+        if not is_admin: st.error("🔒 Operación Bloqueada: Requiere contraseña de Administrador.")
+        else:
+            if st.button("🚀 Confirmar Salida y Generar Nueva Remisión"):
+                if not t_sel or not nom_r: st.error("Complete los campos.")
+                else:
+                    fol = f"E00{27 + len(st.session_state.BD_Datos_Generales_Remision)}"
+                    reg = {"ID_Remision": len(st.session_state.BD_Datos_Generales_Remision)+1, "Folio_Remision": fol, "Fecha_Hora_Salida": datetime.datetime.now().strftime("%d/%m/%Y"), "Nombre_Emisor": nom_e, "Direccion_Emisor": dir_e, "Nombre_Receptor": nom_r, "Direccion_Receptor": dir_r, "Tarimas_Asociadas": t_sel}
+                    st.session_state.BD_Datos_Generales_Remision = pd.concat([st.session_state.BD_Datos_Generales_Remision, pd.DataFrame([reg])], ignore_index=True)
+                    st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(t_sel), 'Estatus'] = 'Remesada'
+                    subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                    subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
+                    st.success(f"✅ ¡Remisión {fol} Generada y Guardada!"); st.rerun()
+                    
+    if not st.session_state.BD_Datos_Generales_Remision.empty:
+        st.write("---")
+        r_sel = st.selectbox("Seleccione Folio:", st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique(), key="rem_download_folio_sel")
+        row = st.session_state.BD_Datos_Generales_Remision[st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel].iloc
+        df_det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(row['Tarimas_Asociadas'])]
+        c1, c2 = st.columns(2)
+        with c1: st.download_button("📥 Descargar Remisión (PDF)", data=generar_pdf_remision_general(row, df_det), file_name=f"Remision_{r_sel}.pdf", key="btn_dl_rem_pdf")
+        with c2: st.download_button("📥 Descargar Anexo Tarimas (PDF)", data=generar_pdf_anexo_tarimas(row['Tarimas_Asociadas'], df_det), file_name=f"Anexo_{r_sel}.pdf", key="btn_dl_anexo_pdf")
 
-
-
-
-# =============================================================================
-# SECCIÓN 14: PANEL DE MANTENIMIENTO, EDICIÓN EN CALIENTE Y PURGA DE REGISTROS
-# =============================================================================
 elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
     st.title("⚙️ Panel de Mantenimiento Avanzado del Sistema")
     st.warning("⚠️ Acción Crítica: Las modificaciones realizadas impactan directamente en GitHub.")
-    
     if "BD_Lideres" not in st.session_state:
-        st.session_state.BD_Lideres = pd.DataFrame([
-            {"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}
-        ])
+        st.session_state.BD_Lideres = pd.DataFrame([{"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}])
 
     tab1, tab2, tab3 = st.tabs(["📝 Ajustar Cantidades", "👤 Catálogo de Líderes", "🚨 Purga de Datos"])
 
-    # --- PESTAÑA 1: AJUSTAR CANTIDADES EN CALIENTE ---
     with tab1:
-        st.subheader("✏️ Edición Rápida de Inventario (Detalle Tarimas)")
+        st.subheader("✏️ Edición Rápida de Inventario")
         if not st.session_state.BD_Detalle_Tarimas.empty:
-            df_editable = st.data_editor(
-                st.session_state.BD_Detalle_Tarimas, 
-                use_container_width=True, 
-                disabled=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion"], 
-                hide_index=True
-            )
+            df_editable = st.data_editor(st.session_state.BD_Detalle_Tarimas, use_container_width=True, disabled=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion"], hide_index=True, key="editor_mantenimiento_cantidades")
             if st.button("💾 Guardar Cambios de Cantidades en GitHub"):
                 st.session_state.BD_Detalle_Tarimas = df_editable
                 subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
-                st.success("✅ Cantidades corregidas y sincronizadas con éxito."); st.rerun()
-        else: 
-            st.info("No hay registros en el detalle de tarimas para modificar.")
+                st.success("✅ Cantidades corregidas."); st.rerun()
+        else: st.info("No hay registros para modificar.")
 
-    # --- PESTAÑA 2: ADMISTRACIÓN DE PERSONAL DE LÍDERES ---
     with tab2:
-        st.subheader("👤 Administración del Personal de Líderes")
+        st.subheader("👤 Administración de Personal de Líderes")
         with st.expander("➕ Dar de Alta Nuevo Líder"):
             c_l1, c_l2 = st.columns(2)
-            with c_l1: nuevo_nom = st.text_input("Nombre Completo:")
-            with c_l2: nueva_area = st.text_input("Área:", "Metales")
+            with c_l1: nuevo_nom = st.text_input("Nombre Completo:", key="txt_input_nuevo_lider_name")
+            with c_l2: nueva_area = st.text_input("Área:", "Metales", key="txt_input_nuevo_lider_area")
             if st.button("➕ Registrar Líder"):
                 if nuevo_nom:
                     n_row = {"ID_Lider": f"LID-{(len(st.session_state.BD_Lideres) + 1):02d}", "Nombre_Lider": nuevo_nom, "Area": nueva_area, "Estatus": "Activo"}
                     st.session_state.BD_Lideres = pd.concat([st.session_state.BD_Lideres, pd.DataFrame([n_row])], ignore_index=True)
                     subir_excel_a_github("BD_Lideres.xlsx", st.session_state.BD_Lideres)
                     st.success("Líder registrado."); st.rerun()
-        df_l_edit = st.data_editor(st.session_state.BD_Lideres, use_container_width=True, hide_index=True)
+        df_l_edit = st.data_editor(st.session_state.BD_Lideres, use_container_width=True, hide_index=True, key="editor_catalogo_lideres_master")
         if st.button("💾 Sincronizar Cambios de Líderes"):
             st.session_state.BD_Lideres = df_l_edit
             subir_excel_a_github("BD_Lideres.xlsx", st.session_state.BD_Lideres)
             st.success("Catálogo de líderes sincronizado.")
 
-    # --- PESTAÑA 3: PURGA DETALLADA Y MASIVA DE REGISTROS ---
     with tab3:
         st.subheader("🚨 Reset de Fábrica y Purga de Datos Controlada")
-        metodo_purga = st.radio("Método de Purga:", ["❌ Purga Total Automática (Reset Completo)", "🔍 Seleccionar Registros Específicos para Eliminar"], horizontal=True)
+        metodo_purga = st.radio("Método de Purga:", ["❌ Purga Total Automática (Reset Completo)", "🔍 Seleccionar Registros Específicos para Eliminar"], horizontal=True, key="radio_metodo_purga_master")
         st.write("---")
-        
         if metodo_purga == "❌ Purga Total Automática (Reset Completo)":
-            st.error("⚠️ Peligro: Esta acción vaciará por completo todos los registros históricos en GitHub a ceros.")
-            if st.checkbox("Confirmo que deseo aplicar un Reset de Fábrica Total.", key="chk_total"):
+            st.error("⚠️ Peligro: Esta acción vaciará por completo todos los registros históricos en GitHub.")
+            if st.checkbox("Confirmo que deseo aplicar un Reset de Fábrica Total.", key="chk_total_purga_final"):
                 if st.button("🗑️ EJECUTAR PURGA MAESTRA TOTAL"):
                     st.session_state.BD_Tarimas = pd.DataFrame(columns=st.session_state.BD_Tarimas.columns)
                     st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=st.session_state.BD_Detalle_Tarimas.columns)
@@ -661,39 +681,41 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
                     subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-                    st.success("💥 Sistema purgado por completo a ceros de forma masiva."); st.rerun()
+                    st.success("💥 Sistema purgado por completo."); st.rerun()
         else:
-            st.info("💡 Consejo: Seleccione una o más casillas en las tablas inferiores para habilitar los botones de remoción parcial.")
             st.markdown("### 📦 1. Eliminar Tarimas del Inventario")
             if not st.session_state.BD_Tarimas.empty:
                 df_tar_vista = st.session_state.BD_Tarimas.copy().drop(columns=["Es_Nueva"], errors="ignore")
-                sel_tarimas = st.dataframe(df_tar_vista, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_tarimas")
+                sel_tarimas = st.dataframe(df_tar_vista, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_tarimas_final")
                 filas_tar = sel_tarimas.get("selection", {}).get("rows", [])
                 if filas_tar:
                     ids_tar_eliminar = st.session_state.BD_Tarimas.iloc[filas_tar]['ID_Tarima'].tolist()
-                    st.warning(f"⚠️ Seleccionadas para eliminar: {', '.join(ids_tar_eliminar)}")
                     if st.button("🗑️ Eliminar Tarimas Seleccionadas"):
                         st.session_state.BD_Tarimas = st.session_state.BD_Tarimas[~st.session_state.BD_Tarimas['ID_Tarima'].isin(ids_tar_eliminar)]
                         st.session_state.BD_Detalle_Tarimas = st.session_state.BD_Detalle_Tarimas[~st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(ids_tar_eliminar)]
                         subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                         subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
-                        st.success("✅ Registros de Tarimas removidos e inyectados en GitHub."); st.rerun()
-            else: st.write("No hay tarimas registradas en el inventario activo.")
-                
+                        st.success("✅ Tarimas removidas."); st.rerun()
+            else: st.write("No hay tarimas.")
             st.write("---")
             st.markdown("### 🚚 2. Eliminar Remisiones de Salida")
             if not st.session_state.BD_Datos_Generales_Remision.empty:
-                sel_remisiones = st.dataframe(st.session_state.BD_Datos_Generales_Remision, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_remisiones")
+                sel_remisiones = st.dataframe(st.session_state.BD_Datos_Generales_Remision, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_remisiones_final")
                 filas_rem = sel_remisiones.get("selection", {}).get("rows", [])
                 if filas_rem:
                     ids_rem_eliminar = st.session_state.BD_Datos_Generales_Remision.iloc[filas_rem]['Folio_Remision'].tolist()
                     tarimas_afectadas = []
                     for idx in filas_rem: tarimas_afectadas.extend(st.session_state.BD_Datos_Generales_Remision.iloc[idx]['Tarimas_Asociadas'])
-                    st.warning(f"⚠️ Seleccionadas para eliminar: {', '.join(ids_rem_eliminar)}")
                     if st.button("🗑️ Eliminar Remisiones Seleccionadas"):
                         st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(tarimas_afectadas), 'Estatus'] = 'Disponible'
                         st.session_state.BD_Datos_Generales_Remision = st.session_state.BD_Datos_Generales_Remision[~st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].isin(ids_rem_eliminar)]
-                        subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-                        subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
-                        st.success("✅ Folios de remisión eliminados y tarimas restauradas a Disponible."); st.rerun()
-            else: st.write("No hay folios de remisiones emitidos en el historial.")
+                    # (Continuación de línea 711) -> Guardar físicamente el cambio en el repositorio
+                    subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
+                    subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                    st.success("✅ Remisiones seleccionadas eliminadas y tarimas devueltas a Disponible."); st.rerun()
+            else: 
+                st.write("No hay remisiones emitidas en el historial actual.")
+        else:
+            st.info("💡 Consejo: Seleccione una o más casillas en las tablas superiores para habilitar la purga seleccionada.")
+    else:
+        st.error("🔒 Acceso Denegado: Ingrese la contraseña correcta de Soporte/IT para desbloquear las herramientas avanzadas.")
