@@ -20,17 +20,42 @@ try:
 except FileNotFoundError:
     st.warning("⚠️ Cargando interfaz gráfica del banner...")
 st.write("")
-# 2. MODELO RELACIONAL EN MEMORIA (PANDAS + SESSION STATE)
-if "BD_Articulos" not in st.session_state:
-    st.session_state.BD_Articulos = pd.DataFrame([
-        {"SKU": "12-B-9016-01", "Nombre": "Lámina Galvanizada Sigrama", "Calibre_Espesor": "Calibre 22", "Dimensiones_Pieza": "3x10 ft", "Acabado_Superficial": "Zintro"},
-        {"SKU": "SKU-002", "Nombre": "Placa de Acero Comercial", "Calibre_Espesor": "1/4 pulgada", "Dimensiones_Pieza": "4x8 ft", "Acabado_Superficial": "Negro"}
-    ])
+# =============================================================================
+# 3. CONTROL DE SEGURIDAD MÚLTIPLE (SECRETS Y SUPERUSUARIO)
+# =============================================================================
+st.sidebar.title("🔐 Control de Acceso")
+admin_pass_input = st.sidebar.text_input("Contraseña Administrador:", type="password")
 
-if "BD_Ordenes_Compra" not in st.session_state:
-    st.session_state.BD_Ordenes_Compra = pd.DataFrame([
-        {"PO": "PO-10001", "SKU": "12-B-9016-01", "Cantidad_Solicitada": 500}
-    ])
+def es_admin():
+    try:
+        return admin_pass_input == st.secrets["admin_password"]
+    except KeyError:
+        st.sidebar.error("Error: 'admin_password' no configurado.")
+        return False
+
+is_admin = es_admin()
+if is_admin:
+    st.sidebar.success("Modo Administrador Activo")
+else:
+    st.sidebar.warning("Modo Consulta Activo")
+
+# --- NUEVA VALIDACIÓN: SUPERUSUARIO MANTENIMIENTO ---
+st.sidebar.write("---")
+st.sidebar.title("🛠️ Área de Soporte")
+super_pass_input = st.sidebar.text_input("Contraseña de Soporte / IT:", type="password")
+is_super = (super_pass_input == "SigramaMetales2025")
+
+if is_super:
+    st.sidebar.success("⚡ Modo Superusuario Activo")
+
+# MENÚ LATERAL ACTUALIZADO CON LA NUEVA SECCIÓN
+st.sidebar.title("🧭 Navegación")
+lista_modulos = ["📊 Dashboard e Históricos", "🔍 Centro de Consultas", "📦 Módulo Tarimas", "🚚 Módulo Remisiones"]
+if is_super:
+    lista_modulos.append("⚙️ Mantenimiento y Catálogos")
+
+opcion_menu = st.sidebar.radio("Seleccione un Módulo:", lista_modulos)
+
 if "BD_Tarimas" not in st.session_state:
     st.session_state.BD_Tarimas = pd.DataFrame(columns=[
         "ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus", "Es_Nueva"
@@ -391,3 +416,93 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 file_name=f"Anexo_{r_sel}.pdf", 
                 mime="application/pdf"
             )
+# =============================================================================
+# NUEVO MÓDULO: MANTENIMIENTO, EDICIÓN DE CANTIDADES Y PURGA DE DATOS (SUPERUSUARIO)
+# =============================================================================
+elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
+    st.title("⚙️ Panel de Mantenimiento Avanzado del Sistema")
+    st.warning("⚠️ Atención: Las modificaciones realizadas en este panel impactan directamente los archivos maestros en GitHub.")
+    
+    # Inicialización del Catálogo Semilla de Líderes/Operadores en memoria si no existe
+    if "BD_Lideres" not in st.session_state:
+        st.session_state.BD_Lideres = pd.DataFrame([
+            {"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"},
+            {"ID_Lider": "LID-02", "Nombre_Lider": "Supervisor General", "Area": "Embarques", "Estatus": "Activo"}
+        ])
+
+    tab1, tab2, tab3 = st.tabs(["📝 Ajustar Cantidades", "👤 Catálogo de Líderes", "🚨 Purga de Datos"])
+
+    # --- PESTAÑA 1: AJUSTAR CANTIDADES EN CASO DE ERROR ---
+    with tab1:
+        st.subheader("✏️ Edición Rápida de Inventario (Detalle Tarimas)")
+        if not st.session_state.BD_Detalle_Tarimas.empty:
+            st.write("Seleccione el registro de la tarima que desea modificar:")
+            
+            # Editor interactivo en formato de tabla para modificar cantidades directamente en pantalla
+            df_editable = st.data_editor(
+                st.session_state.BD_Detalle_Tarimas,
+                use_container_width=True,
+                disabled=["ID_Detalle", "ID_Tarima", "SKU", "PO"], # Bloquear llaves relacionales
+                hide_index=True
+            )
+            
+            if st.button("💾 Guardar Cambios de Cantidades en GitHub"):
+                st.session_state.BD_Detalle_Tarimas = df_editable
+                # Sincronización inmediata con el repositorio
+                subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
+                st.success("✅ Cantidades corregidas y actualizadas con éxito en el servidor y GitHub.")
+                st.rerun()
+        else:
+            st.info("No hay registros en el detalle de tarimas para modificar.")
+
+    # --- PESTAÑA 2: CREAR, VER Y MODIFICAR BASE DE DATOS DE LÍDERES ---
+    with tab2:
+        st.subheader("👤 Administración del Personal de Líderes")
+        
+        # Formulario compacto para registrar un nuevo líder
+        with st.expander("➕ Dar de Alta Nuevo Líder / Operador"):
+            c_l1, c_l2 = st.columns(2)
+            with c_l1:
+                nuevo_nom = st.text_input("Nombre Completo del Líder:")
+            with c_l2:
+                nueva_area = st.text_input("Área de Adscripción:", "Metales")
+            
+            if st.button("➕ Registrar Líder"):
+                if nuevo_nom:
+                    n_id_l = f"LID-{(len(st.session_state.BD_Lideres) + 1):02d}"
+                    n_l_row = {"ID_Lider": n_id_l, "Nombre_Lider": nuevo_nom, "Area": nueva_area, "Estatus": "Activo"}
+                    st.session_state.BD_Lideres = pd.concat([st.session_state.BD_Lideres, pd.DataFrame([n_l_row])], ignore_index=True)
+                    subir_excel_a_github("BD_Lideres.xlsx", st.session_state.BD_Lideres)
+                    st.success(f"Líder {nuevo_nom} registrado y respaldado.")
+                    st.rerun()
+                else:
+                    st.error("El nombre es un campo obligatorio.")
+
+        st.write("📋 Catálogo Actual de Líderes Autorizados (Editable):")
+        df_lideres_edit = st.data_editor(st.session_state.BD_Lideres, use_container_width=True, hide_index=True)
+        if st.button("💾 Sincronizar Cambios de Líderes"):
+            st.session_state.BD_Lideres = df_lideres_edit
+            subir_excel_a_github("BD_Lideres.xlsx", st.session_state.BD_Lideres)
+            st.success("Catálogo de líderes sincronizado en GitHub.")
+
+    # --- PESTAÑA 3: BORRAR REGISTROS (PURGA ABSOLUTA DE BASE DE DATOS) ---
+    with tab3:
+        st.subheader("🚨 Reset de Fábrica y Purga de Datos")
+        st.error("⚠️ Peligro: Esta acción eliminará permanentemente todos los registros históricos del sistema y limpiará los archivos de GitHub.")
+        
+        confirmar_purga = st.checkbox("Entiendo los riesgos y deseo vaciar todas las bases de datos.")
+        
+        if confirmar_purga:
+            if st.button("🗑️ EJECUTAR PURGA TOTAL DEL SISTEMA"):
+                # Limpieza absoluta de estructuras relacionales en memoria
+                st.session_state.BD_Tarimas = pd.DataFrame(columns=st.session_state.BD_Tarimas.columns)
+                st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=st.session_state.BD_Detalle_Tarimas.columns)
+                st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=st.session_state.BD_Datos_Generales_Remision.columns)
+                
+                # Sincronizar los archivos vacíos a GitHub para resetear el repositorio
+                subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
+                subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
+                
+                st.success("💥 Sistema purgado por completo. El repositorio en GitHub se ha restablecido a ceros.")
+                st.rerun()
