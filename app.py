@@ -62,10 +62,12 @@ if "BD_Tarimas" not in st.session_state:
         st.session_state.BD_Tarimas = pd.DataFrame(columns=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus", "Es_Nueva"])
 
 # --- Detalle Granular de Contenido por Tarima (Línea Crítica) ---
-if "BD_Detalle_Tarimas" not in st.session_state:
-    df_git_detalles = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
-    if df_git_detalles is not None:
-        st.session_state.BD_Detalle_Tarimas = df_git_detalles
+    # Reemplazo de la línea 410 (Evita el fallo si el estado del navegador está corrupto)
+    if "BD_Detalle_Tarimas" not in st.session_state or st.session_state.get("BD_Detalle_Tarimas") is None:
+        st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"])
+        
+    df_maestro_dash = st.session_state.BD_Detalle_Tarimas.copy()
+
     else:
         # PLAN DE RESPALDO IMPRESCINDIBLE: Si GitHub falla o está vacío, crea las columnas. 
         # Esto elimina de raíz el fallo de la línea 410 porque la propiedad .copy() siempre tendrá un DataFrame válido.
