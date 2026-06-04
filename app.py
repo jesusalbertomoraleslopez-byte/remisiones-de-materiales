@@ -235,6 +235,23 @@ if opcion_menu == "📊 Dashboard e Históricos":
     m4.metric("🔢 Total Piezas", f"{total_piezas:,} PZS")
     
     st.write("---")
+    st.subheader("🔍 Filtros Operativos del Proyecto")
+    col_x1, col_x2, col_x3 = st.columns(3)
+    df_c_filtro = st.session_state.BD_Detalle_Tarimas.copy()
+    
+    with col_x1:
+        opciones_proy = ["Todos"] + df_c_filtro['Proyecto'].dropna().unique().tolist() if not df_c_filtro.empty and 'Proyecto' in df_c_filtro.columns else ["Todos"]
+        proy_sel = st.selectbox("Filtrar por Proyecto Interno:", opciones_proy)
+    with col_x2:
+        if proy_sel != "Todos": df_c_filtro = df_c_filtro[df_c_filtro['Proyecto'] == proy_sel]
+        opciones_po = ["Todas"] + df_c_filtro['PO'].dropna().unique().tolist() if not df_c_filtro.empty else ["Todas"]
+        po_sel = st.selectbox("Filtrar por Orden de Compra (PO):", opciones_po)
+    with col_x3:
+        if po_sel != "Todas": df_c_filtro = df_c_filtro[df_c_filtro['PO'] == po_sel]
+        opciones_parc = ["Todas"] + df_c_filtro['Parcialidad'].dropna().unique().tolist() if not df_c_filtro.empty and 'Parcialidad' in df_c_filtro.columns else ["Todas"]
+        parc_sel = st.selectbox("Filtrar por Parcialidad:", opciones_parc)
+    
+    st.write("---")
     st.subheader("📋 Resumen de Cumplimiento por Pedido (PO)")
     if not st.session_state.BD_Detalle_Tarimas.empty:
         df_c = pd.merge(st.session_state.BD_Detalle_Tarimas, st.session_state.BD_Tarimas[['ID_Tarima', 'Estatus']], on='ID_Tarima', how='left')
@@ -247,49 +264,49 @@ if opcion_menu == "📊 Dashboard e Históricos":
         st.dataframe(resumen_po, use_container_width=True, hide_index=True)
     else: st.info("No hay datos cargados para resumir por PO.")
 
-elif opcion_menu == "🔍 Centro de Consultas":
-    st.title("🔍 Centro de Consultas Avanzado")
-    col_sel, col_val = st.columns(2)
-    with col_sel: tipo_filtro = st.selectbox("Filtrar por:", ["Ninguno", "SKU", "PO", "Folio_Remision"])
-    with col_val: valor_filtro = st.text_input("Término de búsqueda:")
-    res = st.session_state.BD_Detalle_Tarimas.copy()
-    if tipo_filtro == "SKU" and valor_filtro: res = res[res['SKU'].str.contains(valor_filtro, case=False)]
-    elif tipo_filtro == "PO" and valor_filtro: res = res[res['PO'].str.contains(valor_filtro, case=False)]
-    elif tipo_filtro == "Folio_Remision" and valor_filtro:
-        rem_m = st.session_state.BD_Datos_Generales_Remision[st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].str.contains(valor_filtro, case=False)]
-        tar_v = [t for r in rem_m['Tarimas_Asociadas'] for t in r]
-        res = res[res['ID_Tarima'].isin(tar_v)]
-    st.dataframe(res, use_container_width=True)
-elif opcion_menu == "📦 Módulo Tarimas":
-    st.title("📦 Carga de Tarimas")
-    df_p = pd.DataFrame([{"Tarima": "Bulto_1", "Producto/SKU": "12-B-9016-01", "PO": "PO-10001", "Cantidad": 191}])
-    buf_p = io.BytesIO()
-    with pd.ExcelWriter(buf_p, engine='openpyxl') as wr: df_p.to_excel(wr, index=False)
-    st.download_button(label="📥 Descargar Plantilla de Ejemplo (.xlsx)", data=buf_p.getvalue(), file_name="plantilla_tarimas.xlsx")
-    if not st.session_state.BD_Tarimas.empty and "Es_Nueva" not in st.session_state.BD_Tarimas.columns: st.session_state.BD_Tarimas["Es_Nueva"] = False
+    st.download_button(label="📥 Descargar Nueva Plantilla Autogestionable (.xlsx)", data=buf_p.getvalue(), file_name="nueva_plantilla_proyectos.xlsx")
+    
+    if not st.session_state.BD_Tarimas.empty and "Es_Nueva" not in st.session_state.BD_Tarimas.columns:
+        st.session_state.BD_Tarimas["Es_Nueva"] = False
 
-    if not is_admin: st.error("🔒 Área Bloqueada: Requiere contraseña de Administrador.")
+    if not is_admin: 
+        st.error("🔒 Área Bloqueada: Requiere contraseña de Administrador.")
     else:
         st.success("🔓 Acceso Autorizado.")
-        arch = st.file_uploader("Suba la Plantilla Excel", type=["xlsx"])
+        arch = st.file_uploader("Suba el Excel con Formato de Proyectos", type=["xlsx"])
         col_t1, col_t2 = st.columns(2)
         with col_t1: tipo_t = st.selectbox("Tipo:", ["Cuadrada", "Rectangular"])
         with col_t2: oper = st.text_input("Líder:", "Jesus Morales")
-        if arch and st.button("Procesar e Integrar Plantilla"):
+        
+        if arch and st.button("Procesar e Integrar Plantilla Avanzada"):
             try:
                 df_ex = pd.read_excel(arch)
-                if not st.session_state.BD_Tarimas.empty: st.session_state.BD_Tarimas["Es_Nueva"] = False
-                for t_orig in df_ex['Tarima'].unique():
-                    n_id_tpm = f"TPM-{(len(st.session_state.BD_Tarimas) + 1):04d}"
-                    n_t = {"ID_Tarima": n_id_tpm, "Tarima_Origen_Excel": t_orig, "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"), "Ubicacion_Actual": "Metales", "Creado_Por": oper, "Tipo_Tarima": tipo_t, "Estatus": "Disponible", "Es_Nueva": True}
-                    st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, pd.DataFrame([n_t])], ignore_index=True)
-                    items = df_ex[df_ex['Tarima'] == t_orig]
-                    for _, item in items.iterrows():
-                        st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas)+1, "ID_Tarima": n_id_tpm, "SKU": item['Producto/SKU'], "PO": item['PO'], "Cantidad": item['Cantidad']}])], ignore_index=True)
-                subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
-                subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
-                st.success("¡Plantilla integrada y respaldada en GitHub!"); st.rerun()
+                columnas_requeridas = ["Tarima", "Producto/SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"]
+                
+                if not all(col in df_ex.columns for col in columnas_requeridas):
+                    st.error("❌ Error: El archivo no coincide con las nuevas columnas (Proyecto, Parcialidad, Descripcion).")
+                else:
+                    if not st.session_state.BD_Tarimas.empty: st.session_state.BD_Tarimas["Es_Nueva"] = False
+                        
+                    for t_orig in df_ex['Tarima'].unique():
+                        nuevo_id_tpm = f"TPM-{(len(st.session_state.BD_Tarimas) + 1):04d}"
+                        n_t = {"ID_Tarima": nuevo_id_tpm, "Tarima_Origen_Excel": t_orig, "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"), "Ubicacion_Actual": "Metales", "Creado_Por": oper, "Tipo_Tarima": tipo_t, "Estatus": "Disponible", "Es_Nueva": True}
+                        st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, pd.DataFrame([n_t])], ignore_index=True)
+                        
+                        items = df_ex[df_ex['Tarima'] == t_orig]
+                        for _, item in items.iterrows():
+                            st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{
+                                "ID_Detalle": len(st.session_state.BD_Detalle_Tarimas) + 1, "ID_Tarima": nuevo_id_tpm, 
+                                "SKU": item['Producto/SKU'], "PO": item['PO'], "Proyecto": item['Proyecto'],
+                                "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']
+                            }])], ignore_index=True)
+                    
+                    subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                    subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
+                    st.success("¡Inventario guardado y respaldado con éxito!")
+                    st.rerun()
             except Exception as e: st.error(f"Error: {e}")
+
             
     if not st.session_state.BD_Tarimas.empty:
         st.write("---")
