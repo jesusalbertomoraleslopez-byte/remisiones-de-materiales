@@ -205,7 +205,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
         towrite = io.BytesIO()
         with pd.ExcelWriter(towrite, engine='openpyxl') as writer: res.to_excel(writer, index=False, sheet_name='Reporte')
         st.download_button(label="📥 Descargar Reporte en Excel (.xlsx)", data=towrite.getvalue(), file_name="Reporte_Consolidado.xlsx")
-# 6. MÓDULOS OPERATIVOS RESTINGIDOS POR CONTRASEÑA
+# 6. MÓDULOS OPERATIVOS RESTRINGIDOS POR CONTRASEÑA (SISTEMA DE ASIGNACIÓN TPM)
 elif opcion_menu == "📦 Módulo Tarimas":
     st.title("📦 Carga de Tarimas")
     st.subheader("📋 Formato Requerido")
@@ -224,13 +224,16 @@ elif opcion_menu == "📦 Módulo Tarimas":
             try:
                 df_ex = pd.read_excel(arch)
                 for t_orig in df_ex['Tarima'].unique():
-                    n_id = len(st.session_state.BD_Tarimas) + 1
-                    n_t = {"ID_Tarima": n_id, "Tarima_Origen_Excel": t_orig, "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"), "Ubicacion_Actual": "Metales", "Creado_Por": oper, "Tipo_Tarima": tipo_t, "Estatus": "Disponible"}
+                    num_consecutivo = len(st.session_state.BD_Tarimas) + 1
+                    # NUEVA LÓGICA: Renombrar a formato TPM-0001 (Tarima Planta Metales)
+                    nuevo_id_tpm = f"TPM-{num_consecutivo:04d}"
+                    
+                    n_t = {"ID_Tarima": nuevo_id_tpm, "Tarima_Origen_Excel": t_orig, "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"), "Ubicacion_Actual": "Metales", "Creado_Por": oper, "Tipo_Tarima": tipo_t, "Estatus": "Disponible"}
                     st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, pd.DataFrame([n_t])], ignore_index=True)
                     items = df_ex[df_ex['Tarima'] == t_orig]
                     for _, item in items.iterrows():
-                        st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas)+1, "ID_Tarima": n_id, "SKU": item['Producto/SKU'], "PO": item['PO'], "Cantidad": item['Cantidad']}])], ignore_index=True)
-                st.success("¡Plantilla integrada correctamente!")
+                        st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas)+1, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": item['PO'], "Cantidad": item['Cantidad']}])], ignore_index=True)
+                st.success("¡Plantilla integrada correctamente con folios corporativos TPM!")
             except Exception as e: st.error(f"Error: {e}")
     if not st.session_state.BD_Tarimas.empty:
         t_imp = st.selectbox("Seleccione Tarima a Imprimir:", st.session_state.BD_Tarimas['ID_Tarima'].unique())
@@ -262,7 +265,7 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                     st.success(f"✅ ¡Remisión {fol} Generada!")
     if not st.session_state.BD_Datos_Generales_Remision.empty:
         r_sel = st.selectbox("Seleccione Folio para Descarga:", st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique())
-        row = st.session_state.BD_Datos_Generales_Remision[st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel].iloc[0]
+        row = st.session_state.BD_Datos_Generales_Remision[st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel].iloc
         df_det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(row['Tarimas_Asociadas'])]
         c1, c2 = st.columns(2)
         with c1: st.download_button("📥 Descargar Remisión (PDF)", data=generar_pdf_remision_general(row, df_det), file_name=f"Remision_{r_sel}.pdf", mime="application/pdf")
