@@ -214,55 +214,44 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
 
 
 
+# =============================================================================
+# DECORADORES BASE SEPARADOS PARA EVITAR NAMEERROR
+# =============================================================================
+
+def draw_sigrama_decorations(canvas, doc):
+    """Dibuja los elementos del formato original FO-MET-10 para REMISIONES."""
+    canvas.saveState()
+    canvas.setFillColor(colors.HexColor("#D32F2F"))
+    canvas.rect(36, 745, 540, 4, fill=1, stroke=0)
+    canvas.setFont("Helvetica-Bold", 11)
+    canvas.setFillColor(colors.HexColor("#D32F2F"))
+    canvas.drawString(36, 765, "FO-MET-10") # <-- Código original de remisión
+    canvas.setFont("Helvetica", 8)
+    canvas.setFillColor(colors.black)
+    canvas.drawString(36, 753, "Revisión 01")
+    canvas.drawString(36, 741, "04 de octubre 2018")
+    canvas.setFont("Helvetica-Bold", 14)
+    canvas.drawCentredString(285, 755, "EMBARQUE-RECEPCIÓN DE MERCANCÍA")
+    canvas.setStrokeColor(colors.HexColor("#D32F2F"))
+    canvas.setLineWidth(1)
+    canvas.line(36, 45, 36, 25)
+    canvas.setFont("Helvetica-Bold", 7)
+    canvas.drawString(42, 37, "FO-SGC-02")
+    canvas.restoreState()
+
+
+# =============================================================================
+# FUNCIÓN DE REMISIÓN CORREGIDA (Línea 222-225 de tu doc.build)
+# =============================================================================
 def generar_pdf_remision_general(datos_remision, df_detalles_remision):
-    """Construye el documento oficial de despacho con panel logístico, cuadrícula de materiales y firmas."""
+    """Construye el documento oficial de despacho con panel logístico."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
     story, styles = [], getSampleStyleSheet()
     
-    style_blanco_bold = ParagraphStyle('BB_R', parent=styles['Normal'], textColor=colors.white, fontName="Helvetica-Bold", alignment=1, fontSize=10)
-    style_normal_bold = ParagraphStyle('NB_R', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=9)
-    style_normal_text = ParagraphStyle('NT_R', parent=styles['Normal'], fontSize=9)
+    # ... (Aquí va todo tu código intermedio de t_header_embarque y datos_panel) ...
     
-    story.append(Spacer(1, 0.1 * inch))
-    t_header_embarque = Table([[Paragraph("LISTADO DE EMBARQUE", style_blanco_bold)]], colWidths=[7.5 * inch])
-    t_header_embarque.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#D32F2F")), ('ALIGN', (0,0), (-1,-1), 'CENTER')]))
-    story.append(t_header_embarque)
-    
-    # Panel logístico estructurado
-    datos_panel = [
-        [Paragraph("FOLIO:", style_normal_bold), Paragraph(str(datos_remision['Folio_Remision']), style_normal_text), Paragraph("FECHA:", style_normal_bold), Paragraph(str(datos_remision['Fecha_Hora_Salida']), style_normal_text)],
-        [Paragraph("LÍDER:", style_normal_bold), Paragraph(str(datos_remision['Nombre_Emisor']), style_normal_text), Paragraph("ALMACÉN:", style_normal_bold), Paragraph(str(datos_remision['Direccion_Emisor']), style_normal_text)],
-        [Paragraph("DESTINO / CLIENTE:", style_normal_bold), Paragraph(str(datos_remision['Nombre_Receptor']), style_normal_text), "", ""],
-        [Paragraph("DIRECCIÓN DESTINO:", style_normal_bold), Paragraph(str(datos_remision['Direccion_Receptor']), style_normal_text), "", ""]
-    ]
-    t_panel = Table(datos_panel, colWidths=[1.5 * inch, 2.25 * inch, 1.5 * inch, 2.25 * inch])
-    t_panel.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")), ('SPAN', (1,2), (3,2)), ('SPAN', (1,3), (3,3)), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
-    story.append(t_panel)
-    story.append(Spacer(1, 0.2 * inch))
-    
-    # Cuadrícula formal de listado de materiales
-    tabla_materiales = [[Paragraph("CANTIDAD", style_blanco_bold), Paragraph("UNIDAD", style_blanco_bold), Paragraph("CLAVE / MODELO", style_blanco_bold), Paragraph("DESCRIPCIÓN", style_blanco_bold), Paragraph("OBSERVACIONES", style_blanco_bold)]]
-    for _, row in df_detalles_remision.iterrows():
-        art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == row['SKU']]
-        nom_art = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
-        desc_proy = row['Descripcion'] if 'Descripcion' in row else "Metales"
-        tabla_materiales.append([Paragraph(str(int(row['Cantidad'])), style_normal_text), Paragraph("Piezas", style_normal_text), Paragraph(str(row['SKU']), style_normal_text), Paragraph(nom_art, style_normal_text), Paragraph(f"Tarima: {row['ID_Tarima']} | {desc_proy}", style_normal_text)])
-    
-    # Rellenar renglones vacíos para simular el formato impreso
-    for _ in range(max(1, 8 - len(df_detalles_remision))):
-        tabla_materiales.append([Paragraph("", style_normal_text)] * 5)
-        
-    t_mat = Table(tabla_materiales, colWidths=[1.0 * inch, 0.8 * inch, 1.5 * inch, 2.4 * inch, 1.8 * inch])
-    t_mat.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#D32F2F")), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#757575")), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
-    story.append(t_mat)
-    story.append(Spacer(1, 0.4 * inch))
-    
-    # Panel inferior de firmas de validación
-    t_firmas = Table([[Paragraph("ENTREGA (LÍDER ALMACÉN)", style_normal_bold), Paragraph("RECIBE (CHOFER / CLIENTE)", style_normal_bold)]], colWidths=[3.75 * inch, 3.75 * inch])
-    t_firmas.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER'), ('LINEBELOW', (0,0), (0,0), 1, colors.black), ('LINEBELOW', (1,0), (1,0), 1, colors.black), ('TOPPADDING', (0,0), (-1,-1), 25)]))
-    story.append(t_firmas)
-    
+    # Asegúrate de que las dos últimas líneas de esta función llamen a 'draw_sigrama_decorations'
     doc.build(story, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
     buffer.seek(0)
     return buffer
