@@ -373,19 +373,79 @@ if opcion_menu == "📊 Dashboard e Históricos":
         st.dataframe(st.session_state.BD_Tarimas.drop(columns=["Es_Nueva"], errors="ignore"), use_container_width=True)
     else: st.info("No hay tarimas registradas.")
 # 12. MÓDULO DE BÚSQUEDA EXCEL Y CONSULTAS
+
+
 elif opcion_menu == "🔍 Centro de Consultas":
-    st.title("🔍 Centro de Consultas Avanzado")
-    col_sel, col_val = st.columns(2)
-    with col_sel: tipo_filtro = st.selectbox("Filtrar por:", ["Ninguno", "SKU", "PO", "Folio_Remision"], key="consult_tipo_u")
-    with col_val: valor_filtro = st.text_input("Término de búsqueda:", key="consult_val_u")
-    res = st.session_state.BD_Detalle_Tarimas.copy()
-    if tipo_filtro == "SKU" and valor_filtro: res = res[res['SKU'].str.contains(valor_filtro, case=False)]
-    elif tipo_filtro == "PO" and valor_filtro: res = res[res['PO'].str.contains(valor_filtro, case=False)]
-    elif tipo_filtro == "Folio_Remision" and valor_filtro:
-        rem_m = st.session_state.BD_Datos_Generales_Remision[st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].str.contains(valor_filtro, case=False)]
-        tar_v = [t for r in rem_m['Tarimas_Asociadas'] for t in r]
-        res = res[res['ID_Tarima'].isin(tar_v)]
-    st.dataframe(res, use_container_width=True)
+    st.title("🔍 Reporte Detallado de Inventario por Pieza")
+    st.markdown("Utilice los selectores inferiores para filtrar de forma granular el inventario consolidado:")
+    
+    if not st.session_state.BD_Detalle_Tarimas.empty:
+        # Cruce para traer estatus (Disponible / Remesada)
+        df_maestro_piezas = pd.merge(st.session_state.BD_Detalle_Tarimas, st.session_state.BD_Tarimas[['ID_Tarima', 'Estatus', 'Fecha_Creacion']], on='ID_Tarima', how='left')
+        df_maestro_piezas['Estatus_Envio'] = df_maestro_piezas['Estatus'].apply(lambda x: "Remesado" if x == "Remesada" else "No Remesado")
+        
+        # Cuadrícula interactiva de selectores
+        c_filt1, c_filt2, c_filt3, c_filt4 = st.columns(4)
+        with c_filt1:
+            opc_po = ["Todos"] + df_maestro_piezas['PO'].dropna().unique().tolist()
+            f_po = st.selectbox("Orden de Compra (PO):", opc_po, key="query_po_filter_u")
+            opc_sku = ["Todos"] + df_maestro_piezas['SKU'].dropna().unique().tolist()
+            f_sku = st.selectbox("SKU / Producto:", opc_sku, key="query_sku_filter_u")
+        with c_filt2:
+            opc_proy = ["Todos"] + df_maestro_piezas['Proyecto'].dropna().unique().tolist() if 'Proyecto' in df_maestro_piezas.columns else ["Todos"]
+            f_proy = st.selectbox("Proyecto Interno:", opc_proy, key="query_proy_filter_u")
+            opc_tar = ["Todos"] + df_maestro_piezas['ID_Tarima'].dropna().unique().tolist()
+            f_tar = st.selectbox("ID Tarima:", opc_tar, key="query_tar_filter_u")
+        with c_filt3:
+            opc_parc = ["Todos"] + df_maestro_piezas['Parcialidad'].dropna().unique().tolist() if 'Parcialidad' in df_maestro_piezas.columns else ["Todos"]
+            f_parc = st.selectbox("Parcialidad:", opc_parc, key="query_parc_filter_u")
+        with c_filt4:
+            opc_desc = ["Todos"] + df_maestro_piezas['Descripcion'].dropna().unique().tolist() if 'Descripcion' in df_maestro_piezas.columns else ["Todos"]
+            f_desc = st.selectbox("Descripción de Proyecto:", opc_desc, key="query_desc_filter_u")
+            f_est = st.selectbox("Estatus de Envío:", ["Todos", "Remesado", "No Remesado"], key="query_est_filter_u")
+        # Aplicación de filtros en cascada sobre el reporte
+        df_resultado = df_maestro_piezas.copy()
+        if f_po != "Todos": df_resultado = df_resultado[df_resultado['PO'] == f_po]
+        if f_sku != "Todos": df_resultado = df_resultado[df_resultado['SKU'] == f_sku]
+        if 'Proyecto' in df_resultado.columns and f_proy != "Todos": df_resultado = df_resultado[df_resultado['Proyecto'] == f_proy]
+        if f_tar != "Todos": df_resultado = df_resultado[df_resultado['ID_Tarima'] == f_tar]
+        if 'Parcialidad' in df_resultado.columns and f_parc != "Todos": df_resultado = df_resultado[df_resultado['Parcialidad'] == f_parc]
+        if 'Descripcion' in df_resultado.columns and f_desc != "Todos": df_resultado = df_resultado[df_resultado['Descripcion'] == f_desc]
+        if f_est != "Todos": df_resultado = df_resultado[df_resultado['Estatus_Envio'] == f_est]
+        
+        if not df_resultado.empty:
+            df_rep = df_resultado[["ID_Tarima", "PO", "Proyecto", "Parcialidad", "Descripcion", "SKU", "Cantidad", "Estatus_Envio", "Fecha_Creacion"]].copy() if all(c in df_resultado.columns for c in ["Proyecto", "Parcialidad", "Descripcion"]) else df_resultado[["ID_Tarima", "PO", "SKU", "Cantidad", "Estatus_Envio", "Fecha_Creacion"]].copy()
+            df_rep.columns = ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Cantidad (Pzs)", "Estatus de Envío", "Fecha de Ingreso"] if len(df_rep.columns) == 9 else ["ID Tarima", "Orden de Compra (PO)", "SKU / Producto", "Cantidad (Pzs)", "Estatus de Envío", "Fecha de Ingreso"]
+            
+            st.metric("🔢 Total Piezas en Selección:", f"{int(df_rep['Cantidad (Pzs)'].sum()):,} PZS")
+            st.dataframe(df_rep, use_container_width=True, hide_index=True)
+            
+            from openpyxl.styles import Font, PatternFill, Alignment
+            from openpyxl.utils import get_column_letter
+            buf_c = io.BytesIO()
+            with pd.ExcelWriter(buf_c, engine='openpyxl') as writer_c:
+                df_rep.to_excel(writer_c, index=False, sheet_name='Inventario_Detallado')
+                ws_c = writer_c.sheets['Inventario_Detallado']
+                fill_h = PatternFill(start_color="555555", end_color="555555", fill_type="solid")
+                font_h = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                ws_c.row_dimensions.height = 24
+                for col_idx in range(1, len(df_rep.columns) + 1):
+                    cell = ws_c.cell(row=1, column=col_idx)
+                    cell.fill, cell.font, cell.alignment = fill_h, font_h, Alignment(horizontal="center", vertical="center")
+                for col in ws_c.columns:
+                    max_len = max(len(str(cell.value or '')) for cell in col)
+                    ws_c.column_dimensions[get_column_letter(col.column)].width = max(max_len + 4, 15)
+            buf_c.seek(0)
+            st.download_button(label="📥 Descargar Inventario Filtrado por Pieza (.xlsx)", data=buf_c.getvalue(), file_name="Inventario_Detallado_Piezas.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="btn_download_consulta_piezas_excel_m")
+        else:
+            st.warning("⚠️ No existen registros que coincidan con los filtros seleccionados.")
+    else:
+        st.info("No hay datos de inventario registrados para realizar consultas por pieza.")
+
+
+
+
+
 # =============================================================================
 # SECCIÓN 13: MÓDULO TARIMAS - FORMULACIÓN DE PLANTILLA ESTILIZADA SIGRAMA
 # =============================================================================
