@@ -41,42 +41,51 @@ def cargar_excel_desde_github(file_name):
         pass
     return None
 
-# --- INICIALIZACIÓN DE VARIABLES DE SESIÓN (BLINDAJE ANTI-PANTALLA ROJA) ---
+
+# =============================================================================
+# 3. CAPA DE INICIALIZACIÓN GLOBAL SECTORIZADA (BLINDAJE DE SEGURIDAD)
+# =============================================================================
+
+# --- Catálogo de Artículos Base ---
 if "BD_Articulos" not in st.session_state:
     st.session_state.BD_Articulos = pd.DataFrame([
         {"SKU": "12-B-9016-01", "Nombre": "Lámina Galvanizada Sigrama", "Calibre_Espesor": "Calibre 22", "Dimensiones_Pieza": "3x10 ft", "Acabado_Superficial": "Zintro"},
         {"SKU": "SKU-002", "Nombre": "Placa de Acero Comercial", "Calibre_Espesor": "1/4 pulgada", "Dimensiones_Pieza": "4x8 ft", "Acabado_Superficial": "Negro"}
     ])
 
+# --- Catálogo Maestro de Tarimas ---
 if "BD_Tarimas" not in st.session_state:
-    df_git = cargar_excel_desde_github("BD_Tarimas.xlsx")
-    if df_git is not None:
-        st.session_state.BD_Tarimas = df_git
+    df_git_tarimas = cargar_excel_desde_github("BD_Tarimas.xlsx")
+    if df_git_tarimas is not None:
+        st.session_state.BD_Tarimas = df_git_tarimas
     else:
         st.session_state.BD_Tarimas = pd.DataFrame(columns=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus", "Es_Nueva"])
 
+# --- Detalle Granular de Contenido por Tarima (Línea Crítica) ---
 if "BD_Detalle_Tarimas" not in st.session_state:
-    df_git = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
-    if df_git is not None:
-        st.session_state.BD_Detalle_Tarimas = df_git
+    df_git_detalles = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
+    if df_git_detalles is not None:
+        st.session_state.BD_Detalle_Tarimas = df_git_detalles
     else:
-        # CORRECCIÓN DIRECTA: Si falla GitHub, crea la estructura vacía para que la línea 410 no falle
+        # PLAN DE RESPALDO IMPRESCINDIBLE: Si GitHub falla o está vacío, crea las columnas. 
+        # Esto elimina de raíz el fallo de la línea 410 porque la propiedad .copy() siempre tendrá un DataFrame válido.
         st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"])
 
+# --- Datos Históricos de Remisiones Oficiales ---
 if "BD_Datos_Generales_Remision" not in st.session_state:
-    df_git = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
-    if df_git is not None:
-        st.session_state.BD_Datos_Generales_Remision = df_git
+    df_git_remisiones = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
+    if df_git_remisiones is not None:
+        st.session_state.BD_Datos_Generales_Remision = df_git_remisiones
     else:
         st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=["ID_Remision", "Folio_Remision", "Fecha_Hora_Salida", "Nombre_Emisor", "Direccion_Emisor", "Nombre_Receptor", "Direccion_Receptor", "Tarimas_Asociadas"])
 
+# --- Catálogo Operativo de Líderes ---
 if "BD_Lideres" not in st.session_state:
-    df_git = cargar_excel_desde_github("BD_Lideres.xlsx")
-    if df_git is not None:
-        st.session_state.BD_Lideres = df_git
+    df_git_lideres = cargar_excel_desde_github("BD_Lideres.xlsx")
+    if df_git_lideres is not None:
+        st.session_state.BD_Lideres = df_git_lideres
     else:
         st.session_state.BD_Lideres = pd.DataFrame([{"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}])
-
 
 
 
