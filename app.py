@@ -238,7 +238,7 @@ def draw_sigrama_decorations(canvas, doc):
     canvas.setFillColor(colors.black)
     canvas.drawString(36, 753, "Revisión 01")
     
-    # --- CAMBIO AQUÍ: Fecha desplazada hacia abajo (coordenada 730) y tipografía más grande (font size 10) ---
+    # --- CAMBIO APLICADO: Coordenada vertical en 730 y tamaño de letra 10 en negrita ---
     canvas.setFont("Helvetica-Bold", 10)
     canvas.drawString(36, 730, datetime.date.today().strftime("%d de %B %Y"))
     
@@ -723,19 +723,23 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                              key="rem_download_folio_sel")
         
         # Extracción nativa y segura para evitar que el DataFrame rompa el flujo de ReportLab
+        # 1. Filtramos la remisión seleccionada en el selectbox
         lista_remisiones = st.session_state.BD_Datos_Generales_Remision[
             st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel
         ].to_dict('records')
         
         if lista_remisiones:
-            row_dict = lista_remisiones[0] # <--- CORRECCIÓN: Extrae el diccionario limpio [0]
+            # CORRECCIÓN CLAVE: Agrega el [0] para extraer el primer registro puro
+            row_dict = lista_remisiones[0] 
+            
+            # 2. Extraemos los detalles de las tarimas vinculadas a esa fila
             df_det = st.session_state.BD_Detalle_Tarimas[
                 st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(row_dict['Tarimas_Asociadas'])
             ]
             
             c1, c2 = st.columns(2)
             with c1: 
-                # Se cambia el texto a FO-MET-10 y se inyectan correctamente las variables
+                # Con el diccionario limpio [0], la función ya podrá renderizar las páginas
                 st.download_button(
                     label="📄 Descargar Remisión Oficial (FO-MET-10)", 
                     data=generar_pdf_remision_general(row_dict, df_det), 
