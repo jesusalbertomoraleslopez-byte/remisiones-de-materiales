@@ -1529,25 +1529,44 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
     # =============================================================================
     # PESTAÑA 5: CONFIGURADOR DEL FOLIO CONSECUTIVO TPM
     # =============================================================================
-    with tab5:
-        st.write("##### 🔢 Inicializar o Cambiar Consecutivo de Tarimas (TPM)")
-        st.info("💡 **Guía de uso:** Defina el número numérico en el que desea que continúe la siguiente tarima que genere el sistema (Ejemplo: Si pone 56, la siguiente será TPM-0056).")
-
-        # Inicializar la variable en el estado de la sesión si no existe
-        if "siguiente_numero_tpm" not in st.session_state:
-            st.session_state["siguiente_numero_tpm"] = 36  # Valor por defecto inicial
-
-        # Cuadro numérico para el operador
-        nuevo_consecutivo = st.number_input(
-            "Indique el siguiente número de folio a generar:",
-            min_value=1,
-            max_value=9999,
-            value=int(st.session_state["siguiente_numero_tpm"]),
-            step=1,
-            key="input_consecutivo_manual_tpm"
-        )
-
-        if st.button("💾 Guardar Nuevo Consecutivo de Folio", use_container_width=True):
-            st.session_state["siguiente_numero_tpm"] = nuevo_consecutivo
-            st.success(f"💥 ¡Consecutivo actualizado! La próxima tarima nueva se creará con el folio: **TPM-{nuevo_consecutivo:04d}**")
-            st.rerun()
+    try:
+        # Intentamos usar la variable de la quinta pestaña si existe
+        with tab5:
+            st.write("##### 🔢 Inicializar o Cambiar Consecutivo de Tarimas (TPM)")
+            st.info("💡 **Guía de uso:** Defina el número numérico en el que desea que continúe la siguiente tarima que genere el sistema (Ejemplo: Si pone 56, la siguiente será TPM-0056).")
+    
+            if "siguiente_numero_tpm" not in st.session_state:
+                st.session_state["siguiente_numero_tpm"] = 36
+    
+            nuevo_consecutivo = st.number_input(
+                "Indique el siguiente número de folio a generar:",
+                min_value=1, max_value=9999,
+                value=int(st.session_state["siguiente_numero_tpm"]),
+                step=1, key="input_consecutivo_manual_tpm"
+            )
+    
+            if st.button("💾 Guardar Nuevo Consecutivo de Folio", use_container_width=True):
+                st.session_state["siguiente_numero_tpm"] = nuevo_consecutivo
+                st.success(f"💥 ¡Consecutivo actualizado! La próxima tarima nueva se creará con el folio: **TPM-{nuevo_consecutivo:04d}**")
+                st.rerun()
+    except NameError:
+        # Si tab5 no existe, desplegamos un contenedor nativo expandible para que no rompa la aplicación
+        with st.expander("🔢 Contador y Consecutivo de Tarimas (TPM)", expanded=True):
+            st.write("##### 🔢 Inicializar o Cambiar Consecutivo de Tarimas (TPM)")
+            st.info("💡 **Guía de uso:** Defina el número numérico en el que desea que continúe la siguiente tarima que genere el sistema (Ejemplo: Si pone 56, la siguiente será TPM-0056).")
+    
+            if "siguiente_numero_tpm" not in st.session_state:
+                st.session_state["siguiente_numero_tpm"] = 36
+    
+            nuevo_consecutivo = st.number_input(
+                "Indique el siguiente número de folio a generar:",
+                min_value=1, max_value=9999,
+                value=int(st.session_state["siguiente_numero_tpm"]),
+                step=1, key="input_consecutivo_manual_tpm_fallback"
+            )
+    
+            if st.button("💾 Guardar Nuevo Consecutivo de Folio ", use_container_width=True):
+                st.session_state["siguiente_numero_tpm"] = nuevo_consecutivo
+                st.success(f"💥 ¡Consecutivo actualizado! La próxima tarima nueva se creará con el folio: **TPM-{nuevo_consecutivo:04d}**")
+                st.rerun()
+    
