@@ -978,7 +978,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     st.download_button(
                         label="📥 Descargar Lote Completo (PDF)", 
                         data=buf_1.getvalue(), 
-                        file_name=f"LOT_Lote_Tarimas_Separadas_{datetime.now().strftime('%Y%m%d')}.pdf",
+                        file_name=f"LOT_Lote_Tarimas_Separadas_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
                         mime="application/pdf",
                         key="btn_download_lote_tarimas_unificado_final_v2"
                     )
