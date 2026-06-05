@@ -1071,13 +1071,7 @@ elif opcion_menu == "🚚 Módulo Remisiones":
             with c2: 
                 # El anexo secundario solo se habilita si tiene renglones de piezas
                 if not df_det.empty:
-                    st.download_button(
-                        label="📦 Descargar Anexo Tarimas (PDF)", 
-                        data=generar_pdf_anexo_tarimas(row_dict['Tarimas_Asociadas'], df_det), 
-                        file_name=f"Anexo_Remision_{r_sel}.pdf", 
-                        key="btn_dl_anexo_pdf", 
-                        mime="application/pdf"
-                    )
+
                 else:
                     st.info("ℹ️ No hay desglose de piezas registrado para el anexo de este folio.")
 
