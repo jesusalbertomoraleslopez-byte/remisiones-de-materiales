@@ -950,7 +950,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     
                         for _, item in det.iterrows():
                             art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
-                            art_nom = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
+                            art_nom = art.iloc[0]['Nombre'] if not art.empty else "Articulo No Registrado en BD Remisiones"
                             
                             tabla_detalles.append([
                                 Paragraph(str(item['PO']), style_normal_text),
