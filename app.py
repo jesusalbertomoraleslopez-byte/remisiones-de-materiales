@@ -237,10 +237,12 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
         Paragraph("ESTATUS", style_blanco_bold)
     ]]
     
+    #  CÓDIGO CORREGIDO:
     for _, row in df_resultado_piezas.iterrows():
-
+    
         sku_actual = row.get('SKU', '')
-        descripcion_final = "Material de Embarque"
+        descripcion_final = "Articulo No Registrado en BD Remisiones" # <-- CAMBIADO AQUÍ
+
         
         # --- SOLUCIÓN DE BUG: Inicializar variables para evitar UnboundLocalError ---
         calibre = ""
