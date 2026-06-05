@@ -237,19 +237,17 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
         Paragraph("ESTATUS", style_blanco_bold)
     ]]
     
-    #  CÓDIGO CORREGIDO:
     for _, row in df_resultado_piezas.iterrows():
     
         sku_actual = row.get('SKU', '')
-        descripcion_final = "Articulo No Registrado en BD Remisiones" # <-- CAMBIADO AQUÍ
-
-        
+        descripcion_final = "Articulo No Registrado en BD Remisiones"
+    
         # --- SOLUCIÓN DE BUG: Inicializar variables para evitar UnboundLocalError ---
         calibre = ""
         dims = ""
         acabado = ""
         nombre_com = ""
-
+    
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
             df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
             if not df_match.empty:
@@ -258,18 +256,21 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
                 calibre = str(art_info.get('Calibre_Espesor', '')).strip()
                 dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
                 acabado = str(art_info.get('Acabado_Superficial', '')).strip()
-
+    
                 detalles = []
                 if calibre and calibre.lower() != 'nan': detalles.append(f"Cal: {calibre}")
                 if dims and dims.lower() != 'nan': detalles.append(f"Dim: {dims}")
                 if acabado and acabado.lower() != 'nan': detalles.append(f"Acab: {acabado}")
-
+    
                 sub_detalle = f" ({', '.join(detalles)})" if detalles else ""
                 descripcion_final = f"{nombre_com}{sub_detalle}"
             else:
                 descripcion_final = "Articulo No Registrado en BD Remisiones"
         else:
             descripcion_final = "Articulo No Registrado en BD Remisiones"
+
+
+
 
 
         
