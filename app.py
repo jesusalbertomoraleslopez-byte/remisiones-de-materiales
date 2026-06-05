@@ -456,11 +456,19 @@ if is_super:
     st.sidebar.success("⚡ Modo Superusuario Activo")
 
 st.sidebar.title("🧭 Navegación")
-lista_modulos = ["📊 Dashboard e Históricos", "🔍 Centro de Consultas", "📦 Módulo Tarimas", "🚚 Módulo Remisiones"]
+# Agregamos "📦 Catálogo de Artículos" a las opciones globales de navegación
+lista_modulos = [
+    "📊 Dashboard e Históricos", 
+    "🔍 Centro de Consultas", 
+    "📦 Módulo Tarimas", 
+    "🚚 Módulo Remisiones",
+    "📦 Catálogo de Artículos"
+]
 if is_super:
     lista_modulos.append("⚙️ Mantenimiento y Catálogos")
 
 opcion_menu = st.sidebar.radio("Seleccione un Módulo:", lista_modulos)
+
 # =============================================================================
 # 9. INTERFAZ DE USUARIO: DASHBOARD (CON AUTOREPARACIÓN EN CALIENTE)
 # =============================================================================
