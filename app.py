@@ -360,45 +360,45 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
     
     for _, row in df_detalles_remision.iterrows():
         sku_actual = row.get('SKU', '')
-        nombre_com = "Material de Embarque"
+        nombre_com = "Articulo No Registrado en BD_Remisiones"
         renglones_tecnicos = ""
         
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
             df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
             if not df_match.empty:
-                # Extracción segura de la primera coincidencia usando la serie nativa de pandas (.iloc[0])
-                art_info = df_match.iloc[0]
-                nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
-                calibre = str(art_info.get('Calibre_Espesor', '')).strip()
-                dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
-                acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                art_info = df_match.iloc
+                nombre_com_base = str(art_info.get('Nombre', '')).strip()
                 
-                # Construcción dinámica de renglones omitiendo valores nulos
-                lista_renglones = []
-                if calibre and calibre.lower() != 'nan': 
-                    lista_renglones.append(f"<b>Espesor:</b> {calibre}")
-                if dims and dims.lower() != 'nan': 
-                    lista_renglones.append(f"<b>Dimensiones:</b> {dims}")
-                if acabado and acabado.lower() != 'nan': 
-                    lista_renglones.append(f"<b>Acabado:</b> {acabado}")
-                
-                if lista_renglones:
-                    renglones_tecnicos = f"<br/><font color='#555555' size='7'>{'<br/>'.join(lista_renglones)}</font>"
+                if not nombre_com_base or nombre_com_base.lower() == 'nan':
+                    nombre_com = "Articulo No Registrado en BD_Remisiones"
+                else:
+                    nombre_com = nombre_com_base
+                    calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                    dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                    acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                    
+                    lista_renglones = []
+                    if calibre and calibre.lower() != 'nan': lista_renglones.append(f"<b>Espesor:</b> {calibre}")
+                    if dims and dims.lower() != 'nan': lista_renglones.append(f"<b>Dimensiones:</b> {dims}")
+                    if acabado and acabado.lower() != 'nan': lista_renglones.append(f"<b>Acabado:</b> {acabado}")
+                    
+                    if lista_renglones:
+                        renglones_tecnicos = f"<br/><font color='#555555' size='7'>{'<br/>'.join(lista_renglones)}</font>"
             else:
-                nombre_com = row.get('Descripcion', 'Material de Embarque (SKU no catalogado)')
+                nombre_com = "Articulo No Registrado en BD_Remisiones"
         else:
-            nombre_com = row.get('Descripcion', 'Material de Embarque')
+            nombre_com = "Articulo No Registrado en BD_Remisiones"
     
-        # Combinación de SKU, Nombre Comercial y Datos Técnicos en renglones verticales dentro de la misma celda
         celda_detalle_combinada = f"<b>{sku_actual}</b><br/>{nombre_com}{renglones_tecnicos}"
     
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             Paragraph(str(row['PO']), style_normal_text),
-            Paragraph(str(row['Proyecto']), style_normal_text),
+            Paragraph(str(row['Projecto']), style_normal_text), # Ajustar nombre exacto de columna si lleva 'Proyecto' o 'Projecto'
             Paragraph(celda_detalle_combinada, style_normal_text),
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
         ])
+
 
         
     t_mat = Table(tabla_materiales, colWidths=[1.2 * inch, 1.3 * inch, 1.3 * inch, 2.7 * inch, 1.0 * inch])
@@ -947,30 +947,32 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         
                         for _, item in det.iterrows():
                             sku_actual = item.get('SKU', '')
-                            cadena_art_completa = "Material de Embarque"
+                            cadena_art_completa = "Articulo No Registrado en BD_Remisiones"
                             
                             if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
                                 df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
                                 if not df_match.empty:
-                                    # Extracción segura del registro maestro
-                                    art_info = df_match.iloc[0]
-                                    nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
+                                    art_info = df_match.iloc
+                                    nombre_com = str(art_info.get('Nombre', '')).strip()
                                     calibre = str(art_info.get('Calibre_Espesor', '')).strip()
                                     dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
                                     acabado = str(art_info.get('Acabado_Superficial', '')).strip()
                                     
-                                    # Concatenación inteligente omitiendo campos vacíos o nulos
-                                    detalles_lista = []
-                                    if calibre and calibre.lower() != 'nan': detalles_lista.append(f"CAL: {calibre}")
-                                    if dims and dims.lower() != 'nan': detalles_lista.append(f"DIM: {dims}")
-                                    if acabado and acabado.lower() != 'nan': detalles_lista.append(f"ACAB: {acabado.upper()}")
-                                    
-                                    complemento_tecnico = f" - {' / '.join(detalles_lista)}" if detalles_lista else ""
-                                    cadena_art_completa = f"{nombre_com}{complemento_tecnico}"
+                                    # Si el nombre en la BD está vacío o es un nulo de texto
+                                    if not nombre_com or nombre_com.lower() == 'nan':
+                                        cadena_art_completa = "Articulo No Registrado en BD_Remisiones"
+                                    else:
+                                        detalles_lista = []
+                                        if calibre and calibre.lower() != 'nan': detalles_lista.append(f"CAL: {calibre}")
+                                        if dims and dims.lower() != 'nan': detalles_lista.append(f"DIM: {dims}")
+                                        if acabado and acabado.lower() != 'nan': detalles_lista.append(f"ACAB: {acabado.upper()}")
+                                        
+                                        complemento_tecnico = f" - {' / '.join(detalles_lista)}" if detalles_lista else ""
+                                        cadena_art_completa = f"{nombre_com}{complemento_tecnico}"
                                 else:
-                                    cadena_art_completa = item.get('Descripcion', 'Material de Embarque (SKU no catalogado)')
+                                    cadena_art_completa = "Articulo No Registrado en BD_Remisiones"
                             else:
-                                cadena_art_completa = item.get('Descripcion', 'Material de Embarque')
+                                cadena_art_completa = "Articulo No Registrado en BD_Remisiones"
     
                             tabla_detalles.append([
                                 Paragraph(str(item['PO']), style_normal_text),
@@ -978,6 +980,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                 Paragraph(cadena_art_completa, style_normal_text),
                                 Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
                             ])
+
 
                             
                         t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
