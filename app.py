@@ -531,40 +531,6 @@ opcion_menu = st.sidebar.radio("Seleccione un Módulo:", lista_modulos)
 # =============================================================================
 if opcion_menu == "📊 Dashboard e Históricos":
     st.title("📊 Dashboard Planta Metales Inventario Producto")
-        # =============================================================================
-    # 🔄 BOTÓN DE CONTROL INTEGRADO DE SEGURIDAD (FUERZA LA LECTURA REAL)
-    # =============================================================================
-
-        # 2. Rompemos el caché de red inyectando tiempo en segundos a la URL
-        import time
-        nocache_param = int(time.time())
-
-        # Descargamos los datos limpios directo desde el repositorio central
-        df_tarimas_frescas = cargar_excel_desde_github("BD_Tarimas.xlsx")
-        df_detalles_frescos = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
-        df_remisiones_frescas = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
-
-        # Asignamos la memoria de forma segura
-        if df_tarimas_frescas is not None: st.session_state.BD_Tarimas = df_tarimas_frescas
-        if df_detalles_frescos is not None: st.session_state.BD_Detalle_Tarimas = df_detalles_frescos
-        if df_remisiones_frescas is not None: st.session_state.BD_Datos_Generales_Remision = df_remisiones_frescas
-
-        st.success("¡Datos actualizados desde GitHub!")
-        st.rerun()
-
-
-
-    # =============================================================================
-    # 🔍 PANEL DE DIAGNÓSTICO EN TIEMPO REAL (TEMPORAL)
-    # =============================================================================
-    st.info("🛠️ Analizando datos recibidos de GitHub...")
-    if "BD_Tarimas" in st.session_state and isinstance(st.session_state.BD_Tarimas, pd.DataFrame):
-        st.write(f"📋 **Tarimas Maestras** - Renglones: {len(st.session_state.BD_Tarimas)} | Columnas: {list(st.session_state.BD_Tarimas.columns)}")
-    if "BD_Detalle_Tarimas" in st.session_state and isinstance(st.session_state.BD_Detalle_Tarimas, pd.DataFrame):
-        st.write(f"📦 **Detalle de Piezas** - Renglones: {len(st.session_state.BD_Detalle_Tarimas)} | Columnas: {list(st.session_state.BD_Detalle_Tarimas.columns)}")
-
-
-    
     # --- CONTROL DE SEGURIDAD INTERNO ---
     # --- AUTO-REPARACIÓN DE CACHÉ EN LÍNEA 410 ---
     # Si por cookies o caché de Streamlit la variable no se encuentra, la forzamos a existir aquí
