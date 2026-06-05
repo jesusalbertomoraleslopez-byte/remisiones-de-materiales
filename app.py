@@ -239,8 +239,33 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
     ]]
     
     for _, row in df_resultado_piezas.iterrows():
-        art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == row['SKU']]
-        nom_art = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
+
+        sku_actual = row.get('SKU', '')
+        descripcion_final = "Material de Embarque"
+        
+        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+            df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
+            if not df_match.empty:
+                art_info = df_match.iloc[0]
+                nombre_com = str(art_info.get('Nombre', '')).strip()
+                calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                
+                detalles = []
+                if calibre and calibre.lower() != 'nan': detalles.append(f"Cal: {calibre}")
+            if dims and dims.lower() != 'nan': detalles.append(f"Dim: {dims}")
+            if acabado and acabado.lower() != 'nan': detalles.append(f"Acab: {acabado}")
+            
+            sub_detalle = f" ({', '.join(detalles)})" if detalles else ""
+            descripcion_final = f"{nombre_com}{sub_detalle}"
+        else:
+            descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque (SKU no catalogado)'))
+    else:
+        descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
+        
+
+        
         
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
@@ -360,8 +385,33 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
     
     for _, row in df_detalles_remision.iterrows():
         # Búsqueda segura del nombre comercial del artículo
-        art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == row['SKU']]
-        nom_art = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
+        sku_partida = row.get('SKU', '')
+        concepto_remision = "Material de Embarque"
+        
+        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+            df_match_rem = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_partida]
+            if not df_match_rem.empty:
+                art_info = df_match_rem.iloc[0]
+                nombre_com = str(art_info.get('Nombre', '')).strip()
+                calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                
+                componentes_piezas = []
+                if calibre and calibre.lower() != 'nan': componentes_piezas.append(f"CAL. {calibre}")
+                if dims and dims.lower() != 'nan': componentes_piezas.append(f"DIM. {dims}")
+                if acabado and acabado.lower() != 'nan': componentes_piezas.append(f"{acabado.upper()}")
+                
+                formato_especificaciones = f" - {' / '.join(componentes_piezas)}" if componentes_piezas else ""
+                concepto_remision = f"{nombre_com}{formato_especificaciones}"
+            else:
+                concepto_remision = row.get('Descripcion', row.get('Nombre', f"SKU: {sku_partida} (Sin Registro Maestro)"))
+        else:
+            concepto_remision = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
+
+
+
+        
         
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
