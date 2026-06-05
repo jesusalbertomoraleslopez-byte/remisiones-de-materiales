@@ -89,7 +89,8 @@ def subir_excel_a_github(file_name, dataframe_to_save):
             payload["sha"] = sha
 
         res_put = requests.put(url, json=payload, headers=headers)
-        return res_put.status_code in
+        return res_put.status_code in [200, 201]
+
     except Exception as e:
         st.error(f"⚠️ Error al subir archivo a GitHub: {e}")
         return False
