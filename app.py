@@ -243,6 +243,12 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
         sku_actual = row.get('SKU', '')
         descripcion_final = "Material de Embarque"
         
+        # --- SOLUCIÓN DE BUG: Inicializar variables para evitar UnboundLocalError ---
+        calibre = ""
+        dims = ""
+        acabado = ""
+        nombre_com = ""
+
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
             df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
             if not df_match.empty:
@@ -251,19 +257,19 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
                 calibre = str(art_info.get('Calibre_Espesor', '')).strip()
                 dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
                 acabado = str(art_info.get('Acabado_Superficial', '')).strip()
-                
+
                 detalles = []
                 if calibre and calibre.lower() != 'nan': detalles.append(f"Cal: {calibre}")
-            if dims and dims.lower() != 'nan': detalles.append(f"Dim: {dims}")
-            if acabado and acabado.lower() != 'nan': detalles.append(f"Acab: {acabado}")
-            
-            sub_detalle = f" ({', '.join(detalles)})" if detalles else ""
-            descripcion_final = f"{nombre_com}{sub_detalle}"
+                if dims and dims.lower() != 'nan': detalles.append(f"Dim: {dims}")
+                if acabado and acabado.lower() != 'nan': detalles.append(f"Acab: {acabado}")
+
+                sub_detalle = f" ({', '.join(detalles)})" if detalles else ""
+                descripcion_final = f"{nombre_com}{sub_detalle}"
+            else:
+                descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque (SKU no catalogado)'))
         else:
-            descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque (SKU no catalogado)'))
-    else:
-        descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
-        
+            descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
+
 
         
         
