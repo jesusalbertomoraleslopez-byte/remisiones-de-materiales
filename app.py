@@ -786,7 +786,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
                 st.download_button(
                     label="📥 Generar Reporte de Inventario en Excel (.xlsx)",
                     data=buf_c.getvalue(),
-                    file_name=f"Reporte_Inventario_Filtrado_{datetime.date.today().strftime('%d_%m_%Y')}.xlsx",
+                    file_name=f"TAR_Lote_de_Tarimas_Separado_{datetime.now().strftime('%Y%m%d:%I:%M%p').lower()}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     key="btn_download_consulta_piezas_excel_final_master"
                 )
