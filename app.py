@@ -880,14 +880,15 @@ elif opcion_menu == "📦 Módulo Tarimas":
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
         
         # =============================================================================
-        # BLOQUE DE IMPRESIÓN REPARADO CON PARÁMETROS OFICIALES Y PROTECCIÓN DE SKU
+        # BLOQUE DE IMPRESIÓN CORREGIDO (EXTRACCIÓN DE TEXTO PURO DE LA LISTA)
         # =============================================================================
         if filas_seleccionadas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
             if len(elegidas) == 1:
-                id_tarima_limpio = str(elegidas)  # Extrae el texto limpio de la tarima
+                # 💥 SOLUCIÓN AQUÍ: Extraemos el primer elemento de la lista para quitar los corchetes ['']
+                id_tarima_limpio = str(elegidas[0]).strip()  
         
-                # 1. Filtramos los materiales correspondientes a esta tarima
+                # 1. Filtramos los materiales correspondientes a esta tarima usando el texto limpio
                 if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
                     df_tarima_individual = st.session_state.BD_Detalle_Tarimas[
                         st.session_state.BD_Detalle_Tarimas['ID_Tarima'].astype(str) == id_tarima_limpio
@@ -895,21 +896,21 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 else:
                     df_tarima_individual = pd.DataFrame()
         
-                # BLINDAJE LOGÍSTICO: Si la tabla viene vacía o le faltan columnas críticas, las inicializamos
+                # Aseguramos que todas las columnas requeridas por el reporte existan
                 columnas_reporte = ["ID_Tarima", "PO", "Proyecto", "SKU", "Cantidad", "Estatus_Envio", "Descripcion"]
                 for col in columnas_reporte:
                     if col not in df_tarima_individual.columns:
-                        df_tarima_individual[col] = "" # Crea la columna vacía si no existe
+                        df_tarima_individual[col] = ""
         
+                # Si la tarima no tiene piezas en la base de datos, metemos el renglón de aviso solicitado
                 if df_tarima_individual.empty:
-                    # Insertamos al menos un renglón genérico para que no falle el reporte por falta de datos
                     df_tarima_individual = pd.DataFrame([{
                         "ID_Tarima": id_tarima_limpio, "PO": "N/A", "Proyecto": "N/A", 
                         "SKU": "SIN SKU", "Cantidad": 0, "Estatus_Envio": "Vacio", 
                         "Descripcion": "Articulo No Registrado en BD Remisiones"
                     }])
         
-                # 2. Creamos el diccionario de filtros simulado para cumplir con la función
+                # 2. Creamos el diccionario de filtros simulado
                 filtros_simulados = {
                     "ID Tarima": id_tarima_limpio,
                     "PO": "Todos",
@@ -918,16 +919,15 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 }
                 
                 try:
-                    # 3. Ejecutamos la función pasándole los DOS argumentos obligatorios que pide
+                    # 3. Ejecutamos la función pasándole los argumentos obligatorios
                     pdf_datos_compilados = generar_pdf_reporte_filtrado(filtros_simulados, df_tarima_individual)
                     
-                    # Extraemos los bytes puros del documento generado
                     if hasattr(pdf_datos_compilados, 'getvalue'):
                         pdf_bytes_listos = pdf_datos_compilados.getvalue()
                     else:
                         pdf_bytes_listos = pdf_datos_compilados
         
-                    # 4. Pintamos el botón oficial de descarga en pantalla
+                    # 4. Pintamos el botón de descarga en pantalla
                     st.download_button(
                         label=f"📄 Descargar PDF Tarima {id_tarima_limpio}",
                         data=pdf_bytes_listos,
@@ -937,6 +937,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     )
                 except Exception as e:
                     st.error(f"⚠️ Error al compilar el PDF de la tarima {id_tarima_limpio}: {e}")
+
         
 
 
