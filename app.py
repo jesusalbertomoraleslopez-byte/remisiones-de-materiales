@@ -1233,13 +1233,9 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             {"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}
         ])
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📝 Ajustar Cantidades", 
-    "👤 Catálogo de Líderes", 
-    "⚠️ Purga de Datos", 
-    "📦 Catálogo de Artículos"
-    "🔢 Contador de Tarimas"
-])
+    # REVISA QUE TU LÍNEA DE PESTAÑAS SUPERIOR TENGA ESTA ASIGNACIÓN:
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Ajustar Cantidades", "👥 Catálogo de Líderes", "⚠️ Purga de Datos", "📦 Catálogo de Artículos", "🔢 Contador de Tarimas"])
+
 
 
     # --- SUB-MÓDULO 1: MODIFICACIÓN DIRECTA DE CANTIDADES DE MATERIALES ---
