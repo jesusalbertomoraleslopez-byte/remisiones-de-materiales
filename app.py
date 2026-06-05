@@ -189,7 +189,6 @@ def draw_sigrama_reporte_decorations(canvas, doc):
     canvas.drawString(95, 37, texto_legal)
     canvas.restoreState()
 
-
 def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
     """Construye el documento PDF oficial FO-MET-11 con el panel de filtros y la cuadrícula de inventario."""
     buffer = io.BytesIO()
