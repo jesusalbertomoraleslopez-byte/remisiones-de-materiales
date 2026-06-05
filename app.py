@@ -534,13 +534,6 @@ if opcion_menu == "📊 Dashboard e Históricos":
         # =============================================================================
     # 🔄 BOTÓN DE CONTROL INTEGRADO DE SEGURIDAD (FUERZA LA LECTURA REAL)
     # =============================================================================
-    # === BOTÓN DE CONTROL INTEGRADO DE SEGURIDAD (FUERZA LA LECTURA REAL) ===
-    if st.button("⚡ Sincronizar e Inyectar Datos Fresh de GitHub", use_container_width=True):
-        # 1. Eliminamos las variables congeladas de la memoria local
-        if "BD_Tarimas" in st.session_state: del st.session_state.BD_Tarimas
-        if "BD_Detalle_Tarimas" in st.session_state: del st.session_state.BD_Detalle_Tarimas
-        if "BD_Datos_Generales_Remision" in st.session_state: del st.session_state.BD_Datos_Generales_Remision
-        if "BD_Lideres" in st.session_state: del st.session_state.BD_Lideres
 
         # 2. Rompemos el caché de red inyectando tiempo en segundos a la URL
         import time
