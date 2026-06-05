@@ -1107,7 +1107,13 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             {"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}
         ])
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📝 Ajustar Cantidades", "👤 Catálogo de Líderes", "⚠️ Purga de Datos", "📦 Catálogo de Artículos"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+    "📝 Ajustar Cantidades", 
+    "👤 Catálogo de Líderes", 
+    "⚠️ Purga de Datos", 
+    "📦 Catálogo de Artículos"
+])
+
 
     # --- SUB-MÓDULO 1: MODIFICACIÓN DIRECTA DE CANTIDADES DE MATERIALES ---
     with tab1:
@@ -1249,9 +1255,15 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
    
     # --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA DEL CATÁLOGO DE ARTÍCULOS ---
 # --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA DEL CATÁLOGO DE ARTÍCULOS ---
+# --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA DEL CATÁLOGO DE ARTÍCULOS ---
 with tab4:
     st.subheader("📦 Carga y Sincronización del Catálogo de Artículos")
     st.markdown("Utilice este panel para descargar la estructura oficial o actualizar masivamente los nombres comerciales de la planta:")
+
+    # Forzamos la presencia local de librerías críticas para evitar NameError
+    import io
+    import pandas as pd
+    from openpyxl.worksheet.datavalidation import DataValidation
 
     # Estructura en dos columnas organizadas
     c_art1, c_art2 = st.columns(2)
@@ -1278,9 +1290,6 @@ with tab4:
             worksheet.column_dimensions['C'].width = 20 # Calibre_Espesor
             worksheet.column_dimensions['D'].width = 25 # Dimensiones_Pieza
             worksheet.column_dimensions['E'].width = 20 # Acabado_Superficial
-
-            # Importación de componentes de validación nativos de Excel
-            from openpyxl.worksheet.datavalidation import DataValidation
 
             # VALIDACIÓN 1: LISTA DESPLEGABLE DE CALIBRES
             opciones_calibres = '"10GA,12GA,14GA,16GA,10GACR,12GACR,14GACR,16GACR","125AL","250AL","188AL"'
