@@ -846,9 +846,22 @@ elif opcion_menu == "📦 Módulo Tarimas":
     else:
         st.success("🔓 Acceso Autorizado.")
         arch = st.file_uploader("Suba el Excel con Formato de Proyectos", type=["xlsx"])
-        col_t1, col_t2 = st.columns(2)
-        with col_t1: tipo_t = st.selectbox("Tipo:", ["Cuadrada", "Rectangular"])
-        with col_t2: oper = st.text_input("Líder:", "Jesus Morales")
+        col1, col2 = st.columns(2)
+        with col1:
+            tipo_t = st.selectbox("Tipo:", ["Cuadrada", "Rectangular", "Especial", "Otro"], key="sel_tipo_tarima_carga")
+        with col2:
+            # Extraemos los líderes autorizados directamente de tu base de datos de líderes
+            if "BD_Lideres" in st.session_state and not st.session_state.BD_Lideres.empty:
+                col_nom = 'Nombre' if 'Nombre' in st.session_state.BD_Lideres.columns else st.session_state.BD_Lideres.columns[0]
+                opciones_lideres = sorted(st.session_state.BD_Lideres[col_nom].dropna().unique().tolist())
+            else:
+                opciones_lideres = ["Jesus Morales"]
+        
+            # Desplegable dinámico asignado a la misma variable original 'lider_t' para no romper el botón de abajo
+            lider_t = st.selectbox("Líder:", options=opciones_lideres, key="sel_lider_tarima_carga")
+        
+
+        
         if arch and st.button("Procesar e Integrar Plantilla Avanzada"):
             try:
                 df_ex = pd.read_excel(arch)
