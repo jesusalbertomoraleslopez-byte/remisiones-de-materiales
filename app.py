@@ -383,43 +383,50 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         Paragraph("CANTIDAD", style_blanco_bold)
     ]]
     
+    # =============================================================================
+    # CONSTRUCCIÓN DE PARTIDAS DE REMISIÓN INDIVIDUAL (LÍNEAS 360 - 430)
+    # =============================================================================
     for _, row in df_detalles_remision.iterrows():
-        # Búsqueda segura del nombre comercial del artículo
         sku_partida = row.get('SKU', '')
-        concepto_remision = "Material de Embarque"
+        nombre_com = "Material de Embarque"
+        renglones_tecnicos = ""
         
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
             df_match_rem = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_partida]
             if not df_match_rem.empty:
                 art_info = df_match_rem.iloc[0]
-                nombre_com = str(art_info.get('Nombre', '')).strip()
+                nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
                 calibre = str(art_info.get('Calibre_Espesor', '')).strip()
                 dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
                 acabado = str(art_info.get('Acabado_Superficial', '')).strip()
                 
-                componentes_piezas = []
-                if calibre and calibre.lower() != 'nan': componentes_piezas.append(f"CAL. {calibre}")
-                if dims and dims.lower() != 'nan': componentes_piezas.append(f"DIM. {dims}")
-                if acabado and acabado.lower() != 'nan': componentes_piezas.append(f"{acabado.upper()}")
+                # Formateo de renglones técnicos internos para la celda
+                lista_renglones = []
+                if calibre and calibre.lower() != 'nan': 
+                    lista_renglones.append(f"<b>Espesor:</b> {calibre}")
+                if dims and dims.lower() != 'nan': 
+                    lista_renglones.append(f"<b>Dimensiones:</b> {dims}")
+                if acabado and acabado.lower() != 'nan': 
+                    lista_renglones.append(f"<b>Acabado:</b> {acabado}")
                 
-                formato_especificaciones = f" - {' / '.join(componentes_piezas)}" if componentes_piezas else ""
-                concepto_remision = f"{nombre_com}{formato_especificaciones}"
+                if lista_renglones:
+                    renglones_tecnicos = f"<br/><font color='#555555' size='8'>{'<br/>'.join(lista_renglones)}</font>"
             else:
-                concepto_remision = row.get('Descripcion', row.get('Nombre', f"SKU: {sku_partida} (Sin Registro Maestro)"))
+                nombre_com = row.get('Descripcion', row.get('Nombre', 'Material de Embarque (SKU no catalogado)'))
         else:
-            concepto_remision = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
+            nombre_com = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
 
+        # Consolidamos el formato final de la celda de detalle
+        celda_detalle_combinada = f"<b>{nombre_com}</b>{renglones_tecnicos}"
 
-
-        
-        
-        tabla_materiales.append([
-            Paragraph(str(row['ID_Tarima']), style_normal_text),
-            Paragraph(str(row['PO']), style_normal_text),
-            Paragraph(str(row['Proyecto']), style_normal_text),
-            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{nom_art}</font>", style_normal_text),
-            Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
+        # Insertamos de forma segura en la tabla del PDF eliminando la variable huérfana nom_art
+        data.append([
+            Paragraph(str(row.get('PO', 'N/A')), style_normal_text),
+            Paragraph(f"<b>{sku_partida}</b>", style_normal_text),
+            Paragraph(celda_detalle_combinada, style_normal_text),
+            Paragraph(f"<b>{int(row.get('Cantidad', 0))}</b> PZS", style_normal_bold)
         ])
+
         
     t_mat = Table(tabla_materiales, colWidths=[1.2 * inch, 1.3 * inch, 1.3 * inch, 2.7 * inch, 1.0 * inch])
     t_mat.setStyle(TableStyle([
