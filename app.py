@@ -1336,22 +1336,25 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
         st.write("---")
     
         # =============================================================================
-        # BLOQUE B: EDITOR EN CALIENTE TIPO EXCEL
+        # BLOQUE B: EDITOR EN CALIENTE TIPO EXCEL CON ELIMINACIÓN HABILITADA
         # =============================================================================
-        st.write("##### ✏️ Edición Directa y Corrección del Catálogo Maestro")
-        st.info("Haga doble clic sobre cualquier celda para corregir errores de dedo. El SKU actúa como llave relacional y no se puede modificar para evitar errores en el sistema.")
+        st.write("##### ✏️ Edición Directa, Alta y Baja del Catálogo Maestro")
+        st.info("💡 **Guía de uso:**\n"
+                "* **Editar:** Haga doble clic sobre cualquier celda.\n"
+                "* **Eliminar:** Seleccione la fila desde el extremo izquierdo y presione la tecla **Supr/Delete** en su teclado.\n"
+                "* **Nota:** El SKU actúa como llave relacional y está bloqueado para edición, pero sí puede eliminar la fila completa si ya no se usa.")
     
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-            # Mostramos la cuadrícula interactiva bloqueando únicamente la columna de SKU para proteger las relaciones de las tarimas
+            # st.data_editor detectará automáticamente las eliminaciones al activar num_rows="dynamic"
             df_art_editable = st.data_editor(
                 st.session_state.BD_Articulos,
                 use_container_width=True,
                 disabled=["SKU"], 
                 hide_index=True,
-                num_rows="dynamic", # Permite añadir nuevas filas al final de la tabla si lo requieres
-                key="editor_mantenimiento_articulos_directo",
+                num_rows="dynamic", # Habilita dinámicamente añadir (+) y eliminar filas nativas
+                key="editor_mantenimiento_articulos_directo_v3",
                 column_config={
-                    "SKU": st.column_config.TextColumn("SKU (Bloqueado)"),
+                    "SKU": st.column_config.TextColumn("SKU (Bloqueado/Llave)"),
                     "Nombre": st.column_config.TextColumn("Descripción Comercial"),
                     "Calibre_Espesor": st.column_config.SelectboxColumn("Calibre / Espesor", options=["10GA", "12GA", "14GA", "16GA", "10GACR", "12GACR", "14GACR", "16GACR", "125AL", "250AL", "188AL"]),
                     "Dimensiones_Pieza": st.column_config.TextColumn("Dimensiones"),
@@ -1360,15 +1363,21 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             )
     
             # Botón de guardado y persistencia en GitHub
-            if st.button("💾 Guardar Cambios Manuales de Artículos en GitHub", use_container_width=True):
-                st.session_state.BD_Articulos = df_art_editable
-                # Guardamos los cambios de forma permanente en la nube usando tu motor oficial
+            if st.button("💾 Guardar Cambios y Aplicar Bajas en GitHub", use_container_width=True):
+                # 1. Limpieza preventiva de datos antes de subir (eliminar registros basura o completamente vacíos)
+                df_art_final = df_art_editable.dropna(subset=["SKU"])
+                df_art_final["SKU"] = df_art_final["SKU"].astype(str).str.strip()
+                
+                # 2. Actualizar el estado de la sesión local
+                st.session_state.BD_Articulos = df_art_final
+                
+                # 3. Sincronizar y sobreescribir el archivo de Excel en la nube
                 exito_guardado = subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
                 
                 if exito_guardado:
-                    st.success("✅ ¡Cambios en el catálogo de artículos guardados y sincronizados con éxito en GitHub!")
+                    st.success("💥 ¡Catálogo de artículos actualizado! Las modificaciones y bajas se sincronizaron con éxito en GitHub.")
                     st.rerun()
                 else:
-                    st.error("❌ Error de comunicación: No se pudieron plasmar los cambios en el archivo de GitHub.")
+                    st.error("❌ Error de comunicación: No se pudieron plasmar los cambios en el repositorio.")
         else:
             st.warning("⚠️ No existen registros activos en el catálogo de artículos para desplegar el editor.")
