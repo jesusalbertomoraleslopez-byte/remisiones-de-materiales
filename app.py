@@ -1375,25 +1375,26 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     
                             if not all(col in df_art_excel.columns for col in columnas_requeridas):
                                 st.error("❌ Error: Columnas incompatibles. Use la estructura oficial.")
-                            else:
-                                # Limpieza del archivo subido
-                                df_art_excel = df_art_excel.dropna(subset=["SKU"])
-                                df_art_excel["SKU"] = df_art_excel["SKU"].astype(str).str.strip()
-                    
-                                # Si ya hay artículos en el sistema, los combinamos evitando duplicar SKUs
-                                if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                                    df_anterior = st.session_state.BD_Articulos.copy()
-                                    df_anterior["SKU"] = df_anterior["SKU"].astype(str).str.strip()
-                                    
-                                    # Eliminamos del catálogo anterior los SKUs que vienen en el archivo nuevo para actualizarlos
-                                    df_anterior = df_anterior[~df_anterior["SKU"].isin(df_art_excel["SKU"])]
-                                    
-                                    # Unimos los registros viejos con los nuevos
-                                    st.session_state.BD_Articulos = pd.concat([df_anterior, df_art_excel], ignore_index=True)
                                 else:
-                                    st.session_state.BD_Articulos = df_art_excel
-                    
-                                exito_subida = subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
+                                    # Limpieza del archivo subido
+                                    df_art_excel = df_art_excel.dropna(subset=["SKU"])
+                                    df_art_excel["SKU"] = df_art_excel["SKU"].astype(str).str.strip()
+                        
+                                    # Si ya hay artículos en el sistema, los combinamos evitando duplicar SKUs
+                                    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                                        df_anterior = st.session_state.BD_Articulos.copy()
+                                        df_anterior["SKU"] = df_anterior["SKU"].astype(str).str.strip()
+                                        
+                                        # Eliminamos del catálogo anterior los SKUs que vienen en el archivo nuevo para actualizarlos
+                                        df_anterior = df_anterior[~df_anterior["SKU"].isin(df_art_excel["SKU"])]
+                                        
+                                        # Unimos los registros viejos con los nuevos
+                                        st.session_state.BD_Articulos = pd.concat([df_anterior, df_art_excel], ignore_index=True)
+                                    else:
+                                        st.session_state.BD_Articulos = df_art_excel
+                        
+                                    exito_subida = subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
+
 
     
         st.write("---")
