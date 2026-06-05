@@ -880,33 +880,42 @@ elif opcion_menu == "📦 Módulo Tarimas":
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
         
         # =============================================================================
-        # BLOQUE DE IMPRESIÓN SEGURO REUTILIZANDO LA SESIÓN GLOBAL
+        # BLOQUE DE IMPRESIÓN REPARADO CON BOTÓN DE DESCARGA ACTIVO
         # =============================================================================
         if filas_seleccionadas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
             if len(elegidas) == 1:
-                id_tarima_limpio = str(elegidas[0])  # Extrae el ID limpio como texto puro
+                id_tarima_limpio = str(elegidas[0])  # Extrae el texto limpio de la tarima (ej: TPM-0032)
         
                 # 1. Filtramos los materiales correspondientes a esta tarima
                 df_tarima_individual = st.session_state.BD_Detalle_Tarimas[
                     st.session_state.BD_Detalle_Tarimas['ID_Tarima'].astype(str) == id_tarima_limpio
                 ].copy()
         
-                # 2. Guardamos temporalmente en la variable que lee tu función de ReportLab
+                # 2. Guardamos temporalmente los datos para que los procese el generador del PDF
                 st.session_state["df_resultado_piezas_temporal"] = df_tarima_individual
                 
-                # 3. Llamamos a tu función de forma limpia sin pasarle parámetros entre paréntesis
-                generar_pdf_reporte_filtrado()
-
-
+                try:
+                    # 3. Ejecutamos la función de ReportLab para obtener los datos del documento
+                    pdf_datos_compilados = generar_pdf_reporte_filtrado()
+                    
+                    # Verificamos si devuelve un objeto de memoria para extraer sus bytes puros
+                    if hasattr(pdf_datos_compilados, 'getvalue'):
+                        pdf_bytes_listos = pdf_datos_compilados.getvalue()
+                    else:
+                        pdf_bytes_listos = pdf_datos_compilados
         
-                st.download_button(
-                    label=f"📥 Descargar PDF Tarima #{id_tarima_limpio}",
-                    data=generar_pdf_reporte_filtrado(df_tarima_individual),
-                    file_name=f"Tarima_{id_tarima_limpio}.pdf",
-                    mime="application/pdf",
-                    key="btn_descarga_tarima_individual_tabla_maestra"
-                )
+                    # 4. Pintamos de forma correcta el botón oficial de descarga en pantalla
+                    st.download_button(
+                        label=f"📄 Descargar Reporte PDF Tarima {id_tarima_limpio}",
+                        data=pdf_bytes_listos,
+                        file_name=f"TAR_Lote_de_Tarimas_Separado_{id_tarima_limpio}.pdf",
+                        mime="application/pdf",
+                        key=f"btn_descarga_maestra_tarima_ind_{id_tarima_limpio}"
+                    )
+                except Exception as e:
+                    st.error(f"⚠️ Error al compilar el PDF de la tarima {id_tarima_limpio}: {e}")
+
 
                 
             else:
