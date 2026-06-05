@@ -1205,7 +1205,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 from openpyxl.worksheet.datavalidation import DataValidation
                 
                 # --- VALIDACIÓN 1: LISTA DESPLEGABLE DE CALIBRES ---
-                opciones_calibres = '"10GA,12GA,14GA,16GA,10GACR,12GACR,14GACR,16GACR"'
+                opciones_calibres = '"10GA,12GA,14GA,16GA,10GACR,12GACR,14GACR,16GACR","125AL","250AL","188AL"'
                 dv_calibre = DataValidation(type="list", formula1=opciones_calibres, allow_blank=True)
                 dv_calibre.error = 'El calibre ingresado no pertenece a la lista autorizada.'
                 dv_calibre.errorTitle = 'Calibre Inválido'
