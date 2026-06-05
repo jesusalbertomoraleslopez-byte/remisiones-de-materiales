@@ -919,15 +919,39 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         ]]
                         
                         for _, item in det.iterrows():
-                            art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
-                            art_nom = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
+                            sku_actual = item.get('SKU', '')
+                            cadena_art_completa = "Material de Embarque"
                             
+                            if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                                df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
+                                if not df_match.empty:
+                                    # Extracción segura del registro maestro
+                                    art_info = df_match.iloc[0]
+                                    nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
+                                    calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                                    dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                                    acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                                    
+                                    # Concatenación inteligente omitiendo campos vacíos o nulos
+                                    detalles_lista = []
+                                    if calibre and calibre.lower() != 'nan': detalles_lista.append(f"CAL: {calibre}")
+                                    if dims and dims.lower() != 'nan': detalles_lista.append(f"DIM: {dims}")
+                                    if acabado and acabado.lower() != 'nan': detalles_lista.append(f"ACAB: {acabado.upper()}")
+                                    
+                                    complemento_tecnico = f" - {' / '.join(detalles_lista)}" if detalles_lista else ""
+                                    cadena_art_completa = f"{nombre_com}{complemento_tecnico}"
+                                else:
+                                    cadena_art_completa = item.get('Descripcion', 'Material de Embarque (SKU no catalogado)')
+                            else:
+                                cadena_art_completa = item.get('Descripcion', 'Material de Embarque')
+    
                             tabla_detalles.append([
                                 Paragraph(str(item['PO']), style_normal_text),
                                 Paragraph(str(item['SKU']), style_normal_text),
-                                Paragraph(str(art_nom), style_normal_text),
+                                Paragraph(cadena_art_completa, style_normal_text),
                                 Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
                             ])
+
                             
                         t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
                         t_grid.setStyle(TableStyle([
