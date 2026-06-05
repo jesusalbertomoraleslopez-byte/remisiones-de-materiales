@@ -880,63 +880,53 @@ elif opcion_menu == "📦 Módulo Tarimas":
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
         
         # =============================================================================
-        # BLOQUE DE IMPRESIÓN CORREGIDO (EXTRACCIÓN DE TEXTO PURO DE LA LISTA)
+        # BLOQUE DE IMPRESIÓN MAESTRO DE TARIMAS BLINDADO CONTRA LLAVES HUÉRFANAS
         # =============================================================================
         if filas_seleccionadas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
             if len(elegidas) == 1:
-                # 💥 SOLUCIÓN AQUÍ: Extraemos el primer elemento de la lista para quitar los corchetes ['']
-                id_tarima_limpio = str(elegidas[0]).strip()  
+                id_tarima_limpio = str(elegidas[0]).strip()  # Extracción nativa perfecta
         
-                # 1. Filtramos los materiales correspondientes a esta tarima usando el texto limpio
+                # 1. Intentamos buscar las piezas asociadas a esta tarima en la base de datos
+                df_tarima_individual = pd.DataFrame()
                 if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                    # Filtramos asegurando que compare texto puro
                     df_tarima_individual = st.session_state.BD_Detalle_Tarimas[
                         st.session_state.BD_Detalle_Tarimas['ID_Tarima'].astype(str) == id_tarima_limpio
                     ].copy()
+        
+                # 2. VALIDACIÓN CRÍTICA: ¿Tiene artículos esta tarima para imprimir?
+                if df_tarima_individual.empty or "SKU" not in df_tarima_individual.columns:
+                    # Si no hay piezas asociadas, mostramos un mensaje limpio en lugar de lanzar la pantalla de error
+                    st.warning(f"⚠️ La tarima **{id_tarima_limpio}** no contiene artículos o piezas asignadas en la base de datos de detalles. No se puede generar un reporte vacío.")
                 else:
-                    df_tarima_individual = pd.DataFrame()
-        
-                # Aseguramos que todas las columnas requeridas por el reporte existan
-                columnas_reporte = ["ID_Tarima", "PO", "Proyecto", "SKU", "Cantidad", "Estatus_Envio", "Descripcion"]
-                for col in columnas_reporte:
-                    if col not in df_tarima_individual.columns:
-                        df_tarima_individual[col] = ""
-        
-                # Si la tarima no tiene piezas en la base de datos, metemos el renglón de aviso solicitado
-                if df_tarima_individual.empty:
-                    df_tarima_individual = pd.DataFrame([{
-                        "ID_Tarima": id_tarima_limpio, "PO": "N/A", "Proyecto": "N/A", 
-                        "SKU": "SIN SKU", "Cantidad": 0, "Estatus_Envio": "Vacio", 
-                        "Descripcion": "Articulo No Registrado en BD Remisiones"
-                    }])
-        
-                # 2. Creamos el diccionario de filtros simulado
-                filtros_simulados = {
-                    "ID Tarima": id_tarima_limpio,
-                    "PO": "Todos",
-                    "Proyecto": "Todos",
-                    "Estatus": "Todos"
-                }
-                
-                try:
-                    # 3. Ejecutamos la función pasándole los argumentos obligatorios
-                    pdf_datos_compilados = generar_pdf_reporte_filtrado(filtros_simulados, df_tarima_individual)
+                    # Si sí tiene piezas con SKU válido, procedemos a compilar de forma segura
+                    filtros_simulados = {
+                        "ID Tarima": id_tarima_limpio,
+                        "PO": "Todos",
+                        "Proyecto": "Todos",
+                        "Estatus": "Todos"
+                    }
                     
-                    if hasattr(pdf_datos_compilados, 'getvalue'):
-                        pdf_bytes_listos = pdf_datos_compilados.getvalue()
-                    else:
-                        pdf_bytes_listos = pdf_datos_compilados
+                    try:
+                        # 3. Compilamos el PDF pasándole sus parámetros obligatorios
+                        pdf_datos_compilados = generar_pdf_reporte_filtrado(filtros_simulados, df_tarima_individual)
+                        
+                        if hasattr(pdf_datos_compilados, 'getvalue'):
+                            pdf_bytes_listos = pdf_datos_compilados.getvalue()
+                        else:
+                            pdf_bytes_listos = pdf_datos_compilados
         
-                    # 4. Pintamos el botón de descarga en pantalla
-                    st.download_button(
-                        label=f"📄 Descargar PDF Tarima {id_tarima_limpio}",
-                        data=pdf_bytes_listos,
-                        file_name=f"TAR_Lote_de_Tarimas_Separado_{id_tarima_limpio}.pdf",
-                        mime="application/pdf",
-                        key=f"btn_descarga_maestra_tarima_ind_{id_tarima_limpio}"
-                    )
-                except Exception as e:
-                    st.error(f"⚠️ Error al compilar el PDF de la tarima {id_tarima_limpio}: {e}")
+                        # 4. Mostramos el botón de descarga oficial en la interfaz
+                        st.download_button(
+                            label=f"📄 Descargar PDF Tarima {id_tarima_limpio}",
+                            data=pdf_bytes_listos,
+                            file_name=f"TAR_Lote_de_Tarimas_Separado_{id_tarima_limpio}.pdf",
+                            mime="application/pdf",
+                            key=f"btn_descarga_maestra_tarima_ind_{id_tarima_limpio}"
+                        )
+                    except Exception as e:
+                        st.error(f"⚠️ Error al procesar el diseño de ReportLab para la tarima {id_tarima_limpio}: {e}")
 
         
 
