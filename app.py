@@ -534,33 +534,31 @@ if opcion_menu == "📊 Dashboard e Históricos":
         # =============================================================================
     # 🔄 BOTÓN DE CONTROL INTEGRADO DE SEGURIDAD (FUERZA LA LECTURA REAL)
     # =============================================================================
-    col_sync1, col_sync2 = st.columns([3, 1])
-    with col_sync2:
-        if st.button("⚡ Sincronizar GitHub", use_container_width=True):
-            # 1. Eliminamos las variables congeladas de la memoria local
-            if "BD_Tarimas" in st.session_state: del st.session_state.BD_Tarimas
-            if "BD_Detalle_Tarimas" in st.session_state: del st.session_state.BD_Detalle_Tarimas
-            if "BD_Datos_Generales_Remision" in st.session_state: del st.session_state.BD_Datos_Generales_Remision
-            if "BD_Lideres" in st.session_state: del st.session_state.BD_Lideres
-            
-            # 2. Rompemos el caché de red inyectando tiempo en segundos a la URL
-            import time
-            nocache_param = int(time.time())
-            import time
-            nocache_param = int(time.time())
-            
-            # Dejamos únicamente las llamadas limpias (ya que el truco del tiempo ahora lo hace la función de arriba)
-            df_tarimas_frescas = cargar_excel_desde_github("BD_Tarimas.xlsx")
-            df_detalles_frescos = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
-            df_remisiones_frescas = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
-            
-            # Asegúrate de que tu bloque continúe con las asignaciones de memoria que pusimos en el paso anterior:
-            if df_tarimas_frescas is not None: st.session_state.BD_Tarimas = df_tarimas_frescas
-            if df_detalles_frescos is not None: st.session_state.BD_Detalle_Tarimas = df_detalles_frescos
-            if df_remisiones_frescas is not None: st.session_state.BD_Datos_Generales_Remision = df_remisiones_frescas
-            
-            st.success("¡Datos actualizados desde GitHub!")
-            st.rerun()
+    # === BOTÓN DE CONTROL INTEGRADO DE SEGURIDAD (FUERZA LA LECTURA REAL) ===
+    if st.button("⚡ Sincronizar e Inyectar Datos Fresh de GitHub", use_container_width=True):
+        # 1. Eliminamos las variables congeladas de la memoria local
+        if "BD_Tarimas" in st.session_state: del st.session_state.BD_Tarimas
+        if "BD_Detalle_Tarimas" in st.session_state: del st.session_state.BD_Detalle_Tarimas
+        if "BD_Datos_Generales_Remision" in st.session_state: del st.session_state.BD_Datos_Generales_Remision
+        if "BD_Lideres" in st.session_state: del st.session_state.BD_Lideres
+
+        # 2. Rompemos el caché de red inyectando tiempo en segundos a la URL
+        import time
+        nocache_param = int(time.time())
+
+        # Descargamos los datos limpios directo desde el repositorio central
+        df_tarimas_frescas = cargar_excel_desde_github("BD_Tarimas.xlsx")
+        df_detalles_frescos = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
+        df_remisiones_frescas = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
+
+        # Asignamos la memoria de forma segura
+        if df_tarimas_frescas is not None: st.session_state.BD_Tarimas = df_tarimas_frescas
+        if df_detalles_frescos is not None: st.session_state.BD_Detalle_Tarimas = df_detalles_frescos
+        if df_remisiones_frescas is not None: st.session_state.BD_Datos_Generales_Remision = df_remisiones_frescas
+
+        st.success("¡Datos actualizados desde GitHub!")
+        st.rerun()
+
 
 
     # =============================================================================
