@@ -411,9 +411,9 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                 formato_especificaciones = f" - {' / '.join(componentes_piezas)}" if componentes_piezas else ""
                 concepto_remision = f"{nombre_com}{formato_especificaciones}"
             else:
-                concepto_remision = row.get('Descripcion', row.get('Nombre', f"SKU: {sku_partida} (Sin Registro Maestro)"))
+                concepto_remision = "Articulo No Registrado en BD Remisiones"
         else:
-            concepto_remision = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
+            concepto_remision = "Articulo No Registrado en BD Remisiones"
 
 
 
@@ -978,7 +978,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     st.download_button(
                         label="📥 Descargar Lote Completo (PDF)", 
                         data=buf_1.getvalue(), 
-                        file_name="Lote_Tarimas_Separado.pdf", 
+                        file_name=f"LOT_Lote_Tarimas_Separadas_{datetime.now().strftime('%Y%m%d')}.pdf",
                         mime="application/pdf",
                         key="btn_download_lote_tarimas_unificado_final_v2"
                     )
