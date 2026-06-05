@@ -885,33 +885,22 @@ elif opcion_menu == "🚚 Módulo Remisiones":
         ].to_dict('records')
         
         if lista_remisiones:
-            # CORRECCIÓN CLAVE: Agrega el [0] para extraer el primer registro puro
-            row_dict = lista_remisiones[0] 
+            row_dict = lista_remisiones
             
-            # 2. Extraemos los detalles de las tarimas vinculadas a esa fila
+            # --- CORRECCIÓN CLAVE ANTI-TYPEERROR ---
+            # Si el valor viene como texto, lo convertimos de forma segura en una lista real de Python
+            import ast
+            tarimas_lista = row_dict['Tarimas_Asociadas']
+            if isinstance(tarimas_lista, str):
+                try:
+                    tarimas_lista = ast.literal_eval(tarimas_lista)
+                except Exception:
+                    tarimas_lista = [tarimas_lista] # Respaldo si es un solo ID suelto
+            
+            # Ahora la función .isin() recibirá la lista perfecta y no fallará
             df_det = st.session_state.BD_Detalle_Tarimas[
-                st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(row_dict['Tarimas_Asociadas'])
+                st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(tarimas_lista)
             ]
-            
-            c1, c2 = st.columns(2)
-            with c1: 
-                # Con el diccionario limpio [0], la función ya podrá renderizar las páginas
-                st.download_button(
-                    label="📄 Descargar Remisión Oficial (FO-MET-10)", 
-                    data=generar_pdf_remision_general(row_dict, df_det), 
-                    file_name=f"FO-MET-10_Remision_{r_sel}.pdf", 
-                    key="btn_dl_rem_pdf", 
-                    mime="application/pdf"
-                )
-            with c2: 
-                st.download_button(
-                    label="📦 Descargar Anexo Tarimas (PDF)", 
-                    data=generar_pdf_anexo_tarimas(row_dict['Tarimas_Asociadas'], df_det), 
-                    file_name=f"Anexo_Remision_{r_sel}.pdf", 
-                    key="btn_dl_anexo_pdf", 
-                    mime="application/pdf"
-                )
-
 
 
 
