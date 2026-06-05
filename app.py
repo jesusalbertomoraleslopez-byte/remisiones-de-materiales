@@ -985,7 +985,61 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         key="btn_download_lote_tarimas_unificado_final_v2"
                     )
 
-    
+
+        # =============================================================================
+        # NUEVA SECCIÓN: CONSULTA GRANULAR DE ARTÍCULOS POR TARIMA
+        # =============================================================================
+        st.write("---")
+        st.write("### 🔍 Consulta de Contenido de Artículos por Tarima")
+        st.info("💡 **Guía de uso:** Seleccione o busque una Tarima específica para desplegar de forma inmediata el listado de materiales y piezas que contiene.")
+
+        # 1. Validar que la base de datos de tarimas tenga registros activos
+        if "BD_Tarimas" in st.session_state and not st.session_state.BD_Tarimas.empty:
+            
+            # Obtener la lista de IDs de tarimas disponibles para el menú desplegable
+            lista_tarimas_disponibles = sorted(st.session_state.BD_Tarimas["ID_Tarima"].unique())
+            
+            # Selector de Tarima para el usuario
+            tarima_seleccionada = st.selectbox(
+                "📋 Seleccione el ID de la Tarima a consultar:",
+                options=lista_tarimas_disponibles,
+                index=0,
+                key="selector_granular_tarimas_modulo_t"
+            )
+
+            if tarima_seleccionada:
+                # 2. Filtrar el detalle de materiales asociados a la tarima seleccionada
+                if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                    
+                    df_articulos_filtrados = st.session_state.BD_Detalle_Tarimas[
+                        st.session_state.BD_Detalle_Tarimas["ID_Tarima"] == tarima_seleccionada
+                    ].copy()
+
+                    if not df_articulos_filtrados.empty:
+                        st.write(f"##### 📦 Materiales contenidos en la Tarima: **{tarima_seleccionada}**")
+                        
+                        # Mostrar tabla limpia con datos clave para el operador
+                        st.dataframe(
+                            df_articulos_filtrados[["SKU", "PO", "Proyecto", "Descripcion", "Cantidad"]],
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                        
+                        # Resumen de conteo rápido para auditorías
+                        total_pzs_tarima = int(df_articulos_filtrados["Cantidad"].sum())
+                        st.success(f"📊 Total de piezas contabilizadas en esta tarima: **{total_pzs_tarima} Pzs**")
+                    else:
+                        st.warning(f"⚠️ La tarima **{tarima_seleccionada}** está registrada pero no cuenta con un desglose de piezas asociado en la base de datos.")
+                else:
+                    st.error("❌ Error de sistema: No se encuentra cargada la Base de Datos granular de Detalles de Tarimas.")
+        else:
+            st.warning("⚠️ No existen tarimas registradas en el sistema para realizar consultas de contenido.")
+
+
+
+
+
+
 
 
 # =============================================================================
