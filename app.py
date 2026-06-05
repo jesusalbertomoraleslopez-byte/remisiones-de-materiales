@@ -242,7 +242,7 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
 
         sku_actual = row.get('SKU', '')
         descripcion_final = "Material de Embarque"
-        
+
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
             df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
             if not df_match.empty:
@@ -251,30 +251,29 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
                 calibre = str(art_info.get('Calibre_Espesor', '')).strip()
                 dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
                 acabado = str(art_info.get('Acabado_Superficial', '')).strip()
-                
+
                 detalles = []
                 if calibre and calibre.lower() != 'nan': detalles.append(f"Cal: {calibre}")
-            if dims and dims.lower() != 'nan': detalles.append(f"Dim: {dims}")
-            if acabado and acabado.lower() != 'nan': detalles.append(f"Acab: {acabado}")
-            
-            sub_detalle = f" ({', '.join(detalles)})" if detalles else ""
-            descripcion_final = f"{nombre_com}{sub_detalle}"
-        else:
-            descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque (SKU no catalogado)'))
-    else:
-        descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
-        
+                if dims and dims.lower() != 'nan': detalles.append(f"Dim: {dims}")
+                if acabado and acabado.lower() != 'nan': detalles.append(f"Acab: {acabado}")
 
-        
-        
+                sub_detalle = f" ({', '.join(detalles)})" if detalles else ""
+                descripcion_final = f"{nombre_com}{sub_detalle}"
+            else:
+                descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque (SKU no catalogado)'))
+        else:
+            descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
+
+
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             Paragraph(str(row['PO']), style_normal_text),
             Paragraph(str(row['Proyecto']), style_normal_text),
-            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{nom_art}</font>", style_normal_text),
+            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{nombre_com}</font>", style_normal_text), # <-- AQUÍ SE CAMBIÓ nom_art POR nombre_com
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text),
             Paragraph(str(row['Estatus_Envio']), style_normal_text)
         ])
+
         
     t_mat = Table(tabla_materiales, colWidths=[1.0 * inch, 1.1 * inch, 1.2 * inch, 2.3 * inch, 0.9 * inch, 1.0 * inch])
     t_mat.setStyle(TableStyle([
