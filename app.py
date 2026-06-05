@@ -878,11 +878,23 @@ elif opcion_menu == "📦 Módulo Tarimas":
         df_estilado = st.session_state.BD_Tarimas.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
         seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
+        
+        # =============================================================================
+        # BLOQUE DE IMPRESIÓN SEGURO PARA TARIMA INDIVIDUAL
+        # =============================================================================
         if filas_seleccionadas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
             if len(elegidas) == 1:
-                id_tarima_limpio = str(elegidas[0])
-                df_tarima_individual = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].astype(str) == id_tarima_limpio]
+                id_tarima_limpio = str(elegidas[0])  # Extrae el ID limpio sin corchetes (ej: TPM-0032)
+                
+                # Filtramos los materiales correspondientes a esta tarima seleccionada
+                df_tarima_individual = st.session_state.BD_Detalle_Tarimas[
+                    st.session_state.BD_Detalle_Tarimas['ID_Tarima'].astype(str) == id_tarima_limpio
+                ].copy()
+        
+                # DEJAMOS QUE TU FUNCIÓN DIBUJE EL BOTÓN CORRESPONDIENTE AUTOMÁTICAMENTE
+                generar_pdf_reporte_filtrado(df_tarima_individual)
+
         
                 st.download_button(
                     label=f"📥 Descargar PDF Tarima #{id_tarima_limpio}",
