@@ -1176,17 +1176,58 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
         st.subheader("📦 Carga y Sincronización del Catálogo de Artículos")
         st.markdown("Utilice este panel para descargar la estructura oficial o actualizar masivamente los nombres comerciales de la planta:")
 
-        # --- SECCIÓN A: DESCARGAR PLANTILLA BASE OFICIAL ---
+        # --- SECCIÓN A: DESCARGAR PLANTILLA BASE OFICIAL CON VALIDACIONES DE DATOS ---
         c_art1, c_art2 = st.columns(2)
         with c_art1:
             st.write("##### 📥 1. Obtener Plantilla Estructurada")
-            st.info("Descargue el formato en blanco con las columnas requeridas por el SGC para dar de alta sus productos.")
+            st.info("Descargue el formato oficial con anchos de columna y listas desplegables obligatorias para evitar errores de dedo.")
             
-            # Construcción de la plantilla limpia en memoria
-            df_plantilla_art = pd.DataFrame(columns=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"])
+            # 1. Definición de la estructura de columnas limpia
+            columnas_oficiales = ["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
+            df_plantilla_art = pd.DataFrame(columns=columnas_oficiales)
+            
             buf_p_art = io.BytesIO()
             with pd.ExcelWriter(buf_p_art, engine='openpyxl') as p_writer:
                 df_plantilla_art.to_excel(p_writer, index=False, sheet_name='Datos_Sistema')
+                
+                # Acceso directo al motor openpyxl para formatear el archivo en caliente
+                workbook = p_writer.book
+                worksheet = p_writer.sheets['Datos_Sistema']
+                
+                # IMPORTANTE: Configuración de anchos de columna solicitados
+                worksheet.column_dimensions['A'].width = 20  # SKU
+                worksheet.column_dimensions['B'].width = 25  # Nombre
+                worksheet.column_dimensions['C'].width = 20  # Calibre_Espesor
+                worksheet.column_dimensions['D'].width = 25  # Dimensiones_Pieza
+                worksheet.column_dimensions['E'].width = 20  # Acabado_Superficial
+                
+                # Importación de componentes de validación nativos de Excel
+                from openpyxl.worksheet.datavalidation import DataValidation
+                
+                # --- VALIDACIÓN 1: LISTA DESPLEGABLE DE CALIBRES ---
+                opciones_calibres = '"10GA,12GA,14GA,16GA,10GACR,12GACR,14GACR,16GACR"'
+                dv_calibre = DataValidation(type="list", formula1=opciones_calibres, allow_blank=True)
+                dv_calibre.error = 'El calibre ingresado no pertenece a la lista autorizada.'
+                dv_calibre.errorTitle = 'Calibre Inválido'
+                dv_calibre.prompt = 'Seleccione un calibre de la lista'
+                dv_calibre.promptTitle = 'Calibre Espesor'
+                
+                # Aplicamos la validación a la columna C (desde la fila 2 hasta la 2000)
+                worksheet.add_data_validation(dv_calibre)
+                dv_calibre.add("C2:C2000")
+                
+                # --- VALIDACIÓN 2: LISTA DESPLEGABLE DE ACABADOS ---
+                opciones_acabados = '"Decapado,Ansi 61,Galvanizado,Otro"'
+                dv_acabado = DataValidation(type="list", formula1=opciones_acabados, allow_blank=True)
+                dv_acabado.error = 'El acabado ingresado no pertenece a la lista autorizada.'
+                dv_acabado.errorTitle = 'Acabado Inválido'
+                dv_acabado.prompt = 'Seleccione un acabado de la lista'
+                dv_acabado.promptTitle = 'Acabado Superficial'
+                
+                # Aplicamos la validación a la columna E (desde la fila 2 hasta la 2000)
+                worksheet.add_data_validation(dv_acabado)
+                dv_acabado.add("E2:E2000")
+                
             buf_p_art.seek(0)
             
             st.download_button(
@@ -1194,58 +1235,5 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 data=buf_p_art.getvalue(),
                 file_name="Plantilla_Maestra_Articulos.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="btn_download_plantilla_maestra_articulos_sgc"
+                key="btn_download_plantilla_maestra_articulos_sgc_v2"
             )
-
-        # --- SECCIÓN B: CARGA MASIVA E INTEGRACIÓN A GITHUB ---
-        with c_art2:
-            st.write("##### 📤 2. Subir e Integrar Catálogo")
-            st.warning("Asegúrese de respetar los nombres exactos de las columnas de la plantilla antes de realizar la carga.")
-            
-            archivo_art_subido = st.file_uploader(
-                "Seleccione archivo Excel de Artículos:", 
-                type=["xlsx"], 
-                key="uploader_excel_articulos_masivo_git"
-            )
-            
-            if archivo_art_subido is not None:
-                try:
-                    try:
-                        df_subido_art = pd.read_excel(archivo_art_subido, sheet_name='Datos_Sistema')
-                    except Exception:
-                        df_subido_art = pd.read_excel(archivo_art_subido, sheet_name=0)
-                    
-                    columnas_requeridas = ["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
-                    if all(col in df_subido_art.columns for col in columnas_requeridas):
-                        st.success(f"✅ Formato validado con éxito. Detectados {len(df_subido_art)} artículos para integración.")
-                        
-                        if st.button("🚀 Confirmar y Sincronizar Catálogo a GitHub", use_container_width=True):
-                            with st.spinner("Estableciendo conexión y subiendo datos a producción..."):
-                                st.session_state.BD_Articulos = df_subido_art[columnas_requeridas].copy()
-                                
-                                # Subida formal a través de la API al repositorio
-                                exito_subida = subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
-                                
-                                if exito_subida:
-                                    st.balloons()
-                                    st.success("🎉 ¡Catálogo Maestro 'BD_Articulos.xlsx' sincronizado con éxito en GitHub!")
-                                    import time
-                                    time.sleep(1.5)
-                                    st.rerun()
-                                else:
-                                    st.error("❌ Fallo en la comunicación con la API de GitHub. Verifique su Token de acceso en Secrets.")
-                    else:
-                        st.error("❌ Archivo inválido. Las columnas deben ser exactamente: SKU, Nombre, Calibre_Espesor, Dimensiones_Pieza, Acabado_Superficial")
-                except Exception as error_proc:
-                    st.error(f"⚠️ Error al procesar el archivo Excel: {error_proc}")
-
-        # --- SECCIÓN C: PANEL DE VISUALIZACIÓN EN TIEMPO REAL ---
-        st.write("##### 📋 Vista Previa del Catálogo Activo en Sistema")
-        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-            st.dataframe(
-                st.session_state.BD_Articulos, 
-                use_container_width=True, 
-                hide_index=True
-            )
-        else:
-            st.info("ℹ️ El catálogo de artículos se encuentra actualmente vacío en GitHub. Descargue la plantilla de arriba para subir los primeros registros.")
