@@ -110,7 +110,7 @@ if "BD_Articulos" not in st.session_state or st.session_state.get("BD_Articulos"
         st.session_state.BD_Articulos = df_git_articulos
     else:
         # Estructura oficial estricta del sistema en caso de que el archivo no exista aún en GitHub
-        st.session_state.BD_Articulos = pd.DataFrame(columns=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial", "Es_Nuevo"])
+        st.session_state.BD_Articulos = pd.DataFrame(columns=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"])
 
 
 # --- Catálogo Maestro de Tarimas ---
@@ -359,47 +359,17 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
     ]]
     
     for _, row in df_detalles_remision.iterrows():
-        sku_actual = row.get('SKU', '')
-        nombre_com = "Articulo No Registrado en BD_Remisiones"
-        renglones_tecnicos = ""
+        # Búsqueda segura del nombre comercial del artículo
+        art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == row['SKU']]
+        nom_art = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
         
-        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-            df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
-            if not df_match.empty:
-                art_info = df_match.iloc
-                nombre_com_base = str(art_info.get('Nombre', '')).strip()
-                
-                if not nombre_com_base or nombre_com_base.lower() == 'nan':
-                    nombre_com = "Articulo No Registrado en BD_Remisiones"
-                else:
-                    nombre_com = nombre_com_base
-                    calibre = str(art_info.get('Calibre_Espesor', '')).strip()
-                    dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
-                    acabado = str(art_info.get('Acabado_Superficial', '')).strip()
-                    
-                    lista_renglones = []
-                    if calibre and calibre.lower() != 'nan': lista_renglones.append(f"<b>Espesor:</b> {calibre}")
-                    if dims and dims.lower() != 'nan': lista_renglones.append(f"<b>Dimensiones:</b> {dims}")
-                    if acabado and acabado.lower() != 'nan': lista_renglones.append(f"<b>Acabado:</b> {acabado}")
-                    
-                    if lista_renglones:
-                        renglones_tecnicos = f"<br/><font color='#555555' size='7'>{'<br/>'.join(lista_renglones)}</font>"
-            else:
-                nombre_com = "Articulo No Registrado en BD_Remisiones"
-        else:
-            nombre_com = "Articulo No Registrado en BD_Remisiones"
-    
-        celda_detalle_combinada = f"<b>{sku_actual}</b><br/>{nombre_com}{renglones_tecnicos}"
-    
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             Paragraph(str(row['PO']), style_normal_text),
-            Paragraph(str(row['Projecto']), style_normal_text), # Ajustar nombre exacto de columna si lleva 'Proyecto' o 'Projecto'
-            Paragraph(celda_detalle_combinada, style_normal_text),
+            Paragraph(str(row['Proyecto']), style_normal_text),
+            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{nom_art}</font>", style_normal_text),
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
         ])
-
-
         
     t_mat = Table(tabla_materiales, colWidths=[1.2 * inch, 1.3 * inch, 1.3 * inch, 2.7 * inch, 1.0 * inch])
     t_mat.setStyle(TableStyle([
@@ -508,28 +478,30 @@ if opcion_menu == "📊 Dashboard e Históricos":
     # =============================================================================
     col_sync1, col_sync2 = st.columns([3, 1])
     with col_sync2:
-        # 🟢 Deja ÚNICAMENTE este botón. Si hay otro abajo en la línea 540, bórralo por completo.
-        if st.button("⚡ Sincronizar GitHub", use_container_width=True, key="btn_sincronizar_github_unico_sgc"):
+        if st.button("⚡ Sincronizar GitHub", use_container_width=True):
             # 1. Eliminamos las variables congeladas de la memoria local
             if "BD_Tarimas" in st.session_state: del st.session_state.BD_Tarimas
             if "BD_Detalle_Tarimas" in st.session_state: del st.session_state.BD_Detalle_Tarimas
             if "BD_Datos_Generales_Remision" in st.session_state: del st.session_state.BD_Datos_Generales_Remision
             if "BD_Lideres" in st.session_state: del st.session_state.BD_Lideres
-            if "BD_Articulos" in st.session_state: del st.session_state.BD_Articulos
-    
-            # 2. Descarga de archivos frescos en caliente desde GitHub
+            
+            # 2. Rompemos el caché de red inyectando tiempo en segundos a la URL
+            import time
+            nocache_param = int(time.time())
+            import time
+            nocache_param = int(time.time())
+            
+            # Dejamos únicamente las llamadas limpias (ya que el truco del tiempo ahora lo hace la función de arriba)
             df_tarimas_frescas = cargar_excel_desde_github("BD_Tarimas.xlsx")
             df_detalles_frescos = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
             df_remisiones_frescas = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
-            df_articulos_frescos = cargar_excel_desde_github("BD_Articulos.xlsx")
-    
-            # 3. Asignación limpia al session_state de la aplicación
+            
+            # Asegúrate de que tu bloque continúe con las asignaciones de memoria que pusimos en el paso anterior:
             if df_tarimas_frescas is not None: st.session_state.BD_Tarimas = df_tarimas_frescas
             if df_detalles_frescos is not None: st.session_state.BD_Detalle_Tarimas = df_detalles_frescos
             if df_remisiones_frescas is not None: st.session_state.BD_Datos_Generales_Remision = df_remisiones_frescas
-            if df_articulos_frescos is not None: st.session_state.BD_Articulos = df_articulos_frescos
-    
-            st.success("¡Datos y catálogo maestro actualizados desde GitHub!")
+            
+            st.success("¡Datos actualizados desde GitHub!")
             st.rerun()
 
 
@@ -818,77 +790,28 @@ elif opcion_menu == "📦 Módulo Tarimas":
     if not is_admin: st.error("🔒 Área Bloqueada: Se requiere contraseña de Administrador.")
     else:
         st.success("🔓 Acceso Autorizado.")
-
-
-        arch = st.file_uploader("Suba el Excel con Formato de Proyectos", type=["xlsx"], key="uploader_plantilla_proyectos_embarques")
-    
-        col1, col2 = st.columns(2)
-        with col1:
-            tipo_t = st.selectbox("Tipo:", ["Cuadrada", "Rectangular", "Especial", "Otro"], key="sel_tipo_tarima_carga")
-        with col2:
-            if "BD_Lideres" in st.session_state and not st.session_state.BD_Lideres.empty:
-                df_lideres_base = st.session_state.BD_Lideres.copy()
-                col_id_real = df_lideres_base.columns[0]
-                col_nom_real = df_lideres_base.columns[1] if len(df_lideres_base.columns) > 1 else df_lideres_base.columns[0]
-                
-                df_lid_aux = df_lideres_base.dropna(subset=[col_id_real, col_nom_real]).copy()
-                df_lid_aux['Display'] = df_lid_aux[col_id_real].astype(str).str.strip() + " - " + df_lid_aux[col_nom_real].astype(str).str.strip()
-                opciones_mostrar = sorted(df_lid_aux['Display'].unique().tolist())
-            else:
-                opciones_mostrar = ["LID-01 - Practicante Dual"]
-    
-            lider_visual = st.selectbox("Líder:", options=opciones_mostrar, key="sel_lider_tarima_carga_v3")
-            # El split corta el texto y se queda únicamente con la clave técnica limpia (ej: "LID-01")
-            lider_t = lider_visual.split(" - ")[0] if " - " in lider_visual else lider_visual
-    
-        # =============================================================================
-        # ACCIÓN DEL BOTÓN: PROCESAR E INTEGRAR PLANTILLA AVANZADA
-        # =============================================================================
-        if st.button("Procesar e Integrar Plantilla Avanzada", use_container_width=True):
-            if arch is not None:
-                try:
-                    df_entrada = pd.read_excel(arch)
-                    # ... (Aquí va tu lógica de lectura y validación interna de columnas del Excel) ...
-                    
-                    # Cálculo automático del consecutivo de ID de Tarima del sistema
-                    if "BD_Tarimas" in st.session_state and not st.session_state.BD_Tarimas.empty:
-                        # Supongamos que tu ID tiene un prefijo numérico o secuencial
-                        ultimo_id = st.session_state.BD_Tarimas['ID_Tarima'].max()
-                        # (Conserva aquí tu lógica exacta de generación de IDs)
-                        nuevo_id = ultimo_id + 1 if isinstance(ultimo_id, (int, float)) else "TPM-NUEVO"
-                    else:
-                        nuevo_id = "TPM-0001"
-    
-                    # CREACIÓN DE LA FILA PARA LA BASE DE DATOS DE TARIMAS
-                    nueva_tarima = {
-                        "ID_Tarima": nuevo_id,
-                        "Tarima_Origen_Excel": arch.name,
-                        "Fecha_Creacion": datetime.date.today().strftime("%d/%m/%Y"),
-                        "Ubicacion_Actual": "Almacén Embarques",
-                        "Creado_Por": lider_t,       # 🟢 SE CORRIGE: Se asigna la variable correcta eliminando 'oper'
-                        "Tipo_Tarima": tipo_t,
-                        "Estatus": "Disponible",
-                        "Es_Nueva": True
-                    }
-                    
-                    # Inserción en el DataFrame global de control de la app
-                    if "BD_Tarimas" in st.session_state:
-                        st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, pd.DataFrame([nueva_tarima])], ignore_index=True)
-                    
-                    # Sincronización automática de persistencia con el repositorio en GitHub
-                    exito_guardado = subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
-                    
-                    if exito_guardado:
-                        st.success(f"✅ ¡Tarima #{nuevo_id} integrada y registrada de forma consecutiva bajo la supervisión de {lider_visual}!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Error de comunicación: No se pudo subir el registro al repositorio de GitHub.")
-                        
-                except Exception as e:
-                    st.error(f"⚠️ Error crítico durante el procesamiento de la plantilla: {e}")
-            else:
-                st.warning("⚠️ Por favor, suba un archivo Excel válido antes de ejecutar el procesamiento.")
-
+        arch = st.file_uploader("Suba el Excel con Formato de Proyectos", type=["xlsx"])
+        col_t1, col_t2 = st.columns(2)
+        with col_t1: tipo_t = st.selectbox("Tipo:", ["Cuadrada", "Rectangular"])
+        with col_t2: oper = st.text_input("Líder:", "Jesus Morales")
+        if arch and st.button("Procesar e Integrar Plantilla Avanzada"):
+            try:
+                df_ex = pd.read_excel(arch)
+                columnas_requeridas = ["Tarima", "Producto/SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"]
+                if not all(col in df_ex.columns for col in columnas_requeridas): st.error("❌ Error: Columnas incompatibles.")
+                else:
+                    if not st.session_state.BD_Tarimas.empty: st.session_state.BD_Tarimas["Es_Nueva"] = False
+                    for t_orig in df_ex['Tarima'].unique():
+                        nuevo_id_tpm = f"TPM-{(len(st.session_state.BD_Tarimas) + 1):04d}"
+                        n_t = {"ID_Tarima": nuevo_id_tpm, "Tarima_Origen_Excel": t_orig, "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"), "Ubicacion_Actual": "Metales", "Creado_Por": oper, "Tipo_Tarima": tipo_t, "Estatus": "Disponible", "Es_Nueva": True}
+                        st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, pd.DataFrame([n_t])], ignore_index=True)
+                        items = df_ex[df_ex['Tarima'] == t_orig]
+                        for _, item in items.iterrows():
+                            st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas) + 1, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": item['PO'], "Proyecto": item['Proyecto'], "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']}])], ignore_index=True)
+                    subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                    subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
+                    st.success("¡Inventario respaldado con éxito!"); st.rerun()
+            except Exception as e: st.error(f"Error: {e}")
             
     if not st.session_state.BD_Tarimas.empty:
         st.write("---")
@@ -896,24 +819,12 @@ elif opcion_menu == "📦 Módulo Tarimas":
         df_estilado = st.session_state.BD_Tarimas.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
         seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
-        
         if filas_seleccionadas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
-            # --- OPCIÓN A CORREGIDA: DESCARGA INDIVIDUAL DE UNA TARIMA ---
             if len(elegidas) == 1:
-                id_tarima_limpio = str(elegidas[0]) # Extraemos el ID como texto limpio (ej: "TPM-NUEVO")
-                
-                st.download_button(
-                    label=f"📥 Descargar PDF Tarima #{id_tarima_limpio}",
-                    # Cambiamos a 'generar_pdf_tarimas' con el ID string que espera tu script original
-                    data=generar_pdf_tarimas(id_tarima_limpio), 
-                    file_name=f"Tarima_{id_tarima_limpio}.pdf", 
-                    mime="application/pdf",
-                    key="btn_dl_single_tarima_key_v4"
-                )
-
-       
+                st.download_button(label=f"📥 Descargar PDF Tarima #{elegidas}", data=generar_pdf_tarima(elegidas), file_name=f"Tarima_{elegidas}.pdf", mime="application/pdf")
             else:
+
                 if st.button("📦 Unificar Lote de Impresión"):
                     buf_1 = io.BytesIO()
                     doc_1 = SimpleDocTemplate(buf_1, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
@@ -978,42 +889,15 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         ]]
                         
                         for _, item in det.iterrows():
-                            sku_actual = item.get('SKU', '')
-                            cadena_art_completa = "Articulo No Registrado en BD_Remisiones"
+                            art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
+                            art_nom = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
                             
-                            if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                                df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
-                                if not df_match.empty:
-                                    art_info = df_match.iloc
-                                    nombre_com = str(art_info.get('Nombre', '')).strip()
-                                    calibre = str(art_info.get('Calibre_Espesor', '')).strip()
-                                    dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
-                                    acabado = str(art_info.get('Acabado_Superficial', '')).strip()
-                                    
-                                    # Si el nombre en la BD está vacío o es un nulo de texto
-                                    if not nombre_com or nombre_com.lower() == 'nan':
-                                        cadena_art_completa = "Articulo No Registrado en BD_Remisiones"
-                                    else:
-                                        detalles_lista = []
-                                        if calibre and calibre.lower() != 'nan': detalles_lista.append(f"CAL: {calibre}")
-                                        if dims and dims.lower() != 'nan': detalles_lista.append(f"DIM: {dims}")
-                                        if acabado and acabado.lower() != 'nan': detalles_lista.append(f"ACAB: {acabado.upper()}")
-                                        
-                                        complemento_tecnico = f" - {' / '.join(detalles_lista)}" if detalles_lista else ""
-                                        cadena_art_completa = f"{nombre_com}{complemento_tecnico}"
-                                else:
-                                    cadena_art_completa = "Articulo No Registrado en BD_Remisiones"
-                            else:
-                                cadena_art_completa = "Articulo No Registrado en BD_Remisiones"
-    
                             tabla_detalles.append([
                                 Paragraph(str(item['PO']), style_normal_text),
                                 Paragraph(str(item['SKU']), style_normal_text),
-                                Paragraph(cadena_art_completa, style_normal_text),
+                                Paragraph(str(art_nom), style_normal_text),
                                 Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
                             ])
-
-
                             
                         t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
                         t_grid.setStyle(TableStyle([
@@ -1426,46 +1310,27 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 arch_articulos = st.file_uploader("Suba la Plantilla de Artículos Rellenada:", type=["xlsx"], key="uploader_articulos_masivo_f")
                 
                 if arch_articulos:
-                    if st.button("🔄 Procesar y Anexar Nuevos Artículos a GitHub", use_container_width=True):
+                    if st.button("🔄 Procesar y Reemplazar Catálogo en GitHub", use_container_width=True):
                         try:
                             df_art_excel = pd.read_excel(arch_articulos)
                             columnas_requeridas = ["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
                             
                             if not all(col in df_art_excel.columns for col in columnas_requeridas):
-                                st.error("❌ Error: Columnas incompatibles. Asegúrese de usar la estructura oficial de la plantilla.")
+                                st.error("❌ Error: Columnas incompatibles. Use la estructura oficial.")
                             else:
-                                # 1. Limpieza básica inicial del archivo entrante
                                 df_art_excel = df_art_excel.dropna(subset=["SKU"])
                                 df_art_excel["SKU"] = df_art_excel["SKU"].astype(str).str.strip()
                                 
-                                # Marcar los registros de este Excel como los nuevos para pintarlos en amarillo
-                                df_art_excel["Es_Nuevo"] = True
-                                
-                                # 2. Lógica acumulativa (Simil al Módulo Tarimas)
-                                if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                                    # Desmarcamos los artículos antiguos quitándoles el color amarillo previo
-                                    st.session_state.BD_Articulos["Es_Nuevo"] = False
-                                    
-                                    # Concatenamos el histórico existente con el nuevo lote cargado
-                                    df_consolidado = pd.concat([st.session_state.BD_Articulos, df_art_excel], ignore_index=True)
-                                    
-                                    # Evitamos duplicados: Si el SKU ya existía, dejamos la versión del nuevo Excel (la última cargada)
-                                    df_consolidado = df_consolidado.drop_duplicates(subset=["SKU"], keep="last")
-                                    st.session_state.BD_Articulos = df_consolidado
-                                else:
-                                    st.session_state.BD_Articulos = df_art_excel
-                                
-                                # 3. Sincronización automática con el repositorio en la nube
+                                st.session_state.BD_Articulos = df_art_excel
                                 exito_subida = subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
                                 
                                 if exito_subida:
-                                    st.success("✅ ¡Artículos integrados al catálogo de forma consecutiva y respaldados exitosamente!")
+                                    st.success("✅ ¡Catálogo actualizado en GitHub exitosamente!")
                                     st.rerun()
                                 else:
-                                    st.error("❌ Error al sincronizar el archivo actualizado con el repositorio de GitHub.")
+                                    st.error("❌ Error al subir el archivo al repositorio de GitHub.")
                         except Exception as e:
-                            st.error(f"⚠️ Error crítico durante la integración del archivo: {e}")
-
+                            st.error(f"⚠️ Error crítico: {e}")
     
         st.write("---")
     
@@ -1479,25 +1344,14 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 "* **Nota:** El SKU actúa como llave relacional y está bloqueado para edición, pero sí puede eliminar la fila completa si ya no se usa.")
     
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-            # Forzamos la presencia de la columna de control para evitar fallos de renderizado
-            if "Es_Nuevo" not in st.session_state.BD_Articulos.columns:
-                st.session_state.BD_Articulos["Es_Nuevo"] = False
-                
-            # Aplicamos la máscara de color amarillo a las filas donde Es_Nuevo sea True
-            df_art_estilado = st.session_state.BD_Articulos.style.apply(
-                lambda r: ['background-color: #FFF59D' if r['Es_Nuevo'] else '' for _ in r], 
-                axis=1
-            )
-            
-            # st.data_editor recibe el DataFrame con el estilo visual aplicado
+            # st.data_editor detectará automáticamente las eliminaciones al activar num_rows="dynamic"
             df_art_editable = st.data_editor(
-                df_art_estilado,
+                st.session_state.BD_Articulos,
                 use_container_width=True,
                 disabled=["SKU"], 
                 hide_index=True,
-                num_rows="dynamic",
+                num_rows="dynamic", # Habilita dinámicamente añadir (+) y eliminar filas nativas
                 key="editor_mantenimiento_articulos_directo_v3",
-                column_order=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"], # Oculta la columna Es_Nuevo de la vista del usuario
                 column_config={
                     "SKU": st.column_config.TextColumn("SKU (Bloqueado/Llave)"),
                     "Nombre": st.column_config.TextColumn("Descripción Comercial"),
@@ -1506,7 +1360,6 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     "Acabado_Superficial": st.column_config.SelectboxColumn("Acabado Superficial", options=["Decapado", "Ansi 61", "Galvanizado", "Otro"])
                 }
             )
-
     
             # Botón de guardado y persistencia en GitHub
             if st.button("💾 Guardar Cambios y Aplicar Bajas en GitHub", use_container_width=True):
