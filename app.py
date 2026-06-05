@@ -820,31 +820,88 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     doc_1 = SimpleDocTemplate(buf_1, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
                     story_l, styles = [], getSampleStyleSheet()
                     
-                    # Ciclo de impresión principal
+                    # Estilos tipográficos institucionales de gran impacto
+                    style_tarima_titulo = ParagraphStyle('T_Giga', parent=styles['Heading1'], fontName="Helvetica-Bold", fontSize=140, alignment=1, leading=150, textColor=colors.HexColor("#212121"))
+                    style_sub_titulo = ParagraphStyle('S_Giga', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=26, alignment=1, textColor=colors.HexColor("#D32F2F"))
+                    style_normal_bold = ParagraphStyle('N_Bold', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=11, leading=14)
+                    style_normal_text = ParagraphStyle('N_Text', parent=styles['Normal'], fontSize=11, leading=14)
+                    style_blanco_bold = ParagraphStyle('B_Bold', parent=styles['Normal'], fontName="Helvetica-Bold", textColor=colors.white, alignment=1, fontSize=10)
+                    
                     for t_imp in elegidas:
                         det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
                         t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp]
                         
-                        # Extracción segura de operador y fecha
                         op_nom = t_info.iloc[0]['Creado_Por'] if not t_info.empty else "N/A"
-                        fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"    
-        
-                        story_l.append(Spacer(1, 1.8 * inch))
-                        story_l.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=28, alignment=1)))
-                        story_l.append(Paragraph(f"<b>Detalle Interno - Tarima #{t_imp}</b>", styles['Heading2']))
-                        story_l.append(Paragraph(f"<b>Operador:</b> {op_nom} | <b>Fecha:</b> {fe_cre}", styles['Normal']))
-                        story_l.append(Spacer(1, 0.3 * inch))
+                        fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
+                        
+                        # =============================================================================
+                        # HOJA 1: CARÁTULA DE IDENTIFICACIÓN MASIVA (NÚMERO GIGANTE)
+                        # =============================================================================
+                        story_l.append(Spacer(1, 1.2 * inch))
+                        story_l.append(Paragraph("TARIMA", style_sub_titulo))
+                        story_l.append(Spacer(1, 0.2 * inch))
+                        
+                        # Extraemos solo el número limpio (ej. si es TPM-0024 extrae 0024)
+                        num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
+                        story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
+                        
+                        story_l.append(Spacer(1, 1.5 * inch))
+                        
+                        # Mini panel inferior de trazabilidad en la carátula
+                        tabla_base = Table([
+                            [Paragraph("CÓDIGO DE IDENTIFICACIÓN:", style_normal_bold), Paragraph(str(t_imp), style_normal_text)],
+                            [Paragraph("OPERADOR DE PLANTA:", style_normal_bold), Paragraph(str(op_nom), style_normal_text)],
+                            [Paragraph("FECHA DE EMISIÓN:", style_normal_bold), Paragraph(str(fe_cre), style_normal_text)]
+                        ], colWidths=[2.5 * inch, 5.0 * inch])
+                        tabla_base.setStyle(TableStyle([
+                            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                            ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor("#E0E0E0")),
+                            ('BOTTOMPADDING', (0,0), (-1,-1), 6)
+                        ]))
+                        story_l.append(tabla_base)
+                        
+                        # Forzamos salto inmediato a la siguiente página
+                        story_l.append(PageBreak())
+                        
+                        # =============================================================================
+                        # HOJA 2: DESGLOSE GRANULAR Y DETALLE DE PIEZAS
+                        # =============================================================================
+                        story_l.append(Spacer(1, 0.1 * inch))
+                        story_l.append(Paragraph(f"<b>DETALLE DE MATERIALES ASOCIADOS - CONTROL #{t_imp}</b>", styles['Heading2']))
+                        story_l.append(Spacer(1, 0.2 * inch))
+                        
+                        # Construcción de cuadrícula formal de inventario
+                        tabla_detalles = [[
+                            Paragraph("ORDEN (PO)", style_blanco_bold),
+                            Paragraph("SKU / PRODUCTO", style_blanco_bold),
+                            Paragraph("DESCRIPCIÓN COMERCIAL", style_blanco_bold),
+                            Paragraph("CANTIDAD", style_blanco_bold)
+                        ]]
                         
                         for _, item in det.iterrows():
                             art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
-                            art_nom = art.iloc[0]['Nombre'] if not art.empty else "Material"
+                            art_nom = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
                             
-                            story_l.append(Paragraph(f"<b>PO:</b> {item['PO']} | <b>SKU:</b> {item['SKU']} - {art_nom}", styles['Normal']))
-                            story_l.append(Spacer(1, 0.4 * inch))
-                            story_l.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", ParagraphStyle('NG_L', parent=styles['Heading1'], fontSize=24, alignment=1)))
-                            story_l.append(PageBreak())
+                            tabla_detalles.append([
+                                Paragraph(str(item['PO']), style_normal_text),
+                                Paragraph(str(item['SKU']), style_normal_text),
+                                Paragraph(str(art_nom), style_normal_text),
+                                Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
+                            ])
                             
-                    # --- FINALIZACIÓN DEL DOCUMENTO (DENTRO DEL ELSE) ---
+                        t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
+                        t_grid.setStyle(TableStyle([
+                            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")),
+                            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")),
+                            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                            ('TOPPADDING', (0,0), (-1,-1), 6),
+                            ('BOTTOMPADDING', (0,0), (-1,-1), 6)
+                        ]))
+                        story_l.append(t_grid)
+                        
+                        # Salto de página para separar la siguiente tarima del lote
+                        story_l.append(PageBreak())
+                        
                     if story_l: 
                         story_l.pop()  # Remueve el último salto de página sobrante
                         
@@ -853,10 +910,11 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     st.download_button(
                         label="📥 Descargar Lote Completo (PDF)", 
                         data=buf_1.getvalue(), 
-                        file_name="Lote_Tarimas.pdf", 
+                        file_name="Lote_Tarimas_Separado.pdf", 
                         mime="application/pdf",
-                        key="btn_download_lote_tarimas_unificado_final"
+                        key="btn_download_lote_tarimas_unificado_final_v2"
                     )
+
     
 
 
