@@ -744,22 +744,33 @@ elif opcion_menu == "🔍 Centro de Consultas":
                 from openpyxl.styles import Font, PatternFill, Alignment
                 from openpyxl.utils import get_column_letter
                 buf_c = io.BytesIO()
-                with pd.ExcelWriter(buf_c, engine='openpyxl') as writer_c:
-                    df_metadatos = pd.DataFrame([
-                        {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO (FO-MET-11)"},
-                        {"Concepto": "EMPRESA", "Valor": "INDUSTRIA SIGRAMA S.A. DE C.V."},
-                        {"Concepto": "FECHA DE GENERACIÓN", "Valor": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
-                        {"Concepto": "FILTRO: ORDEN DE COMPRA (PO)", "Valor": str(f_po)},
-                        {"Concepto": "FILTRO: PROYECTO INTERNO", "Valor": str(f_proy)},
-                        {"Concepto": "FILTRO: PARCIALIDAD", "Valor": str(f_parc)},
-                        {"Concepto": "FILTRO: DESCRIPCIÓN PROYECTO", "Valor": str(f_desc)},
-                        {"Concepto": "FILTRO: SKU / PRODUCTO", "Valor": str(f_sku)},
-                        {"Concepto": "FILTRO: ID TARIMA", "Valor": str(f_tar)},
-                        {"Concepto": "FILTRO: ESTATUS DE ENVÍO", "Valor": str(f_est)},
-                        {"Concepto": "TOTAL PIEZAS EN SELECCIÓN", "Valor": int(total_piezas_consulta)}
-                    ])
-                    df_metadatos.to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
-                    df_rep.to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
+        
+                # SI LA TABLA TIENE DATOS, GENERA EL REPORTE COMPLETO CON DOS HOJAS
+                if 'df_rep' in locals() and not df_rep.empty:
+                    with pd.ExcelWriter(buf_c, engine='openpyxl') as writer_c:
+                        df_metadatos = pd.DataFrame([
+                            {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO (FO-MET-11)"},
+                            {"Concepto": "EMPRESA", "Valor": "INDUSTRIA SIGRAMA S.A. DE C.V."},
+                            {"Concepto": "FECHA DE GENERACIÓN", "Valor": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
+                            {"Concepto": "FILTRO: ORDEN DE COMPRA (PO)", "Valor": str(f_po)},
+                            {"Concepto": "FILTRO: PROYECTO INTERNO", "Valor": str(f_proy)},
+                            {"Concepto": "FILTRO: PARCIALIDAD", "Valor": str(f_parc)},
+                            {"Concepto": "FILTRO: DESCRIPCIÓN PROYECTO", "Valor": str(f_desc)},
+                            {"Concepto": "FILTRO: SKU / PRODUCTO", "Valor": str(f_sku)},
+                            {"Concepto": "FILTRO: ID TARIMA", "Valor": str(f_tar)},
+                            {"Concepto": "FILTRO: ESTATUS DE ENVÍO", "Valor": str(f_est)},
+                            {"Concepto": "TOTAL PIEZAS EN SELECCIÓN", "Valor": int(total_piezas_consulta)}
+                        ])
+                        df_metadatos.to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
+                        df_rep.to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
+                else:
+                    # SI NO HAY DATOS, GENERA UN EXCEL SEGURO EN BLANCO PARA EVITAR LA PANTALLA ROJA
+                    with pd.ExcelWriter(buf_c, engine='openpyxl') as writer_c:
+                        pd.DataFrame([{"Mensaje": "No se encontraron registros con los filtros seleccionados."}]).to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
+                        pd.DataFrame(columns=["ID_Tarima", "PO", "Proyecto", "SKU", "Cantidad", "Estatus_Envio"]).to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
+
+
+                
                     
                     # Estilos de Portada (Gris de Control de Almacén)
                     ws_m = writer_c.sheets['Resumen_Filtros']
