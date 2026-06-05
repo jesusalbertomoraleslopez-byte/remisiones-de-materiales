@@ -1028,6 +1028,75 @@ elif opcion_menu == "🚚 Módulo Remisiones":
 # =============================================================================
 # SECCIÓN 17A: PANEL DE MANTENIMIENTO AVANZADO Y EDICIÓN EN CALIENTE (SUPERUSER)
 # =============================================================================
+elif opcion_menu == "📦 Catálogo de Artículos":
+    st.title("📦 Catálogo Maestro de Artículos")
+    st.markdown("Consulte y filtre de forma dinámica el catálogo oficial de productos cargados en el sistema:")
+
+    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+        df_articulos_base = st.session_state.BD_Articulos.copy()
+
+        # Cuadrícula de filtros dinámicos (3 columnas en paralelo para optimizar espacio)
+        art_col1, art_col2, art_col3 = st.columns(3)
+        
+        with art_col1:
+            # Filtro por SKU
+            opc_art_sku = ["Todos"] + sorted(df_articulos_base['SKU'].dropna().unique().tolist())
+            f_art_sku = st.selectbox("Filtrar por SKU:", opc_art_sku, key="filter_art_sku")
+            
+            # Filtro por Dimensiones
+            opc_art_dim = ["Todos"] + sorted(df_articulos_base['Dimensiones_Pieza'].dropna().unique().tolist())
+            f_art_dim = st.selectbox("Filtrar por Dimensiones:", opc_art_dim, key="filter_art_dim")
+
+        with art_col2:
+            # Filtro por Nombre / Descripción Comercial
+            opc_art_nom = ["Todos"] + sorted(df_articulos_base['Nombre'].dropna().unique().tolist())
+            f_art_nom = st.selectbox("Filtrar por Nombre:", opc_art_nom, key="filter_art_nom")
+
+        with art_col3:
+            # Filtro por Calibre / Espesor
+            opc_art_cal = ["Todos"] + sorted(df_articulos_base['Calibre_Espesor'].dropna().unique().tolist())
+            f_art_cal = st.selectbox("Filtrar por Calibre / Espesor:", opc_art_cal, key="filter_art_cal")
+            
+            # Filtro por Acabado Superficial
+            opc_art_acab = ["Todos"] + sorted(df_articulos_base['Acabado_Superficial'].dropna().unique().tolist())
+            f_art_acab = st.selectbox("Filtrar por Acabado Superficial:", opc_art_acab, key="filter_art_acab")
+
+        # Aplicación en cascada de los filtros seleccionados
+        df_art_filtrado = df_articulos_base.copy()
+        if f_art_sku != "Todos":
+            df_art_filtrado = df_art_filtrado[df_art_filtrado['SKU'] == f_art_sku]
+        if f_art_nom != "Todos":
+            df_art_filtrado = df_art_filtrado[df_art_filtrado['Nombre'] == f_art_nom]
+        if f_art_cal != "Todos":
+            df_art_filtrado = df_art_filtrado[df_art_filtrado['Calibre_Espesor'] == f_art_cal]
+        if f_art_dim != "Todos":
+            df_art_filtrado = df_art_filtrado[df_art_filtrado['Dimensiones_Pieza'] == f_art_dim]
+        if f_art_acab != "Todos":
+            df_art_filtrado = df_art_filtrado[df_art_filtrado['Acabado_Superficial'] == f_art_acab]
+
+        st.write("---")
+        
+        # Despliegue de métricas rápidas de la consulta
+        st.metric("🔢 Artículos en Selección:", f"{len(df_art_filtrado)} Items")
+        
+        # Despliegue de la tabla de datos estructurada
+        st.dataframe(
+            df_art_filtrado, 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "SKU": st.column_config.TextColumn("SKU / Código"),
+                "Nombre": st.column_config.TextColumn("Descripción Comercial"),
+                "Calibre_Espesor": st.column_config.TextColumn("Calibre / Espesor"),
+                "Dimensiones_Pieza": st.column_config.TextColumn("Dimensiones de la Pieza"),
+                "Acabado_Superficial": st.column_config.TextColumn("Acabado Superficial")
+            }
+        )
+    else:
+        st.info("ℹ️ No hay artículos registrados en el catálogo maestro actualmente o el archivo en GitHub está vacío.")
+
+
+
 elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
     st.title("⚙️ Panel de Mantenimiento Avanzado del Sistema")
     st.warning("⚠️ Acción Crítica: Las modificaciones realizadas impactan directamente en los archivos de GitHub.")
