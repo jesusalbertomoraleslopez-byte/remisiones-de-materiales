@@ -868,28 +868,28 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                     subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
                     st.success(f"✅ ¡Remisión {fol} Generada y Guardada de Forma Permanente!"); st.rerun()
                     
-    # =============================================================================
-    # BLOQUE DE DESCARGA DOCUMENTAL DE REMISIONES CORREGIDO (FO-MET-10)
+        # =============================================================================
+    # INTERFAZ DE DESCARGA DE REMISIONES CORREGIDA Y GARANTIZADA (FO-MET-10)
     # =============================================================================
     if not st.session_state.BD_Datos_Generales_Remision.empty:
         st.write("---")
         st.subheader("📋 Descarga Documental de Remisiones")
-        r_sel = st.selectbox("Seleccione Folio para Descarga:", 
-                             st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique(), 
-                             key="rem_download_folio_sel")
         
-        # Extracción nativa y segura para evitar que el DataFrame rompa el flujo de ReportLab
-        # 1. Filtramos la remisión seleccionada en el selectbox
-        # 1. Filtramos la remisión seleccionada en el selectbox
+        r_sel = st.selectbox(
+            "Seleccione Folio para Descarga:", 
+            st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique(), 
+            key="rem_download_folio_sel"
+        )
+        
+        # Filtramos de forma segura la fila seleccionada
         lista_remisiones = st.session_state.BD_Datos_Generales_Remision[
             st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel
         ].to_dict('records')
         
         if lista_remisiones:
-            # CORRECCIÓN PARA EL TYPEERROR: Extraemos el primer diccionario puro usando [0]
             row_dict = lista_remisiones[0]
             
-            # Convertimos de forma segura el texto de las tarimas de vuelta a una lista real
+            # Convertimos las tarimas asociadas de texto a lista real de Python
             import ast
             tarimas_lista = row_dict['Tarimas_Asociadas']
             if isinstance(tarimas_lista, str):
@@ -898,10 +898,34 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                 except Exception:
                     tarimas_lista = [tarimas_lista]
             
-            # El filtro relacional ahora cruzará los datos perfectamente sin errores
+            # Filtramos el desglose granular de las piezas
             df_det = st.session_state.BD_Detalle_Tarimas[
                 st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(tarimas_lista)
             ]
+            
+            # --- RENDERIZADO DE BOTONES EXCLUSIVO SIN CONDICIONES OCULTAS ---
+            c1, c2 = st.columns(2)
+            with c1: 
+                # El formato oficial FO-MET-10 siempre estará visible para ti
+                st.download_button(
+                    label="📄 Descargar Reporte Oficial (FO-MET-10)", 
+                    data=generar_pdf_remision_general(row_dict, df_det), 
+                    file_name=f"FO-MET-10_Remision_{r_sel}.pdf", 
+                    key="btn_dl_rem_pdf", 
+                    mime="application/pdf"
+                )
+            with c2: 
+                # El anexo secundario solo se habilita si tiene renglones de piezas
+                if not df_det.empty:
+                    st.download_button(
+                        label="📦 Descargar Anexo Tarimas (PDF)", 
+                        data=generar_pdf_anexo_tarimas(row_dict['Tarimas_Asociadas'], df_det), 
+                        file_name=f"Anexo_Remision_{r_sel}.pdf", 
+                        key="btn_dl_anexo_pdf", 
+                        mime="application/pdf"
+                    )
+                else:
+                    st.info("ℹ️ No hay desglose de piezas registrado para el anexo de este folio.")
 
 
 
