@@ -1071,7 +1071,7 @@ elif opcion_menu == "🚚 Módulo Remisiones":
             with c2: 
                 # El anexo secundario solo se habilita si tiene renglones de piezas
                 if not df_det.empty:
-
+                    pass
                 else:
                     st.info("ℹ️ No hay desglose de piezas registrado para el anexo de este folio.")
 
