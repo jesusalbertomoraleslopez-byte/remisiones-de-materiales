@@ -880,20 +880,24 @@ elif opcion_menu == "📦 Módulo Tarimas":
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
         
         # =============================================================================
-        # BLOQUE DE IMPRESIÓN SEGURO PARA TARIMA INDIVIDUAL
+        # BLOQUE DE IMPRESIÓN SEGURO REUTILIZANDO LA SESIÓN GLOBAL
         # =============================================================================
         if filas_seleccionadas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
             if len(elegidas) == 1:
-                id_tarima_limpio = str(elegidas[0])  # Extrae el ID limpio sin corchetes (ej: TPM-0032)
-                
-                # Filtramos los materiales correspondientes a esta tarima seleccionada
+                id_tarima_limpio = str(elegidas[0])  # Extrae el ID limpio como texto puro
+        
+                # 1. Filtramos los materiales correspondientes a esta tarima
                 df_tarima_individual = st.session_state.BD_Detalle_Tarimas[
                     st.session_state.BD_Detalle_Tarimas['ID_Tarima'].astype(str) == id_tarima_limpio
                 ].copy()
         
-                # DEJAMOS QUE TU FUNCIÓN DIBUJE EL BOTÓN CORRESPONDIENTE AUTOMÁTICAMENTE
-                generar_pdf_reporte_filtrado(df_tarima_individual)
+                # 2. Guardamos temporalmente en la variable que lee tu función de ReportLab
+                st.session_state["df_resultado_piezas_temporal"] = df_tarima_individual
+                
+                # 3. Llamamos a tu función de forma limpia sin pasarle parámetros entre paréntesis
+                generar_pdf_reporte_filtrado()
+
 
         
                 st.download_button(
