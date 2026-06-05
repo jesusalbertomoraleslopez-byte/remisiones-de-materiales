@@ -896,12 +896,24 @@ elif opcion_menu == "📦 Módulo Tarimas":
         df_estilado = st.session_state.BD_Tarimas.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
         seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
+        
         if filas_seleccionadas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
+            # --- OPCIÓN A CORREGIDA: DESCARGA INDIVIDUAL DE UNA TARIMA ---
             if len(elegidas) == 1:
-                st.download_button(label=f"📥 Descargar PDF Tarima #{elegidas}", data=generar_pdf_tarima(elegidas), file_name=f"Tarima_{elegidas}.pdf", mime="application/pdf")
-            else:
+                id_tarima_limpio = str(elegidas[0]) # Extraemos el ID como texto limpio (ej: "TPM-NUEVO")
+                
+                st.download_button(
+                    label=f"📥 Descargar PDF Tarima #{id_tarima_limpio}",
+                    # Cambiamos a 'generar_pdf_tarimas' con el ID string que espera tu script original
+                    data=generar_pdf_tarimas(id_tarima_limpio), 
+                    file_name=f"Tarima_{id_tarima_limpio}.pdf", 
+                    mime="application/pdf",
+                    key="btn_dl_single_tarima_key_v4"
+                )
 
+       
+            else:
                 if st.button("📦 Unificar Lote de Impresión"):
                     buf_1 = io.BytesIO()
                     doc_1 = SimpleDocTemplate(buf_1, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
