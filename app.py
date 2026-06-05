@@ -239,8 +239,33 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
     ]]
     
     for _, row in df_resultado_piezas.iterrows():
-        art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == row['SKU']]
-        nom_art = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
+
+        sku_actual = row.get('SKU', '')
+        descripcion_final = "Material de Embarque"
+        
+        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+            df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
+            if not df_match.empty:
+                art_info = df_match.iloc[0]
+                nombre_com = str(art_info.get('Nombre', '')).strip()
+                calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                
+                detalles = []
+                if calibre and calibre.lower() != 'nan': detalles.append(f"Cal: {calibre}")
+            if dims and dims.lower() != 'nan': detalles.append(f"Dim: {dims}")
+            if acabado and acabado.lower() != 'nan': detalles.append(f"Acab: {acabado}")
+            
+            sub_detalle = f" ({', '.join(detalles)})" if detalles else ""
+            descripcion_final = f"{nombre_com}{sub_detalle}"
+        else:
+            descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque (SKU no catalogado)'))
+    else:
+        descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
+        
+
+        
         
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
@@ -360,8 +385,33 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
     
     for _, row in df_detalles_remision.iterrows():
         # Búsqueda segura del nombre comercial del artículo
-        art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == row['SKU']]
-        nom_art = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
+        sku_partida = row.get('SKU', '')
+        concepto_remision = "Material de Embarque"
+        
+        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+            df_match_rem = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_partida]
+            if not df_match_rem.empty:
+                art_info = df_match_rem.iloc[0]
+                nombre_com = str(art_info.get('Nombre', '')).strip()
+                calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                
+                componentes_piezas = []
+                if calibre and calibre.lower() != 'nan': componentes_piezas.append(f"CAL. {calibre}")
+                if dims and dims.lower() != 'nan': componentes_piezas.append(f"DIM. {dims}")
+                if acabado and acabado.lower() != 'nan': componentes_piezas.append(f"{acabado.upper()}")
+                
+                formato_especificaciones = f" - {' / '.join(componentes_piezas)}" if componentes_piezas else ""
+                concepto_remision = f"{nombre_com}{formato_especificaciones}"
+            else:
+                concepto_remision = row.get('Descripcion', row.get('Nombre', f"SKU: {sku_partida} (Sin Registro Maestro)"))
+        else:
+            concepto_remision = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
+
+
+
+        
         
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
@@ -815,22 +865,28 @@ elif opcion_menu == "📦 Módulo Tarimas":
             
     if not st.session_state.BD_Tarimas.empty:
         st.write("---")
-        st.subheader("🖨️ Panel de Impresión Masiva de Tarimas")
+        st.subheader("📟 Panel de Impresión Masiva de Tarimas")
         df_estilado = st.session_state.BD_Tarimas.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
         seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
+    
         if filas_seleccionadas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
+            
             if len(elegidas) == 1:
-                st.download_button(label=f"📥 Descargar PDF Tarima #{elegidas}", data=generar_pdf_tarima(elegidas), file_name=f"Tarima_{elegidas}.pdf", mime="application/pdf")
+                st.download_button(
+                    label=f"📥 Descargar PDF Tarima #{elegidas}",
+                    data=generar_pdf_tarima(elegidas), 
+                    file_name=f"Tarima_{elegidas}.pdf", 
+                    mime="application/pdf",
+                    key="btn_dl_single_tarima_key"
+                )
             else:
-
-                if st.button("📦 Unificar Lote de Impresión"):
+                if st.button("📦 Unificar Lote de Impresión", use_container_width=True):
                     buf_1 = io.BytesIO()
                     doc_1 = SimpleDocTemplate(buf_1, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
                     story_l, styles = [], getSampleStyleSheet()
                     
-                    # Estilos tipográficos institucionales de gran impacto
                     style_tarima_titulo = ParagraphStyle('T_Giga', parent=styles['Heading1'], fontName="Helvetica-Bold", fontSize=140, alignment=1, leading=150, textColor=colors.HexColor("#212121"))
                     style_sub_titulo = ParagraphStyle('S_Giga', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=26, alignment=1, textColor=colors.HexColor("#D32F2F"))
                     style_normal_bold = ParagraphStyle('N_Bold', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=11, leading=14)
@@ -844,20 +900,13 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         op_nom = t_info.iloc[0]['Creado_Por'] if not t_info.empty else "N/A"
                         fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
                         
-                        # =============================================================================
-                        # HOJA 1: CARÁTULA DE IDENTIFICACIÓN MASIVA (NÚMERO GIGANTE)
-                        # =============================================================================
                         story_l.append(Spacer(1, 1.2 * inch))
                         story_l.append(Paragraph("TARIMA", style_sub_titulo))
                         story_l.append(Spacer(1, 0.2 * inch))
-                        
-                        # Extraemos solo el número limpio (ej. si es TPM-0024 extrae 0024)
                         num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
                         story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
-                        
                         story_l.append(Spacer(1, 1.5 * inch))
                         
-                        # Mini panel inferior de trazabilidad en la carátula
                         tabla_base = Table([
                             [Paragraph("CÓDIGO DE IDENTIFICACIÓN:", style_normal_bold), Paragraph(str(t_imp), style_normal_text)],
                             [Paragraph("OPERADOR DE PLANTA:", style_normal_bold), Paragraph(str(op_nom), style_normal_text)],
@@ -869,10 +918,89 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             ('BOTTOMPADDING', (0,0), (-1,-1), 6)
                         ]))
                         story_l.append(tabla_base)
-                        
-                        # Forzamos salto inmediato a la siguiente página
                         story_l.append(PageBreak())
                         
+                        story_l.append(Spacer(1, 0.1 * inch))
+                        story_l.append(Paragraph(f"<b>DETALLE DE MATERIALES ASOCIADOS - CONTROL #{t_imp}</b>", styles['Heading2']))
+                        story_l.append(Spacer(1, 0.2 * inch))
+                        
+                        tabla_detalles = [[
+                            Paragraph("ORDEN (PO)", style_blanco_bold),
+                            Paragraph("SKU / PRODUCTO", style_blanco_bold),
+                            Paragraph("DETALLE DE PIEZA", style_blanco_bold),
+                            Paragraph("CANTIDAD", style_blanco_bold)
+                        ]]
+                        
+                        for _, item in det.iterrows():
+                            sku_actual = item.get('SKU', '')
+                            nombre_com = "Material de Embarque"
+                            renglones_tecnicos = ""
+                            
+                            if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                                df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
+                                if not df_match.empty:
+                                    art_info = df_match.iloc[0]
+                                    nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
+                                    calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                                    dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                                    acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                                    
+                                    lista_renglones = []
+                                    if calibre and calibre.lower() != 'nan': lista_renglones.append(f"<b>Espesor:</b> {calibre}")
+                                    if dims and dims.lower() != 'nan': lista_renglones.append(f"<b>Dimensiones:</b> {dims}")
+                                    if acabado and acabado.lower() != 'nan': lista_renglones.append(f"<b>Acabado:</b> {acabado}")
+                                    
+                                    if lista_renglones:
+                                        renglones_tecnicos = f"<br/><font color='#555555' size='8'>{'<br/>'.join(lista_renglones)}</font>"
+                                else:
+                                    nombre_com = item.get('Descripcion', 'Material de Embarque (SKU no catalogado)')
+                            else:
+                                nombre_com = item.get('Descripcion', 'Material de Embarque')
+                            
+                            celda_detalle_combinada = f"<b>{nombre_com}</b>{renglones_tecnicos}"
+                            
+                            tabla_detalles.append([
+                                Paragraph(str(item['PO']), style_normal_text),
+                                Paragraph(str(item['SKU']), style_normal_text),
+                                Paragraph(celda_detalle_combinada, style_normal_text),
+                                Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
+                            ])
+                        
+                        t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
+                        t_grid.setStyle(TableStyle([
+                            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")),
+                            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")),
+                            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                            ('TOPPADDING', (0,0), (-1,-1), 6),
+                            ('BOTTOMPADDING', (0,0), (-1,-1), 6)
+                        ]))
+                        story_l.append(t_grid)
+                        story_l.append(PageBreak())
+                    
+                    if story_l:
+                        story_l.pop()
+                    
+                    doc_1.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+                    buf_1.seek(0)
+                    st.session_state["pdf_lote_generado"] = buf_1.getvalue()
+                
+                if "pdf_lote_generado" in st.session_state:
+                    st.write("---")
+                    st.success("✅ ¡Lote unificado generado con éxito!")
+                    st.download_button(
+                        label="📥 Descargar Lote Completo en mi Equipo (PDF)",
+                        data=st.session_state["pdf_lote_generado"],
+                        file_name=f"Lote_Tarimas_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
+                        mime="application/pdf",
+                        key="btn_download_lote_tarimas_unificado_final_v2",
+                        use_container_width=True
+                    )
+
+
+
+
+        
+        
                         # =============================================================================
                         # HOJA 2: DESGLOSE GRANULAR Y DETALLE DE PIEZAS
                         # =============================================================================
@@ -887,47 +1015,74 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             Paragraph("DESCRIPCIÓN COMERCIAL", style_blanco_bold),
                             Paragraph("CANTIDAD", style_blanco_bold)
                         ]]
-                        
+
+                    
                         for _, item in det.iterrows():
                             art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
                             art_nom = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
                             
-                            tabla_detalles.append([
-                                Paragraph(str(item['PO']), style_normal_text),
-                                Paragraph(str(item['SKU']), style_normal_text),
-                                Paragraph(str(art_nom), style_normal_text),
-                                Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
-                            ])
-                            
-                        t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
-                        t_grid.setStyle(TableStyle([
-                            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")),
-                            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")),
-                            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                            ('TOPPADDING', (0,0), (-1,-1), 6),
-                            ('BOTTOMPADDING', (0,0), (-1,-1), 6)
-                        ]))
-                        story_l.append(t_grid)
-                        
-                        # Salto de página para separar la siguiente tarima del lote
-                        story_l.append(PageBreak())
-                        
-                    if story_l: 
-                        story_l.pop()  # Remueve el último salto de página sobrante
-                        
-                    doc_1.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+
+
+                            # =============================================================================
+                            # HOJA 2: DESGLOSE GRANULAR CON RENGLONES EN LA MISMA CELDA (LÍNEAS 884-910)
+                            # =============================================================================
+                            # Cambiamos el encabezado a "DETALLE DE PIEZA"
+                            tabla_detalles = [[
+                                Paragraph("ORDEN (PO)", style_blanco_bold),
+                                Paragraph("SKU / PRODUCTO", style_blanco_bold),
+                                Paragraph("DETALLE DE PIEZA", style_blanco_bold),
+                                Paragraph("CANTIDAD", style_blanco_bold)
+                            ]]
                     
-                    st.download_button(
-                        label="📥 Descargar Lote Completo (PDF)", 
-                        data=buf_1.getvalue(), 
-                        file_name="Lote_Tarimas_Separado.pdf", 
-                        mime="application/pdf",
-                        key="btn_download_lote_tarimas_unificado_final_v2"
-                    )
-
-    
-
-
+                            for _, item in det.iterrows():
+                                sku_actual = item.get('SKU', '')
+                                
+                                # Valores por defecto si el SKU no está catalogado
+                                nombre_com = "Material de Embarque"
+                                renglones_tecnicos = ""
+                                
+                                if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                                    df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
+                                    
+                                    if not df_match.empty:
+                                        art_info = df_match.iloc[0]
+                                        nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
+                                        calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                                        dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                                        acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                                        
+                                        # Construimos la lista de renglones omitiendo valores vacíos o nulos
+                                        lista_renglones = []
+                                        if calibre and calibre.lower() != 'nan': 
+                                            lista_renglones.append(f"<b>Espesor:</b> {calibre}")
+                                        if dims and dims.lower() != 'nan': 
+                                            lista_renglones.append(f"<b>Dimensiones:</b> {dims}")
+                                        if acabado and acabado.lower() != 'nan': 
+                                            lista_renglones.append(f"<b>Acabado:</b> {acabado}")
+                                        
+                                        # Si hay datos técnicos, los unimos con saltos de línea y les damos un tono gris para contraste visual
+                                        if lista_renglones:
+                                            renglones_tecnicos = f"<br/><font color='#555555' size='7'>{'<br/>'.join(lista_renglones)}</font>"
+                                    else:
+                                        # Tolerancia: si no está en la base de datos, intenta usar la descripción nativa de la tarima
+                                        nombre_com = item.get('Descripcion', 'Material de Embarque (SKU no catalogado)')
+                                else:
+                                    nombre_com = item.get('Descripcion', 'Material de Embarque')
+                    
+                                # Consolidamos el nombre principal y sus renglones técnicos en la misma celda
+                                celda_detalle_combinada = f"<b>{nombre_com}</b>{renglones_tecnicos}"
+                    
+                                tabla_detalles.append([
+                                    Paragraph(str(item['PO']), style_normal_text),
+                                    Paragraph(str(item['SKU']), style_normal_text),
+                                    Paragraph(celda_detalle_combinada, style_normal_text),
+                                    Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
+                                ])
+                    
+                            # Se mantiene la misma configuración de anchos e inserción en el PDF
+                            t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
+                    
+   
 # =============================================================================
 # 12. MÓDULO DE DESPACHOS LOGÍSTICOS: EMISIÓN DE REMISIONES DE SALIDA
 # =============================================================================
