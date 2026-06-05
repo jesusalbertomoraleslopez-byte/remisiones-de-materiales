@@ -814,50 +814,50 @@ elif opcion_menu == "📦 Módulo Tarimas":
             if len(elegidas) == 1:
                 st.download_button(label=f"📥 Descargar PDF Tarima #{elegidas}", data=generar_pdf_tarima(elegidas), file_name=f"Tarima_{elegidas}.pdf", mime="application/pdf")
             else:
-                if st.button("📦 Unificar Lote de Impresión"):
-                    buf_l = io.BytesIO()
-                    doc_l = SimpleDocTemplate(buf_l, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
-                    story_l, styles = [], getSampleStyleSheet()
-                    for t_imp in elegidas:
-                        det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
-        t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp]
+    if st.button("📦 Unificar Lote de Impresión"):
+        buf_1 = io.BytesIO()
+        doc_1 = SimpleDocTemplate(buf_1, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
+        story_l, styles = [], getSampleStyleSheet()
         
-        # Extracción segura de la primera fila si existen datos
-        op_nom = t_info.iloc['Creado_Por'] if not t_info.empty else "N/A"
-        fe_cre = t_info.iloc['Fecha_Creacion'] if not t_info.empty else "N/A"
-
-        story_l.append(Spacer(1, 1.8 * inch))
-        story_l.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=28, alignment=1)))
-        story_l.append(Paragraph(f"<b>Detalle Interno - Tarima #{t_imp}</b>", styles['Heading2']))
-        story_l.append(Paragraph(f"<b>Operador:</b> {op_nom} | <b>Fecha:</b> {fe_cre}", styles['Normal']))
-        story_l.append(Spacer(1, 0.3 * inch))
-        
-        for _, item in det.iterrows():
-            art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
-            # Extracción corregida para el nombre del artículo usando la posición 0 de la fila
-            art_nom = art.iloc['Nombre'] if not art.empty else "Material"
+        # El ciclo FOR declara formalmente la variable t_imp
+        for t_imp in elegidas:
+            det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
             
-        # --- CONTINUACIÓN DEL BUCLE DE MATERIALES (CORRECCIÓN DE ALINEACIÓN INTERNA) ---
-        story_l.append(Spacer(1, 0.4 * inch))
-        story_l.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", ParagraphStyle('NG_L', parent=styles['Heading1'], fontSize=24, alignment=1)))
-        story_l.append(PageBreak())
+            # --- SE SOLUCIONA EL NAMEERROR: t_info ahora sí está dentro del bucle for y conoce a t_imp ---
+            t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp]
+            
+            # Extracción segura de operador y fecha
+            op_nom = t_info.iloc[0]['Creado_Por'] if not t_info.empty else "N/A"
+            fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
 
+            story_l.append(Spacer(1, 1.8 * inch))
+            story_l.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=28, alignment=1)))
+            story_l.append(Paragraph(f"<b>Detalle Interno - Tarima #{t_imp}</b>", styles['Heading2']))
+            story_l.append(Paragraph(f"<b>Operador:</b> {op_nom} | <b>Fecha:</b> {fe_cre}", styles['Normal']))
+            story_l.append(Spacer(1, 0.3 * inch))
+            
+            for _, item in det.iterrows():
+                art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
+                art_nom = art.iloc[0]['Nombre'] if not art.empty else "Material"
+                
+                story_l.append(Paragraph(f"<b>PO:</b> {item['PO']} | <b>SKU:</b> {item['SKU']} - {art_nom}", styles['Normal']))
+                story_l.append(Spacer(1, 0.4 * inch))
+                story_l.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", ParagraphStyle('NG_L', parent=styles['Heading1'], fontSize=24, alignment=1)))
+                story_l.append(PageBreak())
+                
+        # --- FINALIZACIÓN DEL DOCUMENTO (FUERA DEL FOR PRINCIPAL - AL RAS DEL IF DEL BOTÓN) ---
+        if story_l: 
+            story_l.pop()  # Remueve el último salto de página sobrante
+            
+        doc_1.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
         
-    # --- FINALIZACIÓN DEL DOCUMENTO (FUERA DEL FOR PRINCIPAL - REGRESAR AL RAS DEL IF DEL BOTÓN) ---
-    if story_l: 
-        story_l.pop() # Remueve el último salto de página sobrante
-        
-    # CORRECCIÓN CLAVE: Llamada oficial con los guiones bajos correctos al Canvas
-    doc_1.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
-    
-    st.download_button(
-        label="📥 Descargar Lote Completo (PDF)", 
-        data=buf_1.getvalue(), 
-        file_name="Lote_Tarimas.pdf", 
-        mime="application/pdf",
-        key="btn_download_lote_tarimas_unificado_final"
-    )
-
+        st.download_button(
+            label="📥 Descargar Lote Completo (PDF)", 
+            data=buf_1.getvalue(), 
+            file_name="Lote_Tarimas.pdf", 
+            mime="application/pdf",
+            key="btn_download_lote_tarimas_unificado_final"
+        )
 
 
 
