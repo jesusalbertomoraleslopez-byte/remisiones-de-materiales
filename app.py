@@ -1032,7 +1032,6 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
 
     tab1, tab2, tab3, tab4 = st.tabs(["📝 Ajustar Cantidades", "👤 Catálogo de Líderes", "⚠️ Purga de Datos", "📦 Catálogo de Artículos"])
 
-
     # --- SUB-MÓDULO 1: MODIFICACIÓN DIRECTA DE CANTIDADES DE MATERIALES ---
     with tab1:
         st.subheader("✏️ Edición Rápida de Inventario (Detalle Tarimas)")
