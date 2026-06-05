@@ -753,7 +753,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
                 df_metadatos = pd.DataFrame([
                     {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO (FO-MET-11)"},
                     {"Concepto": "EMPRESA", "Valor": "INDUSTRIA SIGRAMA S.A. DE C.V."},
-                    {"Concepto": "FECHA DE GENERACIÓN", "Valor": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
+                    {"Concepto": "FECHA DE GENERACIÓN", "Valor": datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
                     {"Concepto": "FILTRO: ORDEN DE COMPRA (PO)", "Valor": str(f_po)},
                     {"Concepto": "FILTRO: PROYECTO INTERNO", "Valor": str(f_proy)},
                     {"Concepto": "FILTRO: PARCIALIDAD", "Valor": str(f_parc)},
