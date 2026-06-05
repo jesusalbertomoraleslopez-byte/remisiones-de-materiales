@@ -103,12 +103,15 @@ def subir_excel_a_github(file_name, dataframe_to_save):
 # 3. CAPA DE INICIALIZACIÓN GLOBAL SECTORIZADA (BLINDAJE DE SEGURIDAD)
 # =============================================================================
 
-# --- Catálogo de Artículos Base ---
-if "BD_Articulos" not in st.session_state:
-    st.session_state.BD_Articulos = pd.DataFrame([
-        {"SKU": "12-B-9016-01", "Nombre": "Lámina Galvanizada Sigrama", "Calibre_Espesor": "Calibre 22", "Dimensiones_Pieza": "3x10 ft", "Acabado_Superficial": "Zintro"},
-        {"SKU": "SKU-002", "Nombre": "Placa de Acero Comercial", "Calibre_Espesor": "1/4 pulgada", "Dimensiones_Pieza": "4x8 ft", "Acabado_Superficial": "Negro"}
-    ])
+# --- Catálogo Maestro de Artículos (Actualizado para Persistencia en GitHub) ---
+if "BD_Articulos" not in st.session_state or st.session_state.get("BD_Articulos") is None:
+    df_git_articulos = cargar_excel_desde_github("BD_Articulos.xlsx")
+    if df_git_articulos is not None:
+        st.session_state.BD_Articulos = df_git_articulos
+    else:
+        # Estructura oficial estricta del sistema en caso de que el archivo no exista aún en GitHub
+        st.session_state.BD_Articulos = pd.DataFrame(columns=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"])
+
 
 # --- Catálogo Maestro de Tarimas ---
 if "BD_Tarimas" not in st.session_state:
@@ -1027,7 +1030,8 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             {"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}
         ])
 
-    tab1, tab2, tab3 = st.tabs(["📝 Ajustar Cantidades", "👤 Catálogo de Líderes", "🚨 Purga de Datos"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📝 Ajustar Cantidades", "👤 Catálogo de Líderes", "⚠️ Purga de Datos", "📦 Catálogo de Artículos"])
+
 
     # --- SUB-MÓDULO 1: MODIFICACIÓN DIRECTA DE CANTIDADES DE MATERIALES ---
     with tab1:
@@ -1166,3 +1170,82 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                         subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                         st.success("✅ Remisiones eliminadas y bultos reactivados."); st.rerun()
             else: st.write("No hay remisiones registradas.")
+   
+    # --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA DEL CATÁLOGO DE ARTÍCULOS ---
+    with tab4:
+        st.subheader("📦 Carga y Sincronización del Catálogo de Artículos")
+        st.markdown("Utilice este panel para descargar la estructura oficial o actualizar masivamente los nombres comerciales de la planta:")
+
+        # --- SECCIÓN A: DESCARGAR PLANTILLA BASE OFICIAL ---
+        c_art1, c_art2 = st.columns(2)
+        with c_art1:
+            st.write("##### 📥 1. Obtener Plantilla Estructurada")
+            st.info("Descargue el formato en blanco con las columnas requeridas por el SGC para dar de alta sus productos.")
+            
+            # Construcción de la plantilla limpia en memoria
+            df_plantilla_art = pd.DataFrame(columns=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"])
+            buf_p_art = io.BytesIO()
+            with pd.ExcelWriter(buf_p_art, engine='openpyxl') as p_writer:
+                df_plantilla_art.to_excel(p_writer, index=False, sheet_name='Datos_Sistema')
+            buf_p_art.seek(0)
+            
+            st.download_button(
+                label="📊 Descargar Plantilla Base Artículos (.xlsx)",
+                data=buf_p_art.getvalue(),
+                file_name="Plantilla_Maestra_Articulos.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_download_plantilla_maestra_articulos_sgc"
+            )
+
+        # --- SECCIÓN B: CARGA MASIVA E INTEGRACIÓN A GITHUB ---
+        with c_art2:
+            st.write("##### 📤 2. Subir e Integrar Catálogo")
+            st.warning("Asegúrese de respetar los nombres exactos de las columnas de la plantilla antes de realizar la carga.")
+            
+            archivo_art_subido = st.file_uploader(
+                "Seleccione archivo Excel de Artículos:", 
+                type=["xlsx"], 
+                key="uploader_excel_articulos_masivo_git"
+            )
+            
+            if archivo_art_subido is not None:
+                try:
+                    try:
+                        df_subido_art = pd.read_excel(archivo_art_subido, sheet_name='Datos_Sistema')
+                    except Exception:
+                        df_subido_art = pd.read_excel(archivo_art_subido, sheet_name=0)
+                    
+                    columnas_requeridas = ["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
+                    if all(col in df_subido_art.columns for col in columnas_requeridas):
+                        st.success(f"✅ Formato validado con éxito. Detectados {len(df_subido_art)} artículos para integración.")
+                        
+                        if st.button("🚀 Confirmar y Sincronizar Catálogo a GitHub", use_container_width=True):
+                            with st.spinner("Estableciendo conexión y subiendo datos a producción..."):
+                                st.session_state.BD_Articulos = df_subido_art[columnas_requeridas].copy()
+                                
+                                # Subida formal a través de la API al repositorio
+                                exito_subida = subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
+                                
+                                if exito_subida:
+                                    st.balloons()
+                                    st.success("🎉 ¡Catálogo Maestro 'BD_Articulos.xlsx' sincronizado con éxito en GitHub!")
+                                    import time
+                                    time.sleep(1.5)
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Fallo en la comunicación con la API de GitHub. Verifique su Token de acceso en Secrets.")
+                    else:
+                        st.error("❌ Archivo inválido. Las columnas deben ser exactamente: SKU, Nombre, Calibre_Espesor, Dimensiones_Pieza, Acabado_Superficial")
+                except Exception as error_proc:
+                    st.error(f"⚠️ Error al procesar el archivo Excel: {error_proc}")
+
+        # --- SECCIÓN C: PANEL DE VISUALIZACIÓN EN TIEMPO REAL ---
+        st.write("##### 📋 Vista Previa del Catálogo Activo en Sistema")
+        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+            st.dataframe(
+                st.session_state.BD_Articulos, 
+                use_container_width=True, 
+                hide_index=True
+            )
+        else:
+            st.info("ℹ️ El catálogo de artículos se encuentra actualmente vacío en GitHub. Descargue la plantilla de arriba para subir los primeros registros.")
