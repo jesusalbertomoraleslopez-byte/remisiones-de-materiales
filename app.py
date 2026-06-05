@@ -266,9 +266,9 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
                 sub_detalle = f" ({', '.join(detalles)})" if detalles else ""
                 descripcion_final = f"{nombre_com}{sub_detalle}"
             else:
-                descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque (SKU no catalogado)'))
+                descripcion_final = "Articulo No Registrado en BD Remisiones"
         else:
-            descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
+            descripcion_final = "Articulo No Registrado en BD Remisiones"
 
 
         
@@ -726,13 +726,18 @@ elif opcion_menu == "🔍 Centro de Consultas":
                     "Descripcion": f_desc, "Estatus": f_est
                 }
                 pdf_data = generar_pdf_reporte_filtrado(filtros_aplicados, df_resultado)
+                from datetime import datetime
+                
+                # Generar fecha y hora actual en el formato exacto requerido
+                fecha_hora_str = datetime.now().strftime("%Y%m%d:%I:%M%p").lower()
+                
                 st.download_button(
                     label="📄 Descargar Reporte Oficial en PDF (FO-MET-11)",
-                    data=pdf_data.getvalue(),
-                    file_name=f"FO-MET-11_Reporte_Inventario_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
-                    mime="application/pdf",
-                    key="btn_download_consulta_piezas_pdf_final"
+                    data=pdf_data,
+                    file_name=f"TAR_Lote_de_Tarimas_Separado_{fecha_hora_str}.pdf",
+                    mime="application/pdf"
                 )
+
             
             with btn_col2:
                 # Construcción del reporte de auditoría multi-hoja con openpyxl
