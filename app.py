@@ -937,7 +937,8 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             Paragraph("DESCRIPCIÓN COMERCIAL", style_blanco_bold),
                             Paragraph("CANTIDAD", style_blanco_bold)
                         ]]
-                        
+
+                    
                         for _, item in det.iterrows():
                             art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
                             art_nom = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
