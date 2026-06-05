@@ -880,27 +880,29 @@ elif opcion_menu == "🚚 Módulo Remisiones":
         
         # Extracción nativa y segura para evitar que el DataFrame rompa el flujo de ReportLab
         # 1. Filtramos la remisión seleccionada en el selectbox
+        # 1. Filtramos la remisión seleccionada en el selectbox
         lista_remisiones = st.session_state.BD_Datos_Generales_Remision[
             st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel
         ].to_dict('records')
         
         if lista_remisiones:
-            row_dict = lista_remisiones
+            # CORRECCIÓN PARA EL TYPEERROR: Extraemos el primer diccionario puro usando [0]
+            row_dict = lista_remisiones[0]
             
-            # --- CORRECCIÓN CLAVE ANTI-TYPEERROR ---
-            # Si el valor viene como texto, lo convertimos de forma segura en una lista real de Python
+            # Convertimos de forma segura el texto de las tarimas de vuelta a una lista real
             import ast
             tarimas_lista = row_dict['Tarimas_Asociadas']
             if isinstance(tarimas_lista, str):
                 try:
                     tarimas_lista = ast.literal_eval(tarimas_lista)
                 except Exception:
-                    tarimas_lista = [tarimas_lista] # Respaldo si es un solo ID suelto
+                    tarimas_lista = [tarimas_lista]
             
-            # Ahora la función .isin() recibirá la lista perfecta y no fallará
+            # El filtro relacional ahora cruzará los datos perfectamente sin errores
             df_det = st.session_state.BD_Detalle_Tarimas[
                 st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(tarimas_lista)
             ]
+
 
 
 
