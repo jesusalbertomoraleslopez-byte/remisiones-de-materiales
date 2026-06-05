@@ -110,7 +110,7 @@ if "BD_Articulos" not in st.session_state or st.session_state.get("BD_Articulos"
         st.session_state.BD_Articulos = df_git_articulos
     else:
         # Estructura oficial estricta del sistema en caso de que el archivo no exista aún en GitHub
-        st.session_state.BD_Articulos = pd.DataFrame(columns=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"])
+        st.session_state.BD_Articulos = pd.DataFrame(columns=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial", "Es_Nuevo"])
 
 
 # --- Catálogo Maestro de Tarimas ---
@@ -514,6 +514,7 @@ if opcion_menu == "📊 Dashboard e Históricos":
             if "BD_Detalle_Tarimas" in st.session_state: del st.session_state.BD_Detalle_Tarimas
             if "BD_Datos_Generales_Remision" in st.session_state: del st.session_state.BD_Datos_Generales_Remision
             if "BD_Lideres" in st.session_state: del st.session_state.BD_Lideres
+            if "BD_Articulos" in st.session_state: del st.session_state.BD_Articulos  # 👈 ESTA LÍNEA ES LA NUEVA
             
             # 2. Rompemos el caché de red inyectando tiempo en segundos a la URL
             import time
@@ -534,6 +535,30 @@ if opcion_menu == "📊 Dashboard e Históricos":
             st.success("¡Datos actualizados desde GitHub!")
             st.rerun()
 
+    col_sync1, col_sync2 = st.columns([3, 1])
+    with col_sync2:
+        if st.button("⚡ Sincronizar GitHub", use_container_width=True):
+            # 1. Eliminamos las variables congeladas de la memoria local (Incluyendo Artículos)
+            if "BD_Tarimas" in st.session_state: del st.session_state.BD_Tarimas
+            if "BD_Detalle_Tarimas" in st.session_state: del st.session_state.BD_Detalle_Tarimas
+            if "BD_Datos_Generales_Remision" in st.session_state: del st.session_state.BD_Datos_Generales_Remision
+            if "BD_Lideres" in st.session_state: del st.session_state.BD_Lideres
+            if "BD_Articulos" in st.session_state: del st.session_state.BD_Articulos
+    
+            # 2. Descarga de archivos frescos en caliente desde GitHub
+            df_tarimas_frescas = cargar_excel_desde_github("BD_Tarimas.xlsx")
+            df_detalles_frescos = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
+            df_remisiones_frescas = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
+            df_articulos_frescos = cargar_excel_desde_github("BD_Articulos.xlsx")
+    
+            # 3. Asignación limpia al session_state de la aplicación
+            if df_tarimas_frescas is not None: st.session_state.BD_Tarimas = df_tarimas_frescas
+            if df_detalles_frescos is not None: st.session_state.BD_Detalle_Tarimas = df_detalles_frescos
+            if df_remisiones_frescas is not None: st.session_state.BD_Datos_Generales_Remision = df_remisiones_frescas
+            if df_articulos_frescos is not None: st.session_state.BD_Articulos = df_articulos_frescos
+    
+            st.success("¡Datos y catálogo maestro actualizados desde GitHub!")
+            st.rerun()
 
     # =============================================================================
     # 🔍 PANEL DE DIAGNÓSTICO EN TIEMPO REAL (TEMPORAL)
@@ -1364,27 +1389,46 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 arch_articulos = st.file_uploader("Suba la Plantilla de Artículos Rellenada:", type=["xlsx"], key="uploader_articulos_masivo_f")
                 
                 if arch_articulos:
-                    if st.button("🔄 Procesar y Reemplazar Catálogo en GitHub", use_container_width=True):
+                    if st.button("🔄 Procesar y Anexar Nuevos Artículos a GitHub", use_container_width=True):
                         try:
                             df_art_excel = pd.read_excel(arch_articulos)
                             columnas_requeridas = ["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
                             
                             if not all(col in df_art_excel.columns for col in columnas_requeridas):
-                                st.error("❌ Error: Columnas incompatibles. Use la estructura oficial.")
+                                st.error("❌ Error: Columnas incompatibles. Asegúrese de usar la estructura oficial de la plantilla.")
                             else:
+                                # 1. Limpieza básica inicial del archivo entrante
                                 df_art_excel = df_art_excel.dropna(subset=["SKU"])
                                 df_art_excel["SKU"] = df_art_excel["SKU"].astype(str).str.strip()
                                 
-                                st.session_state.BD_Articulos = df_art_excel
+                                # Marcar los registros de este Excel como los nuevos para pintarlos en amarillo
+                                df_art_excel["Es_Nuevo"] = True
+                                
+                                # 2. Lógica acumulativa (Simil al Módulo Tarimas)
+                                if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                                    # Desmarcamos los artículos antiguos quitándoles el color amarillo previo
+                                    st.session_state.BD_Articulos["Es_Nuevo"] = False
+                                    
+                                    # Concatenamos el histórico existente con el nuevo lote cargado
+                                    df_consolidado = pd.concat([st.session_state.BD_Articulos, df_art_excel], ignore_index=True)
+                                    
+                                    # Evitamos duplicados: Si el SKU ya existía, dejamos la versión del nuevo Excel (la última cargada)
+                                    df_consolidado = df_consolidado.drop_duplicates(subset=["SKU"], keep="last")
+                                    st.session_state.BD_Articulos = df_consolidado
+                                else:
+                                    st.session_state.BD_Articulos = df_art_excel
+                                
+                                # 3. Sincronización automática con el repositorio en la nube
                                 exito_subida = subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
                                 
                                 if exito_subida:
-                                    st.success("✅ ¡Catálogo actualizado en GitHub exitosamente!")
+                                    st.success("✅ ¡Artículos integrados al catálogo de forma consecutiva y respaldados exitosamente!")
                                     st.rerun()
                                 else:
-                                    st.error("❌ Error al subir el archivo al repositorio de GitHub.")
+                                    st.error("❌ Error al sincronizar el archivo actualizado con el repositorio de GitHub.")
                         except Exception as e:
-                            st.error(f"⚠️ Error crítico: {e}")
+                            st.error(f"⚠️ Error crítico durante la integración del archivo: {e}")
+
     
         st.write("---")
     
@@ -1398,14 +1442,25 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 "* **Nota:** El SKU actúa como llave relacional y está bloqueado para edición, pero sí puede eliminar la fila completa si ya no se usa.")
     
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-            # st.data_editor detectará automáticamente las eliminaciones al activar num_rows="dynamic"
+            # Forzamos la presencia de la columna de control para evitar fallos de renderizado
+            if "Es_Nuevo" not in st.session_state.BD_Articulos.columns:
+                st.session_state.BD_Articulos["Es_Nuevo"] = False
+                
+            # Aplicamos la máscara de color amarillo a las filas donde Es_Nuevo sea True
+            df_art_estilado = st.session_state.BD_Articulos.style.apply(
+                lambda r: ['background-color: #FFF59D' if r['Es_Nuevo'] else '' for _ in r], 
+                axis=1
+            )
+            
+            # st.data_editor recibe el DataFrame con el estilo visual aplicado
             df_art_editable = st.data_editor(
-                st.session_state.BD_Articulos,
+                df_art_estilado,
                 use_container_width=True,
                 disabled=["SKU"], 
                 hide_index=True,
-                num_rows="dynamic", # Habilita dinámicamente añadir (+) y eliminar filas nativas
+                num_rows="dynamic",
                 key="editor_mantenimiento_articulos_directo_v3",
+                column_order=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"], # Oculta la columna Es_Nuevo de la vista del usuario
                 column_config={
                     "SKU": st.column_config.TextColumn("SKU (Bloqueado/Llave)"),
                     "Nombre": st.column_config.TextColumn("Descripción Comercial"),
@@ -1414,6 +1469,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     "Acabado_Superficial": st.column_config.SelectboxColumn("Acabado Superficial", options=["Decapado", "Ansi 61", "Galvanizado", "Otro"])
                 }
             )
+
     
             # Botón de guardado y persistencia en GitHub
             if st.button("💾 Guardar Cambios y Aplicar Bajas en GitHub", use_container_width=True):
