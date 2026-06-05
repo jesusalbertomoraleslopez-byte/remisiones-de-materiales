@@ -880,17 +880,34 @@ elif opcion_menu == "📦 Módulo Tarimas":
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
         
         # =============================================================================
-        # BLOQUE DE IMPRESIÓN REPARADO CON PARÁMETROS OFICIALES
+        # BLOQUE DE IMPRESIÓN REPARADO CON PARÁMETROS OFICIALES Y PROTECCIÓN DE SKU
         # =============================================================================
         if filas_seleccionadas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
             if len(elegidas) == 1:
-                id_tarima_limpio = str(elegidas[0])  # Extrae el texto limpio de la tarima (ej: TPM-0032)
+                id_tarima_limpio = str(elegidas)  # Extrae el texto limpio de la tarima
         
                 # 1. Filtramos los materiales correspondientes a esta tarima
-                df_tarima_individual = st.session_state.BD_Detalle_Tarimas[
-                    st.session_state.BD_Detalle_Tarimas['ID_Tarima'].astype(str) == id_tarima_limpio
-                ].copy()
+                if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                    df_tarima_individual = st.session_state.BD_Detalle_Tarimas[
+                        st.session_state.BD_Detalle_Tarimas['ID_Tarima'].astype(str) == id_tarima_limpio
+                    ].copy()
+                else:
+                    df_tarima_individual = pd.DataFrame()
+        
+                # BLINDAJE LOGÍSTICO: Si la tabla viene vacía o le faltan columnas críticas, las inicializamos
+                columnas_reporte = ["ID_Tarima", "PO", "Proyecto", "SKU", "Cantidad", "Estatus_Envio", "Descripcion"]
+                for col in columnas_reporte:
+                    if col not in df_tarima_individual.columns:
+                        df_tarima_individual[col] = "" # Crea la columna vacía si no existe
+        
+                if df_tarima_individual.empty:
+                    # Insertamos al menos un renglón genérico para que no falle el reporte por falta de datos
+                    df_tarima_individual = pd.DataFrame([{
+                        "ID_Tarima": id_tarima_limpio, "PO": "N/A", "Proyecto": "N/A", 
+                        "SKU": "SIN SKU", "Cantidad": 0, "Estatus_Envio": "Vacio", 
+                        "Descripcion": "Articulo No Registrado en BD Remisiones"
+                    }])
         
                 # 2. Creamos el diccionario de filtros simulado para cumplir con la función
                 filtros_simulados = {
@@ -920,6 +937,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     )
                 except Exception as e:
                     st.error(f"⚠️ Error al compilar el PDF de la tarima {id_tarima_limpio}: {e}")
+        
 
 
 
