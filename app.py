@@ -870,11 +870,9 @@ elif opcion_menu == "📦 Módulo Tarimas":
         seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
     
-        # 🟢 BLOQUE CORRECTAMENTE INDENTADO DENTRO DE LA LÍNEA 866
         if filas_seleccionadas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
             
-            # Opción A: Si solo se seleccionó una tarima, muestra su descarga directa
             if len(elegidas) == 1:
                 st.download_button(
                     label=f"📥 Descargar PDF Tarima #{elegidas}",
@@ -884,13 +882,11 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     key="btn_dl_single_tarima_key"
                 )
             else:
-                # Opción B: Selección múltiple. Mostramos el botón de procesamiento unificado.
                 if st.button("📦 Unificar Lote de Impresión", use_container_width=True):
                     buf_1 = io.BytesIO()
                     doc_1 = SimpleDocTemplate(buf_1, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
                     story_l, styles = [], getSampleStyleSheet()
                     
-                    # Estilos tipográficos institucionales de gran impacto
                     style_tarima_titulo = ParagraphStyle('T_Giga', parent=styles['Heading1'], fontName="Helvetica-Bold", fontSize=140, alignment=1, leading=150, textColor=colors.HexColor("#212121"))
                     style_sub_titulo = ParagraphStyle('S_Giga', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=26, alignment=1, textColor=colors.HexColor("#D32F2F"))
                     style_normal_bold = ParagraphStyle('N_Bold', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=11, leading=14)
@@ -904,7 +900,6 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         op_nom = t_info.iloc[0]['Creado_Por'] if not t_info.empty else "N/A"
                         fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
                         
-                        # --- HOJA 1: CARÁTULA DE IDENTIFICACIÓN ---
                         story_l.append(Spacer(1, 1.2 * inch))
                         story_l.append(Paragraph("TARIMA", style_sub_titulo))
                         story_l.append(Spacer(1, 0.2 * inch))
@@ -925,7 +920,6 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         story_l.append(tabla_base)
                         story_l.append(PageBreak())
                         
-                        # --- HOJA 2: DESGLOSE CON RENGLONES DENTRO DE LA MISMA CELDA ---
                         story_l.append(Spacer(1, 0.1 * inch))
                         story_l.append(Paragraph(f"<b>DETALLE DE MATERIALES ASOCIADOS - CONTROL #{t_imp}</b>", styles['Heading2']))
                         story_l.append(Spacer(1, 0.2 * inch))
@@ -1001,6 +995,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         key="btn_download_lote_tarimas_unificado_final_v2",
                         use_container_width=True
                     )
+
 
 
 
