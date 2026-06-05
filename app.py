@@ -881,7 +881,18 @@ elif opcion_menu == "📦 Módulo Tarimas":
         if filas_seleccionadas:
             elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
             if len(elegidas) == 1:
-                st.download_button(label=f"📥 Descargar PDF Tarima #{elegidas}", data=generar_pdf_reporte_filtrado(st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == elegidas]), file_name=f"Tarima_{elegidas}.pdf", mime="application/pdf")
+                id_tarima_limpio = str(elegidas[0])
+                df_tarima_individual = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].astype(str) == id_tarima_limpio]
+        
+                st.download_button(
+                    label=f"📥 Descargar PDF Tarima #{id_tarima_limpio}",
+                    data=generar_pdf_reporte_filtrado(df_tarima_individual),
+                    file_name=f"Tarima_{id_tarima_limpio}.pdf",
+                    mime="application/pdf",
+                    key="btn_descarga_tarima_individual_tabla_maestra"
+                )
+
+                
             else:
 
                 if st.button("📦 Unificar Lote de Impresión"):
