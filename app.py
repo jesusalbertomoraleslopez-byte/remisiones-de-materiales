@@ -929,7 +929,6 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     story_l.append(Paragraph(f"<b>DETALLE DE MATERIALES ASOCIADOS - CONTROL #{t_imp}</b>", styles['Heading2']))
                     story_l.append(Spacer(1, 0.2 * inch))
                     
-                    # Se implementa el nuevo encabezado: DETALLE DE PIEZA
                     tabla_detalles = [[
                         Paragraph("ORDEN (PO)", style_blanco_bold),
                         Paragraph("SKU / PRODUCTO", style_blanco_bold),
@@ -951,7 +950,6 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                 dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
                                 acabado = str(art_info.get('Acabado_Superficial', '')).strip()
                                 
-                                # Estructuración de renglones técnicos con saltos de línea HTML <br/>
                                 lista_renglones = []
                                 if calibre and calibre.lower() != 'nan': lista_renglones.append(f"<b>Espesor:</b> {calibre}")
                                 if dims and dims.lower() != 'nan': lista_renglones.append(f"<b>Dimensiones:</b> {dims}")
@@ -985,15 +983,12 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     story_l.append(PageBreak())
                 
                 if story_l:
-                    story_l.pop() # Remueve el último salto sobrante
+                    story_l.pop()
                 
                 doc_1.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
                 buf_1.seek(0)
-                
-                # Guardamos los bytes del PDF de forma segura en Session State
                 st.session_state["pdf_lote_generado"] = buf_1.getvalue()
             
-            # Forzamos la visualización persistente del botón de descarga real en verde
             if "pdf_lote_generado" in st.session_state:
                 st.write("---")
                 st.success("✅ ¡Lote unificado generado con éxito!")
@@ -1005,6 +1000,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     key="btn_download_lote_tarimas_unificado_final_v2",
                     use_container_width=True
                 )
+
 
 
 
