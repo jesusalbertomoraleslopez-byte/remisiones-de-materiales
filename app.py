@@ -110,7 +110,7 @@ if "BD_Articulos" not in st.session_state or st.session_state.get("BD_Articulos"
         st.session_state.BD_Articulos = df_git_articulos
     else:
         # Estructura oficial estricta del sistema en caso de que el archivo no exista aún en GitHub
-        st.session_state.BD_Articulos = pd.DataFrame(columns=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial", "Es_Nuevo"])
+        st.session_state.BD_Articulos = pd.DataFrame(columns=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"])
 
 
 # --- Catálogo Maestro de Tarimas ---
@@ -239,8 +239,33 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
     ]]
     
     for _, row in df_resultado_piezas.iterrows():
-        art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == row['SKU']]
-        nom_art = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
+
+        sku_actual = row.get('SKU', '')
+        descripcion_final = "Material de Embarque"
+        
+        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+            df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
+            if not df_match.empty:
+                art_info = df_match.iloc[0]
+                nombre_com = str(art_info.get('Nombre', '')).strip()
+                calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                
+                detalles = []
+                if calibre and calibre.lower() != 'nan': detalles.append(f"Cal: {calibre}")
+            if dims and dims.lower() != 'nan': detalles.append(f"Dim: {dims}")
+            if acabado and acabado.lower() != 'nan': detalles.append(f"Acab: {acabado}")
+            
+            sub_detalle = f" ({', '.join(detalles)})" if detalles else ""
+            descripcion_final = f"{nombre_com}{sub_detalle}"
+        else:
+            descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque (SKU no catalogado)'))
+    else:
+        descripcion_final = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
+        
+
+        
         
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
@@ -358,22 +383,24 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         Paragraph("CANTIDAD", style_blanco_bold)
     ]]
     
+    # =============================================================================
+    # CONSTRUCCIÓN DE PARTIDAS DE REMISIÓN INDIVIDUAL (LÍNEAS 360 - 430)
+    # =============================================================================
     for _, row in df_detalles_remision.iterrows():
-        sku_actual = row.get('SKU', '')
+        sku_partida = row.get('SKU', '')
         nombre_com = "Material de Embarque"
         renglones_tecnicos = ""
         
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-            df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
-            if not df_match.empty:
-                # Extracción segura de la primera coincidencia usando la serie nativa de pandas (.iloc[0])
-                art_info = df_match.iloc[0]
+            df_match_rem = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_partida]
+            if not df_match_rem.empty:
+                art_info = df_match_rem.iloc[0]
                 nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
                 calibre = str(art_info.get('Calibre_Espesor', '')).strip()
                 dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
                 acabado = str(art_info.get('Acabado_Superficial', '')).strip()
                 
-                # Construcción dinámica de renglones omitiendo valores nulos
+                # Formateo de renglones técnicos internos para la celda
                 lista_renglones = []
                 if calibre and calibre.lower() != 'nan': 
                     lista_renglones.append(f"<b>Espesor:</b> {calibre}")
@@ -383,21 +410,21 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                     lista_renglones.append(f"<b>Acabado:</b> {acabado}")
                 
                 if lista_renglones:
-                    renglones_tecnicos = f"<br/><font color='#555555' size='7'>{'<br/>'.join(lista_renglones)}</font>"
+                    renglones_tecnicos = f"<br/><font color='#555555' size='8'>{'<br/>'.join(lista_renglones)}</font>"
             else:
-                nombre_com = row.get('Descripcion', 'Material de Embarque (SKU no catalogado)')
+                nombre_com = row.get('Descripcion', row.get('Nombre', 'Material de Embarque (SKU no catalogado)'))
         else:
-            nombre_com = row.get('Descripcion', 'Material de Embarque')
-    
-        # Combinación de SKU, Nombre Comercial y Datos Técnicos en renglones verticales dentro de la misma celda
-        celda_detalle_combinada = f"<b>{sku_actual}</b><br/>{nombre_com}{renglones_tecnicos}"
-    
-        tabla_materiales.append([
-            Paragraph(str(row['ID_Tarima']), style_normal_text),
-            Paragraph(str(row['PO']), style_normal_text),
-            Paragraph(str(row['Proyecto']), style_normal_text),
+            nombre_com = row.get('Descripcion', row.get('Nombre', 'Material de Embarque'))
+
+        # Consolidamos el formato final de la celda de detalle
+        celda_detalle_combinada = f"<b>{nombre_com}</b>{renglones_tecnicos}"
+
+        # Insertamos de forma segura en la tabla del PDF eliminando la variable huérfana nom_art
+        data.append([
+            Paragraph(str(row.get('PO', 'N/A')), style_normal_text),
+            Paragraph(f"<b>{sku_partida}</b>", style_normal_text),
             Paragraph(celda_detalle_combinada, style_normal_text),
-            Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
+            Paragraph(f"<b>{int(row.get('Cantidad', 0))}</b> PZS", style_normal_bold)
         ])
 
         
@@ -514,7 +541,6 @@ if opcion_menu == "📊 Dashboard e Históricos":
             if "BD_Detalle_Tarimas" in st.session_state: del st.session_state.BD_Detalle_Tarimas
             if "BD_Datos_Generales_Remision" in st.session_state: del st.session_state.BD_Datos_Generales_Remision
             if "BD_Lideres" in st.session_state: del st.session_state.BD_Lideres
-            if "BD_Articulos" in st.session_state: del st.session_state.BD_Articulos  # 👈 ESTA LÍNEA ES LA NUEVA
             
             # 2. Rompemos el caché de red inyectando tiempo en segundos a la URL
             import time
@@ -535,30 +561,6 @@ if opcion_menu == "📊 Dashboard e Históricos":
             st.success("¡Datos actualizados desde GitHub!")
             st.rerun()
 
-    col_sync1, col_sync2 = st.columns([3, 1])
-    with col_sync2:
-        if st.button("⚡ Sincronizar GitHub", use_container_width=True):
-            # 1. Eliminamos las variables congeladas de la memoria local (Incluyendo Artículos)
-            if "BD_Tarimas" in st.session_state: del st.session_state.BD_Tarimas
-            if "BD_Detalle_Tarimas" in st.session_state: del st.session_state.BD_Detalle_Tarimas
-            if "BD_Datos_Generales_Remision" in st.session_state: del st.session_state.BD_Datos_Generales_Remision
-            if "BD_Lideres" in st.session_state: del st.session_state.BD_Lideres
-            if "BD_Articulos" in st.session_state: del st.session_state.BD_Articulos
-    
-            # 2. Descarga de archivos frescos en caliente desde GitHub
-            df_tarimas_frescas = cargar_excel_desde_github("BD_Tarimas.xlsx")
-            df_detalles_frescos = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
-            df_remisiones_frescas = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
-            df_articulos_frescos = cargar_excel_desde_github("BD_Articulos.xlsx")
-    
-            # 3. Asignación limpia al session_state de la aplicación
-            if df_tarimas_frescas is not None: st.session_state.BD_Tarimas = df_tarimas_frescas
-            if df_detalles_frescos is not None: st.session_state.BD_Detalle_Tarimas = df_detalles_frescos
-            if df_remisiones_frescas is not None: st.session_state.BD_Datos_Generales_Remision = df_remisiones_frescas
-            if df_articulos_frescos is not None: st.session_state.BD_Articulos = df_articulos_frescos
-    
-            st.success("¡Datos y catálogo maestro actualizados desde GitHub!")
-            st.rerun()
 
     # =============================================================================
     # 🔍 PANEL DE DIAGNÓSTICO EN TIEMPO REAL (TEMPORAL)
@@ -867,67 +869,142 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
                     st.success("¡Inventario respaldado con éxito!"); st.rerun()
             except Exception as e: st.error(f"Error: {e}")
-            
-    if not st.session_state.BD_Tarimas.empty:
-        st.write("---")
-        st.subheader("🖨️ Panel de Impresión Masiva de Tarimas")
-        df_estilado = st.session_state.BD_Tarimas.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
-        seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
-        filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
-        if filas_seleccionadas:
-            elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
-            if len(elegidas) == 1:
-                st.download_button(label=f"📥 Descargar PDF Tarima #{elegidas}", data=generar_pdf_tarima(elegidas), file_name=f"Tarima_{elegidas}.pdf", mime="application/pdf")
-            else:
 
-                if st.button("📦 Unificar Lote de Impresión"):
-                    buf_1 = io.BytesIO()
-                    doc_1 = SimpleDocTemplate(buf_1, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
-                    story_l, styles = [], getSampleStyleSheet()
+            if not st.session_state.BD_Tarimas.empty:
+                st.write("---")
+                st.subheader("📟 Panel de Impresión Masiva de Tarimas")
+                df_estilado = st.session_state.BD_Tarimas.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
+                seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
+                filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
+            
+                if filas_seleccionadas:
+                    elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
                     
-                    # Estilos tipográficos institucionales de gran impacto
-                    style_tarima_titulo = ParagraphStyle('T_Giga', parent=styles['Heading1'], fontName="Helvetica-Bold", fontSize=140, alignment=1, leading=150, textColor=colors.HexColor("#212121"))
-                    style_sub_titulo = ParagraphStyle('S_Giga', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=26, alignment=1, textColor=colors.HexColor("#D32F2F"))
-                    style_normal_bold = ParagraphStyle('N_Bold', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=11, leading=14)
-                    style_normal_text = ParagraphStyle('N_Text', parent=styles['Normal'], fontSize=11, leading=14)
-                    style_blanco_bold = ParagraphStyle('B_Bold', parent=styles['Normal'], fontName="Helvetica-Bold", textColor=colors.white, alignment=1, fontSize=10)
-                    
-                    for t_imp in elegidas:
-                        det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
-                        t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp]
+                    if len(elegidas) == 1:
+                        st.download_button(
+                            label=f"📥 Descargar PDF Tarima #{elegidas}",
+                            data=generar_pdf_tarima(elegidas), 
+                            file_name=f"Tarima_{elegidas}.pdf", 
+                            mime="application/pdf",
+                            key="btn_dl_single_tarima_key"
+                        )
+                    else:
+                        if st.button("📦 Unificar Lote de Impresión", use_container_width=True):
+                            buf_1 = io.BytesIO()
+                            doc_1 = SimpleDocTemplate(buf_1, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
+                            story_l, styles = [], getSampleStyleSheet()
+                            
+                            style_tarima_titulo = ParagraphStyle('T_Giga', parent=styles['Heading1'], fontName="Helvetica-Bold", fontSize=140, alignment=1, leading=150, textColor=colors.HexColor("#212121"))
+                            style_sub_titulo = ParagraphStyle('S_Giga', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=26, alignment=1, textColor=colors.HexColor("#D32F2F"))
+                            style_normal_bold = ParagraphStyle('N_Bold', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=11, leading=14)
+                            style_normal_text = ParagraphStyle('N_Text', parent=styles['Normal'], fontSize=11, leading=14)
+                            style_blanco_bold = ParagraphStyle('B_Bold', parent=styles['Normal'], fontName="Helvetica-Bold", textColor=colors.white, alignment=1, fontSize=10)
+                            
+                            for t_imp in elegidas:
+                                det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
+                                t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp]
+                                
+                                op_nom = t_info.iloc[0]['Creado_Por'] if not t_info.empty else "N/A"
+                                fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
+                                
+                                story_l.append(Spacer(1, 1.2 * inch))
+                                story_l.append(Paragraph("TARIMA", style_sub_titulo))
+                                story_l.append(Spacer(1, 0.2 * inch))
+                                num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
+                                story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
+                                story_l.append(Spacer(1, 1.5 * inch))
+                                
+                                tabla_base = Table([
+                                    [Paragraph("CÓDIGO DE IDENTIFICACIÓN:", style_normal_bold), Paragraph(str(t_imp), style_normal_text)],
+                                    [Paragraph("OPERADOR DE PLANTA:", style_normal_bold), Paragraph(str(op_nom), style_normal_text)],
+                                    [Paragraph("FECHA DE EMISIÓN:", style_normal_bold), Paragraph(str(fe_cre), style_normal_text)]
+                                ], colWidths=[2.5 * inch, 5.0 * inch])
+                                tabla_base.setStyle(TableStyle([
+                                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                                    ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor("#E0E0E0")),
+                                    ('BOTTOMPADDING', (0,0), (-1,-1), 6)
+                                ]))
+                                story_l.append(tabla_base)
+                                story_l.append(PageBreak())
+                                
+                                story_l.append(Spacer(1, 0.1 * inch))
+                                story_l.append(Paragraph(f"<b>DETALLE DE MATERIALES ASOCIADOS - CONTROL #{t_imp}</b>", styles['Heading2']))
+                                story_l.append(Spacer(1, 0.2 * inch))
+                                
+                                tabla_detalles = [[
+                                    Paragraph("ORDEN (PO)", style_blanco_bold),
+                                    Paragraph("SKU / PRODUCTO", style_blanco_bold),
+                                    Paragraph("DETALLE DE PIEZA", style_blanco_bold),
+                                    Paragraph("CANTIDAD", style_blanco_bold)
+                                ]]
+                                
+                                for _, item in det.iterrows():
+                                    sku_actual = item.get('SKU', '')
+                                    nombre_com = "Material de Embarque"
+                                    renglones_tecnicos = ""
+                                    
+                                    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                                        df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
+                                        if not df_match.empty:
+                                            art_info = df_match.iloc[0]
+                                            nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
+                                            calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                                            dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                                            acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                                            
+                                            lista_renglones = []
+                                            if calibre and calibre.lower() != 'nan': lista_renglones.append(f"<b>Espesor:</b> {calibre}")
+                                            if dims and dims.lower() != 'nan': lista_renglones.append(f"<b>Dimensiones:</b> {dims}")
+                                            if acabado and acabado.lower() != 'nan': lista_renglones.append(f"<b>Acabado:</b> {acabado}")
+                                            
+                                            if lista_renglones:
+                                                renglones_tecnicos = f"<br/><font color='#555555' size='8'>{'<br/>'.join(lista_renglones)}</font>"
+                                        else:
+                                            nombre_com = item.get('Descripcion', 'Material de Embarque (SKU no catalogado)')
+                                    else:
+                                        nombre_com = item.get('Descripcion', 'Material de Embarque')
+                                    
+                                    celda_detalle_combinada = f"<b>{nombre_com}</b>{renglones_tecnicos}"
+                                    
+                                    tabla_detalles.append([
+                                        Paragraph(str(item['PO']), style_normal_text),
+                                        Paragraph(str(item['SKU']), style_normal_text),
+                                        Paragraph(celda_detalle_combinada, style_normal_text),
+                                        Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
+                                    ])
+                                
+                                t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
+                                t_grid.setStyle(TableStyle([
+                                    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")),
+                                    ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")),
+                                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                                    ('TOPPADDING', (0,0), (-1,-1), 6),
+                                    ('BOTTOMPADDING', (0,0), (-1,-1), 6)
+                                ]))
+                                story_l.append(t_grid)
+                                story_l.append(PageBreak())
+                            
+                            if story_l:
+                                story_l.pop()
+                            
+                            doc_1.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+                            buf_1.seek(0)
+                            st.session_state["pdf_lote_generado"] = buf_1.getvalue()
                         
-                        op_nom = t_info.iloc[0]['Creado_Por'] if not t_info.empty else "N/A"
-                        fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
-                        
-                        # =============================================================================
-                        # HOJA 1: CARÁTULA DE IDENTIFICACIÓN MASIVA (NÚMERO GIGANTE)
-                        # =============================================================================
-                        story_l.append(Spacer(1, 1.2 * inch))
-                        story_l.append(Paragraph("TARIMA", style_sub_titulo))
-                        story_l.append(Spacer(1, 0.2 * inch))
-                        
-                        # Extraemos solo el número limpio (ej. si es TPM-0024 extrae 0024)
-                        num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
-                        story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
-                        
-                        story_l.append(Spacer(1, 1.5 * inch))
-                        
-                        # Mini panel inferior de trazabilidad en la carátula
-                        tabla_base = Table([
-                            [Paragraph("CÓDIGO DE IDENTIFICACIÓN:", style_normal_bold), Paragraph(str(t_imp), style_normal_text)],
-                            [Paragraph("OPERADOR DE PLANTA:", style_normal_bold), Paragraph(str(op_nom), style_normal_text)],
-                            [Paragraph("FECHA DE EMISIÓN:", style_normal_bold), Paragraph(str(fe_cre), style_normal_text)]
-                        ], colWidths=[2.5 * inch, 5.0 * inch])
-                        tabla_base.setStyle(TableStyle([
-                            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                            ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor("#E0E0E0")),
-                            ('BOTTOMPADDING', (0,0), (-1,-1), 6)
-                        ]))
-                        story_l.append(tabla_base)
-                        
-                        # Forzamos salto inmediato a la siguiente página
-                        story_l.append(PageBreak())
-                        
+                        if "pdf_lote_generado" in st.session_state:
+                            st.write("---")
+                            st.success("✅ ¡Lote unificado generado con éxito!")
+                            st.download_button(
+                                label="📥 Descargar Lote Completo en mi Equipo (PDF)",
+                                data=st.session_state["pdf_lote_generado"],
+                                file_name=f"Lote_Tarimas_{datetime.date.today().strftime('%d_%m_%Y')}.pdf",
+                                mime="application/pdf",
+                                key="btn_download_lote_tarimas_unificado_final_v2",
+                                use_container_width=True
+                            )
+
+        
+        
                         # =============================================================================
                         # HOJA 2: DESGLOSE GRANULAR Y DETALLE DE PIEZAS
                         # =============================================================================
@@ -942,71 +1019,74 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             Paragraph("DESCRIPCIÓN COMERCIAL", style_blanco_bold),
                             Paragraph("CANTIDAD", style_blanco_bold)
                         ]]
-                        
-                        for _, item in det.iterrows():
-                            sku_actual = item.get('SKU', '')
-                            cadena_art_completa = "Material de Embarque"
-                            
-                            if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                                df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
-                                if not df_match.empty:
-                                    # Extracción segura del registro maestro
-                                    art_info = df_match.iloc[0]
-                                    nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
-                                    calibre = str(art_info.get('Calibre_Espesor', '')).strip()
-                                    dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
-                                    acabado = str(art_info.get('Acabado_Superficial', '')).strip()
-                                    
-                                    # Concatenación inteligente omitiendo campos vacíos o nulos
-                                    detalles_lista = []
-                                    if calibre and calibre.lower() != 'nan': detalles_lista.append(f"CAL: {calibre}")
-                                    if dims and dims.lower() != 'nan': detalles_lista.append(f"DIM: {dims}")
-                                    if acabado and acabado.lower() != 'nan': detalles_lista.append(f"ACAB: {acabado.upper()}")
-                                    
-                                    complemento_tecnico = f" - {' / '.join(detalles_lista)}" if detalles_lista else ""
-                                    cadena_art_completa = f"{nombre_com}{complemento_tecnico}"
-                                else:
-                                    cadena_art_completa = item.get('Descripcion', 'Material de Embarque (SKU no catalogado)')
-                            else:
-                                cadena_art_completa = item.get('Descripcion', 'Material de Embarque')
-    
-                            tabla_detalles.append([
-                                Paragraph(str(item['PO']), style_normal_text),
-                                Paragraph(str(item['SKU']), style_normal_text),
-                                Paragraph(cadena_art_completa, style_normal_text),
-                                Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
-                            ])
 
-                            
-                        t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
-                        t_grid.setStyle(TableStyle([
-                            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")),
-                            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")),
-                            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                            ('TOPPADDING', (0,0), (-1,-1), 6),
-                            ('BOTTOMPADDING', (0,0), (-1,-1), 6)
-                        ]))
-                        story_l.append(t_grid)
-                        
-                        # Salto de página para separar la siguiente tarima del lote
-                        story_l.append(PageBreak())
-                        
-                    if story_l: 
-                        story_l.pop()  # Remueve el último salto de página sobrante
-                        
-                    doc_1.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
                     
-                    st.download_button(
-                        label="📥 Descargar Lote Completo (PDF)", 
-                        data=buf_1.getvalue(), 
-                        file_name="Lote_Tarimas_Separado.pdf", 
-                        mime="application/pdf",
-                        key="btn_download_lote_tarimas_unificado_final_v2"
-                    )
-
-    
+                        for _, item in det.iterrows():
+                            art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
+                            art_nom = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
+                            
 
 
+                            # =============================================================================
+                            # HOJA 2: DESGLOSE GRANULAR CON RENGLONES EN LA MISMA CELDA (LÍNEAS 884-910)
+                            # =============================================================================
+                            # Cambiamos el encabezado a "DETALLE DE PIEZA"
+                            tabla_detalles = [[
+                                Paragraph("ORDEN (PO)", style_blanco_bold),
+                                Paragraph("SKU / PRODUCTO", style_blanco_bold),
+                                Paragraph("DETALLE DE PIEZA", style_blanco_bold),
+                                Paragraph("CANTIDAD", style_blanco_bold)
+                            ]]
+                    
+                            for _, item in det.iterrows():
+                                sku_actual = item.get('SKU', '')
+                                
+                                # Valores por defecto si el SKU no está catalogado
+                                nombre_com = "Material de Embarque"
+                                renglones_tecnicos = ""
+                                
+                                if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                                    df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
+                                    
+                                    if not df_match.empty:
+                                        art_info = df_match.iloc[0]
+                                        nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
+                                        calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                                        dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                                        acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                                        
+                                        # Construimos la lista de renglones omitiendo valores vacíos o nulos
+                                        lista_renglones = []
+                                        if calibre and calibre.lower() != 'nan': 
+                                            lista_renglones.append(f"<b>Espesor:</b> {calibre}")
+                                        if dims and dims.lower() != 'nan': 
+                                            lista_renglones.append(f"<b>Dimensiones:</b> {dims}")
+                                        if acabado and acabado.lower() != 'nan': 
+                                            lista_renglones.append(f"<b>Acabado:</b> {acabado}")
+                                        
+                                        # Si hay datos técnicos, los unimos con saltos de línea y les damos un tono gris para contraste visual
+                                        if lista_renglones:
+                                            renglones_tecnicos = f"<br/><font color='#555555' size='7'>{'<br/>'.join(lista_renglones)}</font>"
+                                    else:
+                                        # Tolerancia: si no está en la base de datos, intenta usar la descripción nativa de la tarima
+                                        nombre_com = item.get('Descripcion', 'Material de Embarque (SKU no catalogado)')
+                                else:
+                                    nombre_com = item.get('Descripcion', 'Material de Embarque')
+                    
+                                # Consolidamos el nombre principal y sus renglones técnicos en la misma celda
+                                celda_detalle_combinada = f"<b>{nombre_com}</b>{renglones_tecnicos}"
+                    
+                                tabla_detalles.append([
+                                    Paragraph(str(item['PO']), style_normal_text),
+                                    Paragraph(str(item['SKU']), style_normal_text),
+                                    Paragraph(celda_detalle_combinada, style_normal_text),
+                                    Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
+                                ])
+                    
+                            # Se mantiene la misma configuración de anchos e inserción en el PDF
+                            t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
+                    
+   
 # =============================================================================
 # 12. MÓDULO DE DESPACHOS LOGÍSTICOS: EMISIÓN DE REMISIONES DE SALIDA
 # =============================================================================
@@ -1389,46 +1469,27 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 arch_articulos = st.file_uploader("Suba la Plantilla de Artículos Rellenada:", type=["xlsx"], key="uploader_articulos_masivo_f")
                 
                 if arch_articulos:
-                    if st.button("🔄 Procesar y Anexar Nuevos Artículos a GitHub", use_container_width=True):
+                    if st.button("🔄 Procesar y Reemplazar Catálogo en GitHub", use_container_width=True):
                         try:
                             df_art_excel = pd.read_excel(arch_articulos)
                             columnas_requeridas = ["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
                             
                             if not all(col in df_art_excel.columns for col in columnas_requeridas):
-                                st.error("❌ Error: Columnas incompatibles. Asegúrese de usar la estructura oficial de la plantilla.")
+                                st.error("❌ Error: Columnas incompatibles. Use la estructura oficial.")
                             else:
-                                # 1. Limpieza básica inicial del archivo entrante
                                 df_art_excel = df_art_excel.dropna(subset=["SKU"])
                                 df_art_excel["SKU"] = df_art_excel["SKU"].astype(str).str.strip()
                                 
-                                # Marcar los registros de este Excel como los nuevos para pintarlos en amarillo
-                                df_art_excel["Es_Nuevo"] = True
-                                
-                                # 2. Lógica acumulativa (Simil al Módulo Tarimas)
-                                if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                                    # Desmarcamos los artículos antiguos quitándoles el color amarillo previo
-                                    st.session_state.BD_Articulos["Es_Nuevo"] = False
-                                    
-                                    # Concatenamos el histórico existente con el nuevo lote cargado
-                                    df_consolidado = pd.concat([st.session_state.BD_Articulos, df_art_excel], ignore_index=True)
-                                    
-                                    # Evitamos duplicados: Si el SKU ya existía, dejamos la versión del nuevo Excel (la última cargada)
-                                    df_consolidado = df_consolidado.drop_duplicates(subset=["SKU"], keep="last")
-                                    st.session_state.BD_Articulos = df_consolidado
-                                else:
-                                    st.session_state.BD_Articulos = df_art_excel
-                                
-                                # 3. Sincronización automática con el repositorio en la nube
+                                st.session_state.BD_Articulos = df_art_excel
                                 exito_subida = subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
                                 
                                 if exito_subida:
-                                    st.success("✅ ¡Artículos integrados al catálogo de forma consecutiva y respaldados exitosamente!")
+                                    st.success("✅ ¡Catálogo actualizado en GitHub exitosamente!")
                                     st.rerun()
                                 else:
-                                    st.error("❌ Error al sincronizar el archivo actualizado con el repositorio de GitHub.")
+                                    st.error("❌ Error al subir el archivo al repositorio de GitHub.")
                         except Exception as e:
-                            st.error(f"⚠️ Error crítico durante la integración del archivo: {e}")
-
+                            st.error(f"⚠️ Error crítico: {e}")
     
         st.write("---")
     
@@ -1442,25 +1503,14 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 "* **Nota:** El SKU actúa como llave relacional y está bloqueado para edición, pero sí puede eliminar la fila completa si ya no se usa.")
     
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-            # Forzamos la presencia de la columna de control para evitar fallos de renderizado
-            if "Es_Nuevo" not in st.session_state.BD_Articulos.columns:
-                st.session_state.BD_Articulos["Es_Nuevo"] = False
-                
-            # Aplicamos la máscara de color amarillo a las filas donde Es_Nuevo sea True
-            df_art_estilado = st.session_state.BD_Articulos.style.apply(
-                lambda r: ['background-color: #FFF59D' if r['Es_Nuevo'] else '' for _ in r], 
-                axis=1
-            )
-            
-            # st.data_editor recibe el DataFrame con el estilo visual aplicado
+            # st.data_editor detectará automáticamente las eliminaciones al activar num_rows="dynamic"
             df_art_editable = st.data_editor(
-                df_art_estilado,
+                st.session_state.BD_Articulos,
                 use_container_width=True,
                 disabled=["SKU"], 
                 hide_index=True,
-                num_rows="dynamic",
+                num_rows="dynamic", # Habilita dinámicamente añadir (+) y eliminar filas nativas
                 key="editor_mantenimiento_articulos_directo_v3",
-                column_order=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"], # Oculta la columna Es_Nuevo de la vista del usuario
                 column_config={
                     "SKU": st.column_config.TextColumn("SKU (Bloqueado/Llave)"),
                     "Nombre": st.column_config.TextColumn("Descripción Comercial"),
@@ -1469,7 +1519,6 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     "Acabado_Superficial": st.column_config.SelectboxColumn("Acabado Superficial", options=["Decapado", "Ansi 61", "Galvanizado", "Otro"])
                 }
             )
-
     
             # Botón de guardado y persistencia en GitHub
             if st.button("💾 Guardar Cambios y Aplicar Bajas en GitHub", use_container_width=True):
