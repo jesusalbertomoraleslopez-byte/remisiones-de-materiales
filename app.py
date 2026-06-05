@@ -818,9 +818,20 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 else:
                     if not st.session_state.BD_Tarimas.empty: st.session_state.BD_Tarimas["Es_Nueva"] = False
                     for t_orig in df_ex['Tarima'].unique():
-                        nuevo_id_tpm = f"TPM-{(len(st.session_state.BD_Tarimas) + 1):04d}"
+                        # 1. Leer el consecutivo manual configurado, si no existe usa el conteo base
+                        if "siguiente_numero_tpm" not in st.session_state:
+                            st.session_state["siguiente_numero_tpm"] = len(st.session_state.BD_Tarimas) + 1
+            
+                        num_actual = st.session_state["siguiente_numero_tpm"]
+                        nuevo_id_tpm = f"TPM-{num_actual:04d}"  #<-- AQUÍ USA TU CONTADOR MANUAL (Ejemplo: TPM-0056)
+                        
+                        # 2. Registramos los datos de la nueva tarima
                         n_t = {"ID_Tarima": nuevo_id_tpm, "Tarima_Origen_Excel": t_orig, "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"), "Ubicacion_Actual": "Metales", "Creado_Por": oper, "Tipo_Tarima": tipo_t, "Estatus": "Disponible", "Es_Nueva": True}
                         st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, pd.DataFrame([n_t])], ignore_index=True)
+                        
+                        # 3. Incrementamos el contador en +1 para la siguiente tarima de la lista
+                        st.session_state["siguiente_numero_tpm"] += 1
+
                         items = df_ex[df_ex['Tarima'] == t_orig]
                         for _, item in items.iterrows():
                             st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas) + 1, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": item['PO'], "Proyecto": item['Proyecto'], "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']}])], ignore_index=True)
@@ -1227,6 +1238,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
     "👤 Catálogo de Líderes", 
     "⚠️ Purga de Datos", 
     "📦 Catálogo de Artículos"
+    "🔢 Contador de Tarimas"
 ])
 
 
@@ -1514,3 +1526,28 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                         st.error("❌ Error de comunicación: No se pudieron plasmar los cambios en el repositorio.")
             else:
                 st.warning("⚠️ No existen registros activos en el catálogo de artículos para desplegar el editor.")
+    # =============================================================================
+    # PESTAÑA 5: CONFIGURADOR DEL FOLIO CONSECUTIVO TPM
+    # =============================================================================
+    with tab5:
+        st.write("##### 🔢 Inicializar o Cambiar Consecutivo de Tarimas (TPM)")
+        st.info("💡 **Guía de uso:** Defina el número numérico en el que desea que continúe la siguiente tarima que genere el sistema (Ejemplo: Si pone 56, la siguiente será TPM-0056).")
+
+        # Inicializar la variable en el estado de la sesión si no existe
+        if "siguiente_numero_tpm" not in st.session_state:
+            st.session_state["siguiente_numero_tpm"] = 36  # Valor por defecto inicial
+
+        # Cuadro numérico para el operador
+        nuevo_consecutivo = st.number_input(
+            "Indique el siguiente número de folio a generar:",
+            min_value=1,
+            max_value=9999,
+            value=int(st.session_state["siguiente_numero_tpm"]),
+            step=1,
+            key="input_consecutivo_manual_tpm"
+        )
+
+        if st.button("💾 Guardar Nuevo Consecutivo de Folio", use_container_width=True):
+            st.session_state["siguiente_numero_tpm"] = nuevo_consecutivo
+            st.success(f"💥 ¡Consecutivo actualizado! La próxima tarima nueva se creará con el folio: **TPM-{nuevo_consecutivo:04d}**")
+            st.rerun()
