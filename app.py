@@ -850,15 +850,21 @@ elif opcion_menu == "📦 Módulo Tarimas":
         with col1:
             tipo_t = st.selectbox("Tipo:", ["Cuadrada", "Rectangular", "Especial", "Otro"], key="sel_tipo_tarima_carga")
         with col2:
-            # Extraemos los líderes autorizados directamente de tu base de datos de líderes
+            # 1. Validación estricta y preparación de datos de líderes
             if "BD_Lideres" in st.session_state and not st.session_state.BD_Lideres.empty:
-                col_nom = 'Nombre' if 'Nombre' in st.session_state.BD_Lideres.columns else st.session_state.BD_Lideres.columns[0]
-                opciones_lideres = sorted(st.session_state.BD_Lideres[col_nom].dropna().unique().tolist())
+                # Aseguramos que existan las columnas correctas en tu base de datos de líderes
+                df_lid_aux = st.session_state.BD_Lideres.dropna(subset=['ID_Lider', 'Nombre']).copy()
+                df_lid_aux['Display'] = df_lid_aux['ID_Lider'].astype(str) + " - " + df_lid_aux['Nombre'].astype(str)
+                opciones_mostrar = sorted(df_lid_aux['Display'].unique().tolist())
             else:
-                opciones_lideres = ["Jesus Morales"]
+                opciones_mostrar = ["LID-01 - Jesus Morales"]
         
-            # Desplegable dinámico asignado a la misma variable original 'lider_t' para no romper el botón de abajo
-            lider_t = st.selectbox("Líder:", options=opciones_lideres, key="sel_lider_tarima_carga")
+            # 2. Desplegable que muestra "ID - Nombre" de manera estética
+            lider_visual = st.selectbox("Líder:", options=opciones_mostrar, key="sel_lider_tarima_carga_v2")
+            
+            # 3. Extraemos de regreso el ID limpio (ej. "LID-02") para que se guarde de forma transparente en la base de datos
+            lider_t = lider_visual.split(" - ")[0] if " - " in lider_visual else lider_visual
+
         
 
         
