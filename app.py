@@ -271,7 +271,7 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             Paragraph(str(row['PO']), style_normal_text),
             Paragraph(str(row['Proyecto']), style_normal_text),
-            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{nom_art}</font>", style_normal_text),
+            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{descripcion_final}</font>", style_normal_text),
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text),
             Paragraph(str(row['Estatus_Envio']), style_normal_text)
         ])
@@ -285,7 +285,7 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
     story.append(t_mat)
     
     # CORRECTO
-    doc.build(story, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+    doc.build(story, onFirstPage=draw_sigrama_reporte_decorations, onLaterPages=draw_sigrama_reporte_decorations)
 
 
     buffer.seek(0)
@@ -417,7 +417,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             Paragraph(str(row['PO']), style_normal_text),
             Paragraph(str(row['Proyecto']), style_normal_text),
-            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{nom_art}</font>", style_normal_text),
+            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{concepto_remision}</font>", style_normal_text),
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
         ])
         
@@ -863,7 +863,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     st.success("¡Inventario respaldado con éxito!"); st.rerun()
             except Exception as e: st.error(f"Error: {e}")
             
-    if not st.session_state.BD_Tarimas.empty:
+    if True:
         st.write("---")
         st.subheader("🖨️ Panel de Impresión Masiva de Tarimas")
         df_estilado = st.session_state.BD_Tarimas.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
