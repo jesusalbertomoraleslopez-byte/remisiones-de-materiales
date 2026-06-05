@@ -168,8 +168,6 @@ def draw_sigrama_reporte_decorations(canvas, doc):
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.black)
     canvas.drawString(36, 753, "Revisión 01")
-    
-    # --- CAMBIO AQUÍ: Fecha más grande, destacada en negrita y desplazada hacia abajo ---
     canvas.setFont("Helvetica-Bold", 10) 
     canvas.drawString(36, 730, datetime.date.today().strftime("%d de %B %Y"))
     
@@ -269,7 +267,7 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             Paragraph(str(row['PO']), style_normal_text),
             Paragraph(str(row['Proyecto']), style_normal_text),
-            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{nombre_com}</font>", style_normal_text), # <-- AQUÍ SE CAMBIÓ nom_art POR nombre_com
+            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{descripcion_final}</font>", style_normal_text),
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text),
             Paragraph(str(row['Estatus_Envio']), style_normal_text)
         ])
