@@ -359,17 +359,47 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
     ]]
     
     for _, row in df_detalles_remision.iterrows():
-        # Búsqueda segura del nombre comercial del artículo
-        art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == row['SKU']]
-        nom_art = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
+        sku_actual = row.get('SKU', '')
+        nombre_com = "Material de Embarque"
+        renglones_tecnicos = ""
         
+        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+            df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
+            if not df_match.empty:
+                # Extracción segura de la primera coincidencia usando la serie nativa de pandas (.iloc[0])
+                art_info = df_match.iloc[0]
+                nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
+                calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                
+                # Construcción dinámica de renglones omitiendo valores nulos
+                lista_renglones = []
+                if calibre and calibre.lower() != 'nan': 
+                    lista_renglones.append(f"<b>Espesor:</b> {calibre}")
+                if dims and dims.lower() != 'nan': 
+                    lista_renglones.append(f"<b>Dimensiones:</b> {dims}")
+                if acabado and acabado.lower() != 'nan': 
+                    lista_renglones.append(f"<b>Acabado:</b> {acabado}")
+                
+                if lista_renglones:
+                    renglones_tecnicos = f"<br/><font color='#555555' size='7'>{'<br/>'.join(lista_renglones)}</font>"
+            else:
+                nombre_com = row.get('Descripcion', 'Material de Embarque (SKU no catalogado)')
+        else:
+            nombre_com = row.get('Descripcion', 'Material de Embarque')
+    
+        # Combinación de SKU, Nombre Comercial y Datos Técnicos en renglones verticales dentro de la misma celda
+        celda_detalle_combinada = f"<b>{sku_actual}</b><br/>{nombre_com}{renglones_tecnicos}"
+    
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             Paragraph(str(row['PO']), style_normal_text),
             Paragraph(str(row['Proyecto']), style_normal_text),
-            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{nom_art}</font>", style_normal_text),
+            Paragraph(celda_detalle_combinada, style_normal_text),
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
         ])
+
         
     t_mat = Table(tabla_materiales, colWidths=[1.2 * inch, 1.3 * inch, 1.3 * inch, 2.7 * inch, 1.0 * inch])
     t_mat.setStyle(TableStyle([
