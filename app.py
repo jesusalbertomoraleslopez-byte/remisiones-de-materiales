@@ -823,22 +823,32 @@ elif opcion_menu == "📦 Módulo Tarimas":
         with col1:
             tipo_t = st.selectbox("Tipo:", ["Cuadrada", "Rectangular", "Especial", "Otro"], key="sel_tipo_tarima_carga")
         with col2:
-            # 1. Validación estricta y preparación de datos de líderes
+            
+            # 1. Validación estricta y preparación de datos con detección automática de columnas
             if "BD_Lideres" in st.session_state and not st.session_state.BD_Lideres.empty:
-                # Aseguramos que existan las columnas correctas en tu base de datos de líderes
-                df_lid_aux = st.session_state.BD_Lideres.dropna(subset=['ID_Lider', 'Nombre']).copy()
-                df_lid_aux['Display'] = df_lid_aux['ID_Lider'].astype(str) + " - " + df_lid_aux['Nombre'].astype(str)
+                df_lideres_base = st.session_state.BD_Lideres.copy()
+                
+                # Detectamos dinámicamente las columnas por su posición física en el Excel
+                # La primera columna (índice 0) será el ID, la segunda (índice 1) será el Nombre
+                col_id_real = df_lideres_base.columns[0]
+                col_nom_real = df_lideres_base.columns[1] if len(df_lideres_base.columns) > 1 else df_lideres_base.columns[0]
+                
+                # Limpiamos filas vacías basándonos en las columnas encontradas
+                df_lid_aux = df_lideres_base.dropna(subset=[col_id_real, col_nom_real]).copy()
+                
+                # Construimos la visualización "ID - Nombre" de forma segura
+                df_lid_aux['Display'] = df_lid_aux[col_id_real].astype(str).str.strip() + " - " + df_lid_aux[col_nom_real].astype(str).str.strip()
                 opciones_mostrar = sorted(df_lid_aux['Display'].unique().tolist())
             else:
+                # Respaldo de emergencia por si el archivo no se ha cargado en el sistema
                 opciones_mostrar = ["LID-01 - Jesus Morales"]
         
-            # 2. Desplegable que muestra "ID - Nombre" de manera estética
-            lider_visual = st.selectbox("Líder:", options=opciones_mostrar, key="sel_lider_tarima_carga_v2")
+            # 2. Desplegable estético en pantalla
+            lider_visual = st.selectbox("Líder:", options=opciones_mostrar, key="sel_lider_tarima_carga_v3")
             
-            # 3. Extraemos de regreso el ID limpio (ej. "LID-02") para que se guarde de forma transparente en la base de datos
+            # 3. Extraemos el ID limpio para que el botón de procesar lo guarde transparentemente
             lider_t = lider_visual.split(" - ")[0] if " - " in lider_visual else lider_visual
 
-        
 
         
         if arch and st.button("Procesar e Integrar Plantilla Avanzada"):
