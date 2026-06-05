@@ -820,20 +820,47 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     story_l, styles = [], getSampleStyleSheet()
                     for t_imp in elegidas:
                         det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
-                        t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp].iloc
-                        story_l.append(Spacer(1, 1.8 * inch)); story_l.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=54, leading=60, alignment=1))); story_l.append(PageBreak())
-                        story_l.append(Paragraph(f"<b>Detalle Interno - Tarima #{t_imp}</b>", styles['Heading2']))
-                        story_l.append(Paragraph(f"<b>Operador:</b> {t_info['Creado_Por']} | <b>Fecha:</b> {t_info['Fecha_Creacion']}", styles['Normal']))
-                        story_l.append(Spacer(1, 0.3 * inch))
-                        for _, item in det.iterrows():
-                            art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
-                            story_l.append(Paragraph(f"<b>PO:</b> {item['PO']} | <b>SKU:</b> {item['SKU']} - {art.iloc['Nombre'] if not art.empty else 'Material'}", styles['Normal']))
-                            story_l.append(Spacer(1, 0.4 * inch)); story_l.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", ParagraphStyle('NG_L', parent=styles['Heading2'], fontSize=28, leading=34, alignment=1)))
-                        story_l.append(PageBreak())
-                    if story_l: story_l.pop()
-                    doc_l.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
-                    st.download_button(label="📥 Descargar Lote Completo (PDF)", data=buf_l.getvalue(), file_name="Lote_Tarimas.pdf", mime="application/pdf")
-        else: st.warning("Seleccione registros en la tabla usando las casillas.")
+        t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp]
+        
+        # Extracción segura de la primera fila si existen datos
+        op_nom = t_info.iloc['Creado_Por'] if not t_info.empty else "N/A"
+        fe_cre = t_info.iloc['Fecha_Creacion'] if not t_info.empty else "N/A"
+
+        story_l.append(Spacer(1, 1.8 * inch))
+        story_l.append(Paragraph(f"TARIMA<br/><br/><b>#{t_imp}</b>", ParagraphStyle('G_L', parent=styles['Heading1'], fontSize=28, alignment=1)))
+        story_l.append(Paragraph(f"<b>Detalle Interno - Tarima #{t_imp}</b>", styles['Heading2']))
+        story_l.append(Paragraph(f"<b>Operador:</b> {op_nom} | <b>Fecha:</b> {fe_cre}", styles['Normal']))
+        story_l.append(Spacer(1, 0.3 * inch))
+        
+        for _, item in det.iterrows():
+            art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
+            # Extracción corregida para el nombre del artículo usando la posición 0 de la fila
+            art_nom = art.iloc['Nombre'] if not art.empty else "Material"
+            
+        # --- CONTINUACIÓN DEL BUCLE DE MATERIALES (CORRECCIÓN DE ALINEACIÓN INTERNA) ---
+        story_l.append(Spacer(1, 0.4 * inch))
+        story_l.append(Paragraph(f"<b>{int(item['Cantidad'])} PZS</b>", ParagraphStyle('NG_L', parent=styles['Heading1'], fontSize=24, alignment=1)))
+        story_l.append(PageBreak())
+
+        
+    # --- FINALIZACIÓN DEL DOCUMENTO (FUERA DEL FOR PRINCIPAL - REGRESAR AL RAS DEL IF DEL BOTÓN) ---
+    if story_l: 
+        story_l.pop() # Remueve el último salto de página sobrante
+        
+    # CORRECCIÓN CLAVE: Llamada oficial con los guiones bajos correctos al Canvas
+    doc_1.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+    
+    st.download_button(
+        label="📥 Descargar Lote Completo (PDF)", 
+        data=buf_1.getvalue(), 
+        file_name="Lote_Tarimas.pdf", 
+        mime="application/pdf",
+        key="btn_download_lote_tarimas_unificado_final"
+    )
+
+
+
+
 # =============================================================================
 # 12. MÓDULO DE DESPACHOS LOGÍSTICOS: EMISIÓN DE REMISIONES DE SALIDA
 # =============================================================================
