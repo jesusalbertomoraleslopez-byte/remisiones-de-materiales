@@ -1233,7 +1233,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             {"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}
         ])
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📝 Ajustar Cantidades", 
     "👤 Catálogo de Líderes", 
     "⚠️ Purga de Datos", 
