@@ -743,60 +743,45 @@ elif opcion_menu == "🔍 Centro de Consultas":
                 # Construcción del reporte de auditoría multi-hoja con openpyxl
                 from openpyxl.styles import Font, PatternFill, Alignment
                 from openpyxl.utils import get_column_letter
+
+                # =============================================================================
+                # SOLUCIÓN DEFINITIVA: REPORTE DE EXCEL BLINDADO CONTRA DATOS VACÍOS
+                # =============================================================================
                 buf_c = io.BytesIO()
         
-                # SI LA TABLA TIENE DATOS, GENERA EL REPORTE COMPLETO CON DOS HOJAS
+                # 1. Creamos los metadatos básicos del reporte
+                df_metadatos = pd.DataFrame([
+                    {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO (FO-MET-11)"},
+                    {"Concepto": "EMPRESA", "Valor": "INDUSTRIA SIGRAMA S.A. DE C.V."},
+                    {"Concepto": "FECHA DE GENERACIÓN", "Valor": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
+                    {"Concepto": "FILTRO: ORDEN DE COMPRA (PO)", "Valor": str(f_po)},
+                    {"Concepto": "FILTRO: PROYECTO INTERNO", "Valor": str(f_proy)},
+                    {"Concepto": "FILTRO: PARCIALIDAD", "Valor": str(f_parc)},
+                    {"Concepto": "FILTRO: DESCRIPCIÓN PROYECTO", "Valor": str(f_desc)},
+                    {"Concepto": "FILTRO: SKU / PRODUCTO", "Valor": str(f_sku)},
+                    {"Concepto": "FILTRO: ID TARIMA", "Valor": str(f_tar)},
+                    {"Concepto": "FILTRO: ESTATUS DE ENVÍO", "Valor": str(f_est)},
+                    {"Concepto": "TOTAL PIEZAS EN SELECCIÓN", "Valor": int(total_piezas_consulta)}
+                ])
+        
+                # 2. Validamos si hay datos reales en la tabla para exportar
                 if 'df_rep' in locals() and not df_rep.empty:
-                    with pd.ExcelWriter(buf_c, engine='openpyxl') as writer_c:
-                        df_metadatos = pd.DataFrame([
-                            {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO (FO-MET-11)"},
-                            {"Concepto": "EMPRESA", "Valor": "INDUSTRIA SIGRAMA S.A. DE C.V."},
-                            {"Concepto": "FECHA DE GENERACIÓN", "Valor": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
-                            {"Concepto": "FILTRO: ORDEN DE COMPRA (PO)", "Valor": str(f_po)},
-                            {"Concepto": "FILTRO: PROYECTO INTERNO", "Valor": str(f_proy)},
-                            {"Concepto": "FILTRO: PARCIALIDAD", "Valor": str(f_parc)},
-                            {"Concepto": "FILTRO: DESCRIPCIÓN PROYECTO", "Valor": str(f_desc)},
-                            {"Concepto": "FILTRO: SKU / PRODUCTO", "Valor": str(f_sku)},
-                            {"Concepto": "FILTRO: ID TARIMA", "Valor": str(f_tar)},
-                            {"Concepto": "FILTRO: ESTATUS DE ENVÍO", "Valor": str(f_est)},
-                            {"Concepto": "TOTAL PIEZAS EN SELECCIÓN", "Valor": int(total_piezas_consulta)}
-                        ])
-                        df_metadatos.to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
-                        df_rep.to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
+                    df_exportar_inventario = df_rep.copy()
                 else:
-                    # SI NO HAY DATOS, GENERA UN EXCEL SEGURO EN BLANCO PARA EVITAR LA PANTALLA ROJA
-                    with pd.ExcelWriter(buf_c, engine='openpyxl') as writer_c:
-                        pd.DataFrame([{"Mensaje": "No se encontraron registros con los filtros seleccionados."}]).to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
-                        pd.DataFrame(columns=["ID_Tarima", "PO", "Proyecto", "SKU", "Cantidad", "Estatus_Envio"]).to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
+                    # Si no hay datos, creamos una tabla vacía segura con los encabezados oficiales
+                    df_exportar_inventario = pd.DataFrame(columns=["ID_Tarima", "PO", "Proyecto", "SKU", "Cantidad", "Estatus_Envio"])
+                    df_metadatos.loc[len(df_metadatos)] = {"Concepto": "AVISO", "Valor": "No se encontraron registros con los filtros seleccionados."}
+        
+                # 3. Escritura segura y directa en el archivo Excel
+                writer_c = pd.ExcelWriter(buf_c, engine='openpyxl')
+                df_metadatos.to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
+                df_exportar_inventario.to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
+                writer_c.close()
+                
+                buf_c.seek(0)
 
 
                 
-                    
-                    # Estilos de Portada (Gris de Control de Almacén)
-                    ws_m = writer_c.sheets['Resumen_Filtros']
-                    ws_m.row_dimensions.height = 24
-                    fill_m = PatternFill(start_color="333333", end_color="333333", fill_type="solid")
-                    font_hm = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-                    for col_idx in range(1, 3):
-                        cell = ws_m.cell(row=1, column=col_idx)
-                        cell.fill, cell.font, cell.alignment = fill_m, font_hm, Alignment(horizontal="center", vertical="center")
-                    ws_m.column_dimensions['A'].width = 30
-                    ws_m.column_dimensions['B'].width = 50
-                    
-                    # Estilos de Lista de Datos (Rojo Sigrama Corporativo)
-                    ws_c = writer_c.sheets['Listado_Inventario']
-                    fill_h = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
-                    font_h = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-                    ws_c.row_dimensions.height = 24
-                    for col_idx in range(1, len(df_rep.columns) + 1):
-                        cell = ws_c.cell(row=1, column=col_idx)
-                        cell.fill, cell.font, cell.alignment = fill_h, font_h, Alignment(horizontal="center", vertical="center")
-                    
-                    for idx, col_name in enumerate(df_rep.columns):
-                        max_len = max(df_rep[col_name].astype(str).map(len).max(), len(str(col_name)))
-                        col_letter = get_column_letter(idx + 1)
-                        ws_c.column_dimensions[col_letter].width = max(max_len + 4, 15)
-                buf_c.seek(0)
                 
                 st.download_button(
                     label="📥 Generar Reporte de Inventario en Excel (.xlsx)",
