@@ -943,42 +943,68 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
                             art_nom = art.iloc[0]['Nombre'] if not art.empty else "Material de Embarque"
                             
-                            tabla_detalles.append([
-                                Paragraph(str(item['PO']), style_normal_text),
-                                Paragraph(str(item['SKU']), style_normal_text),
-                                Paragraph(str(art_nom), style_normal_text),
-                                Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
-                            ])
-                            
-                        t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
-                        t_grid.setStyle(TableStyle([
-                            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")),
-                            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")),
-                            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                            ('TOPPADDING', (0,0), (-1,-1), 6),
-                            ('BOTTOMPADDING', (0,0), (-1,-1), 6)
-                        ]))
-                        story_l.append(t_grid)
-                        
-                        # Salto de página para separar la siguiente tarima del lote
-                        story_l.append(PageBreak())
-                        
-                    if story_l: 
-                        story_l.pop()  # Remueve el último salto de página sobrante
-                        
-                    doc_1.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+
+
+                            # =============================================================================
+                            # HOJA 2: DESGLOSE GRANULAR CON RENGLONES EN LA MISMA CELDA (LÍNEAS 884-910)
+                            # =============================================================================
+                            # Cambiamos el encabezado a "DETALLE DE PIEZA"
+                            tabla_detalles = [[
+                                Paragraph("ORDEN (PO)", style_blanco_bold),
+                                Paragraph("SKU / PRODUCTO", style_blanco_bold),
+                                Paragraph("DETALLE DE PIEZA", style_blanco_bold),
+                                Paragraph("CANTIDAD", style_blanco_bold)
+                            ]]
                     
-                    st.download_button(
-                        label="📥 Descargar Lote Completo (PDF)", 
-                        data=buf_1.getvalue(), 
-                        file_name="Lote_Tarimas_Separado.pdf", 
-                        mime="application/pdf",
-                        key="btn_download_lote_tarimas_unificado_final_v2"
-                    )
-
-    
-
-
+                            for _, item in det.iterrows():
+                                sku_actual = item.get('SKU', '')
+                                
+                                # Valores por defecto si el SKU no está catalogado
+                                nombre_com = "Material de Embarque"
+                                renglones_tecnicos = ""
+                                
+                                if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                                    df_match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_actual]
+                                    
+                                    if not df_match.empty:
+                                        art_info = df_match.iloc[0]
+                                        nombre_com = str(art_info.get('Nombre', 'Material de Embarque')).strip()
+                                        calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                                        dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                                        acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                                        
+                                        # Construimos la lista de renglones omitiendo valores vacíos o nulos
+                                        lista_renglones = []
+                                        if calibre and calibre.lower() != 'nan': 
+                                            lista_renglones.append(f"<b>Espesor:</b> {calibre}")
+                                        if dims and dims.lower() != 'nan': 
+                                            lista_renglones.append(f"<b>Dimensiones:</b> {dims}")
+                                        if acabado and acabado.lower() != 'nan': 
+                                            lista_renglones.append(f"<b>Acabado:</b> {acabado}")
+                                        
+                                        # Si hay datos técnicos, los unimos con saltos de línea y les damos un tono gris para contraste visual
+                                        if lista_renglones:
+                                            renglones_tecnicos = f"<br/><font color='#555555' size='7'>{'<br/>'.join(lista_renglones)}</font>"
+                                    else:
+                                        # Tolerancia: si no está en la base de datos, intenta usar la descripción nativa de la tarima
+                                        nombre_com = item.get('Descripcion', 'Material de Embarque (SKU no catalogado)')
+                                else:
+                                    nombre_com = item.get('Descripcion', 'Material de Embarque')
+                    
+                                # Consolidamos el nombre principal y sus renglones técnicos en la misma celda
+                                celda_detalle_combinada = f"<b>{nombre_com}</b>{renglones_tecnicos}"
+                    
+                                tabla_detalles.append([
+                                    Paragraph(str(item['PO']), style_normal_text),
+                                    Paragraph(str(item['SKU']), style_normal_text),
+                                    Paragraph(celda_detalle_combinada, style_normal_text),
+                                    Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
+                                ])
+                    
+                            # Se mantiene la misma configuración de anchos e inserción en el PDF
+                            t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
+                    
+   
 # =============================================================================
 # 12. MÓDULO DE DESPACHOS LOGÍSTICOS: EMISIÓN DE REMISIONES DE SALIDA
 # =============================================================================
