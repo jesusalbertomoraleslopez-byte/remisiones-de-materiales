@@ -30,25 +30,31 @@ REPO_NAME = "remisiones-de-materiales"
 BRANCH = "main"
 
 def cargar_excel_desde_github(file_name):
-    """Descarga de forma segura el archivo Excel directamente de la API de contenido de GitHub."""
+    """Carga el archivo Excel: primero busca en disco local (modo offline), luego en GitHub API."""
+    import os
+    # 1. Intentar cargar localmente primero
+    if os.path.exists(file_name):
+        try:
+            try:
+                return pd.read_excel(file_name, sheet_name='Datos_Sistema')
+            except Exception:
+                return pd.read_excel(file_name, sheet_name=0)
+        except Exception as e:
+            st.warning(f"⚠️ Error al leer archivo local {file_name}: {e}")
+            
+    # 2. Si no existe localmente, intentar GitHub
     try:
-        # Importante: Usamos la API oficial para leer exactamente de la misma ubicación de escritura
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}?ref={BRANCH}"
-        
         headers = {}
         if "github_token" in st.secrets:
             headers["Authorization"] = f"token {st.secrets['github_token']}"
             headers["Accept"] = "application/vnd.github.v3+json"
             
         res = requests.get(url, headers=headers)
-        
         if res.status_code == 200:
             datos_json = res.json()
-            # Extraer y decodificar el archivo que envía GitHub en Base64
             contenido_base64 = datos_json["content"]
             archivo_bytes = base64.b64decode(contenido_base64)
-            
-            # Intenta leer la pestaña oficial del sistema; si falla, lee la primera
             try:
                 return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name='Datos_Sistema')
             except Exception:
@@ -58,12 +64,20 @@ def cargar_excel_desde_github(file_name):
     return None
 
 def subir_excel_a_github(file_name, dataframe_to_save):
-    """Sincroniza y sobrescribe el DataFrame directamente en el repositorio mediante la API."""
+    """Guarda el archivo localmente y luego intenta sincronizarlo con GitHub si hay token disponible."""
+    # 1. Guardar localmente siempre
     try:
-        if "github_token" not in st.secrets:
-            st.error("❌ Token 'github_token' no configurado en los Secrets de Streamlit.")
-            return False
-            
+        with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+            dataframe_to_save.to_excel(writer, index=False, sheet_name='Datos_Sistema')
+    except Exception as e:
+        st.error(f"⚠️ Error al guardar archivo localmente {file_name}: {e}")
+        
+    # 2. Sincronizar con GitHub si el token está disponible
+    if "github_token" not in st.secrets or not st.secrets["github_token"]:
+        # Modo local puro sin token, retornamos True ya que se guardó localmente
+        return True
+        
+    try:
         GITHUB_TOKEN = st.secrets["github_token"]
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
@@ -91,7 +105,7 @@ def subir_excel_a_github(file_name, dataframe_to_save):
         return res_put.status_code in [200, 201]
 
     except Exception as e:
-        st.error(f"⚠️ Error al subir archivo a GitHub: {e}")
+        st.warning(f"⚠️ No se pudo sincronizar con GitHub: {e}")
         return False
 
 
@@ -143,6 +157,41 @@ if "BD_Lideres" not in st.session_state:
         st.session_state.BD_Lideres = df_git_lideres
     else:
         st.session_state.BD_Lideres = pd.DataFrame([{"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}])
+
+# --- Función Auxiliar y Consecutivo Dinámico de Tarimas (TPM) ---
+def obtener_siguiente_consecutivo_tpm():
+    # 1. Intentar cargar el consecutivo manual configurado desde disco local
+    import os
+    if os.path.exists("consecutivo_override.txt"):
+        try:
+            with open("consecutivo_override.txt", "r", encoding="utf-8") as f:
+                val = f.read().strip()
+                if val.isdigit():
+                    return int(val)
+        except Exception:
+            pass
+
+    # 2. De lo contrario, calcular dinámicamente a partir de la base de datos
+    if "BD_Tarimas" not in st.session_state or st.session_state.BD_Tarimas.empty:
+        return 1
+    try:
+        # Extraer números de los IDs tipo TPM-XXXX
+        ids = st.session_state.BD_Tarimas['ID_Tarima'].astype(str)
+        numeros = []
+        for id_val in ids:
+            partes = id_val.split('-')
+            if len(partes) > 1 and partes[1].strip().isdigit():
+                numeros.append(int(partes[1].strip()))
+            elif id_val.startswith('TPM') and id_val[3:].strip().isdigit():
+                numeros.append(int(id_val[3:].strip()))
+        if numeros:
+            return max(numeros) + 1
+    except Exception:
+        pass
+    return len(st.session_state.BD_Tarimas) + 1
+
+if "siguiente_numero_tpm" not in st.session_state or st.session_state["siguiente_numero_tpm"] is None:
+    st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
 
 
 
@@ -541,7 +590,7 @@ if opcion_menu == "📊 Dashboard e Históricos":
     df_maestro_dash = st.session_state.BD_Detalle_Tarimas.copy()
 
     
-    col_g1, col_g2 = st.columns(2)
+    col_g1, col_g2, col_g3, col_g4 = st.columns(4)
     with col_g1:
         opciones_global_proy = ["Todos"] + df_maestro_dash['Proyecto'].dropna().unique().tolist() if not df_maestro_dash.empty and 'Proyecto' in df_maestro_dash.columns else ["Todos"]
         proy_global_sel = st.selectbox("Filtrar por Proyecto Interno:", opciones_global_proy, key="dash_global_proy_select_unique")
@@ -549,9 +598,17 @@ if opcion_menu == "📊 Dashboard e Históricos":
     with col_g2:
         if proy_global_sel != "Todos":
             df_maestro_dash = df_maestro_dash[df_maestro_dash['Proyecto'] == proy_global_sel]
-
         opciones_global_desc = ["Todas"] + df_maestro_dash['Descripcion'].dropna().unique().tolist() if not df_maestro_dash.empty and 'Descripcion' in df_maestro_dash.columns else ["Todas"]
-        desc_global_sel = st.selectbox("Filtrar por Descripción de Proyecto Planta Rio:", opciones_global_desc, key="dash_global_desc_select_unique")
+        desc_global_sel = st.selectbox("Filtrar por Descripción de Proyecto:", opciones_global_desc, key="dash_global_desc_select_unique")
+
+    with col_g3:
+        if desc_global_sel != "Todas":
+            df_maestro_dash = df_maestro_dash[df_maestro_dash['Descripcion'] == desc_global_sel]
+        opciones_global_po = ["Todos"] + df_maestro_dash['PO'].dropna().unique().tolist() if not df_maestro_dash.empty and 'PO' in df_maestro_dash.columns else ["Todos"]
+        po_global_sel = st.selectbox("Filtrar por Orden de Compra (PO):", opciones_global_po, key="dash_global_po_select_unique")
+
+    with col_g4:
+        est_global_sel = st.selectbox("Filtrar por Estatus de Envío:", ["Todos", "Remesado", "No Remesado"], key="dash_global_est_select_unique")
 
     st.write("---")
     
@@ -568,6 +625,18 @@ if opcion_menu == "📊 Dashboard e Históricos":
         df_detalles_filtrados = df_detalles_filtrados[df_detalles_filtrados['Descripcion'] == desc_global_sel]
         tarimas_validas_f = df_detalles_filtrados['ID_Tarima'].unique()
         df_tarimas_filtradas = df_tarimas_filtradas[df_tarimas_filtradas['ID_Tarima'].isin(tarimas_validas_f)]
+
+    if po_global_sel != "Todos":
+        df_detalles_filtrados = df_detalles_filtrados[df_detalles_filtrados['PO'] == po_global_sel]
+        tarimas_validas_f = df_detalles_filtrados['ID_Tarima'].unique()
+        df_tarimas_filtradas = df_tarimas_filtradas[df_tarimas_filtradas['ID_Tarima'].isin(tarimas_validas_f)]
+
+    if est_global_sel != "Todos":
+        estatus_buscado = "Remesada" if est_global_sel == "Remesado" else "Disponible"
+        df_tarimas_filtradas = df_tarimas_filtradas[df_tarimas_filtradas['Estatus'] == estatus_buscado]
+        tarimas_validas_f = df_tarimas_filtradas['ID_Tarima'].unique()
+        df_detalles_filtrados = df_detalles_filtrados[df_detalles_filtrados['ID_Tarima'].isin(tarimas_validas_f)]
+
     # Recálculo instantáneo de las tarjetas KPI del Dashboard basado en los filtros superiores
     t_tar = len(df_tarimas_filtradas)
     disp = len(df_tarimas_filtradas[df_tarimas_filtradas['Estatus'] == 'Disponible'])
@@ -595,6 +664,10 @@ if opcion_menu == "📊 Dashboard e Históricos":
         # Sincronizar la tabla del resumen analítico inferior con los filtros globales de arriba
         if proy_global_sel != "Todos": df_completo = df_completo[df_completo['Proyecto'] == proy_global_sel]
         if desc_global_sel != "Todas": df_completo = df_completo[df_completo['Descripcion'] == desc_global_sel]
+        if po_global_sel != "Todos": df_completo = df_completo[df_completo['PO'] == po_global_sel]
+        if est_global_sel != "Todos":
+            estatus_buscado = "Remesada" if est_global_sel == "Remesado" else "Disponible"
+            df_completo = df_completo[df_completo['Estatus'] == estatus_buscado]
             
         if not df_completo.empty and all(col in df_completo.columns for col in ['Proyecto', 'Parcialidad', 'Descripcion']):
             resumen_avanzado = df_completo.groupby(['PO', 'Proyecto', 'Parcialidad', 'Descripcion']).agg(
@@ -819,8 +892,8 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     if not st.session_state.BD_Tarimas.empty: st.session_state.BD_Tarimas["Es_Nueva"] = False
                     for t_orig in df_ex['Tarima'].unique():
                         # 1. Leer el consecutivo manual configurado, si no existe usa el conteo base
-                        if "siguiente_numero_tpm" not in st.session_state:
-                            st.session_state["siguiente_numero_tpm"] = len(st.session_state.BD_Tarimas) + 1
+                        if "siguiente_numero_tpm" not in st.session_state or st.session_state["siguiente_numero_tpm"] is None:
+                            st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
             
                         num_actual = st.session_state["siguiente_numero_tpm"]
                         nuevo_id_tpm = f"TPM-{num_actual:04d}"  #<-- AQUÍ USA TU CONTADOR MANUAL (Ejemplo: TPM-0056)
@@ -837,13 +910,37 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas) + 1, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": item['PO'], "Proyecto": item['Proyecto'], "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']}])], ignore_index=True)
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
+                    # Eliminamos el archivo de override si existe, ya que ha sido consumido
+                    import os
+                    if os.path.exists("consecutivo_override.txt"):
+                        try:
+                            os.remove("consecutivo_override.txt")
+                        except Exception:
+                            pass
+                    st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
                     st.success("¡Inventario respaldado con éxito!"); st.rerun()
             except Exception as e: st.error(f"Error: {e}")
             
     if True:
         st.write("---")
         st.subheader("🖨️ Panel de Impresión Masiva de Tarimas")
-        df_estilado = st.session_state.BD_Tarimas.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
+        
+        # Ordenar las tarimas consecutivamente de manera descendente por ID_Tarima
+        df_tarimas_sorted = st.session_state.BD_Tarimas.copy()
+        
+        def extract_tpm_num(id_val):
+            id_str = str(id_val).strip()
+            partes = id_str.split('-')
+            if len(partes) > 1 and partes[1].strip().isdigit():
+                return int(partes[1].strip())
+            elif id_str.startswith('TPM') and id_str[3:].strip().isdigit():
+                return int(id_str[3:].strip())
+            return 0
+            
+        df_tarimas_sorted['_sort_key'] = df_tarimas_sorted['ID_Tarima'].apply(extract_tpm_num)
+        df_tarimas_sorted = df_tarimas_sorted.sort_values(by='_sort_key', ascending=False).drop(columns=['_sort_key']).reset_index(drop=True)
+        
+        df_estilado = df_tarimas_sorted.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
         seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
         
@@ -851,7 +948,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
         # BLOQUE DE IMPRESIÓN MAESTRO DE TARIMAS BLINDADO CONTRA LLAVES HUÉRFANAS
         # =============================================================================
         if filas_seleccionadas:
-            elegidas = st.session_state.BD_Tarimas.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
+            elegidas = df_tarimas_sorted.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
             if len(elegidas) == 1:
                 id_tarima_limpio = str(elegidas[0]).strip()  # Extracción nativa perfecta
         
@@ -859,9 +956,15 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 df_tarima_individual = pd.DataFrame()
                 if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
                     # Filtramos asegurando que compare texto puro
-                    df_tarima_individual = st.session_state.BD_Detalle_Tarimas[
+                    df_det = st.session_state.BD_Detalle_Tarimas[
                         st.session_state.BD_Detalle_Tarimas['ID_Tarima'].astype(str) == id_tarima_limpio
                     ].copy()
+                    if not df_det.empty:
+                        # Cruce relacional para anexar Estatus, Fecha_Creacion y Estatus_Envio requeridos por el PDF
+                        df_tarima_individual = pd.merge(df_det, 
+                                                         st.session_state.BD_Tarimas[['ID_Tarima', 'Estatus', 'Fecha_Creacion']], 
+                                                         on='ID_Tarima', how='left')
+                        df_tarima_individual['Estatus_Envio'] = df_tarima_individual['Estatus'].apply(lambda x: "Remesado" if x == "Remesada" else "No Remesado")
         
                 # 2. VALIDACIÓN CRÍTICA: ¿Tiene artículos esta tarima para imprimir?
                 if df_tarima_individual.empty or "SKU" not in df_tarima_individual.columns:
@@ -870,29 +973,121 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 else:
                     # Si sí tiene piezas con SKU válido, procedemos a compilar de forma segura
                     filtros_simulados = {
-                        "ID Tarima": id_tarima_limpio,
                         "PO": "Todos",
+                        "SKU": "Todos",
                         "Proyecto": "Todos",
-                        "Estatus": "Todos"
+                        "Tarima": id_tarima_limpio,
+                        "Parcialidad": "Todos",
+                        "Estatus": "Todos",
+                        "Descripcion": "Todos"
                     }
                     
                     try:
-                        # 3. Compilamos el PDF pasándole sus parámetros obligatorios
+                        # Función auxiliar interna para generar la etiqueta de 2 hojas para esta tarima
+                        def generar_pdf_etiqueta_tarima_individual(t_imp):
+                            buf = io.BytesIO()
+                            doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
+                            story_l, styles = [], getSampleStyleSheet()
+                            
+                            style_tarima_titulo = ParagraphStyle('T_Giga_Ind', parent=styles['Heading1'], fontName="Helvetica-Bold", fontSize=140, alignment=1, leading=150, textColor=colors.HexColor("#212121"))
+                            style_sub_titulo = ParagraphStyle('S_Giga_Ind', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=26, alignment=1, textColor=colors.HexColor("#D32F2F"))
+                            style_normal_bold = ParagraphStyle('N_Bold_Ind', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=11, leading=14)
+                            style_normal_text = ParagraphStyle('N_Text_Ind', parent=styles['Normal'], fontSize=11, leading=14)
+                            style_blanco_bold = ParagraphStyle('B_Bold_Ind', parent=styles['Normal'], fontName="Helvetica-Bold", textColor=colors.white, alignment=1, fontSize=10)
+                            
+                            det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
+                            t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp]
+                            
+                            op_nom = t_info.iloc[0]['Creado_Por'] if not t_info.empty else "N/A"
+                            fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
+                            
+                            # HOJA 1: CARÁTULA DE IDENTIFICACIÓN
+                            story_l.append(Spacer(1, 1.2 * inch))
+                            story_l.append(Paragraph("TARIMA", style_sub_titulo))
+                            story_l.append(Spacer(1, 0.2 * inch))
+                            
+                            num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
+                            story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
+                            story_l.append(Spacer(1, 1.5 * inch))
+                            
+                            tabla_base = Table([
+                                [Paragraph("CÓDIGO DE IDENTIFICACIÓN:", style_normal_bold), Paragraph(str(t_imp), style_normal_text)],
+                                [Paragraph("OPERADOR DE PLANTA:", style_normal_bold), Paragraph(str(op_nom), style_normal_text)],
+                                [Paragraph("FECHA DE EMISIÓN:", style_normal_bold), Paragraph(str(fe_cre), style_normal_text)]
+                            ], colWidths=[2.5 * inch, 5.0 * inch])
+                            tabla_base.setStyle(TableStyle([
+                                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                                ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor("#E0E0E0")),
+                                ('BOTTOMPADDING', (0,0), (-1,-1), 6)
+                            ]))
+                            story_l.append(tabla_base)
+                            story_l.append(PageBreak())
+                            
+                            # HOJA 2: DETALLE DE MATERIALES ASOCIADOS
+                            story_l.append(Spacer(1, 0.1 * inch))
+                            story_l.append(Paragraph(f"<b>DETALLE DE MATERIALES ASOCIADOS - CONTROL #{t_imp}</b>", styles['Heading2']))
+                            story_l.append(Spacer(1, 0.2 * inch))
+                            
+                            tabla_detalles = [[
+                                Paragraph("ORDEN (PO)", style_blanco_bold),
+                                Paragraph("SKU / PRODUCTO", style_blanco_bold),
+                                Paragraph("DESCRIPCIÓN COMERCIAL", style_blanco_bold),
+                                Paragraph("CANTIDAD", style_blanco_bold)
+                            ]]
+                            
+                            for _, item in det.iterrows():
+                                art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
+                                art_nom = art.iloc[0]['Nombre'] if not art.empty else "Articulo No Registrado en BD Remisiones"
+                                
+                                tabla_detalles.append([
+                                    Paragraph(str(item['PO']), style_normal_text),
+                                    Paragraph(str(item['SKU']), style_normal_text),
+                                    Paragraph(str(art_nom), style_normal_text),
+                                    Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
+                                ])
+                                
+                            t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
+                            t_grid.setStyle(TableStyle([
+                                ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")),
+                                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")),
+                                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                                ('TOPPADDING', (0,0), (-1,-1), 6),
+                                ('BOTTOMPADDING', (0,0), (-1,-1), 6)
+                            ]))
+                            story_l.append(t_grid)
+                            
+                            doc.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+                            buf.seek(0)
+                            return buf
+
+                        # 3. Compilamos el PDF de reporte pasándole sus parámetros obligatorios
                         pdf_datos_compilados = generar_pdf_reporte_filtrado(filtros_simulados, df_tarima_individual)
                         
                         if hasattr(pdf_datos_compilados, 'getvalue'):
                             pdf_bytes_listos = pdf_datos_compilados.getvalue()
                         else:
                             pdf_bytes_listos = pdf_datos_compilados
+                            
+                        # 4. Generamos el PDF de etiqueta unificada de 2 hojas para esta tarima
+                        pdf_etiqueta_bytes = generar_pdf_etiqueta_tarima_individual(id_tarima_limpio).getvalue()
         
-                        # 4. Mostramos el botón de descarga oficial en la interfaz
-                        st.download_button(
-                            label=f"📄 Descargar PDF Tarima {id_tarima_limpio}",
-                            data=pdf_bytes_listos,
-                            file_name=f"TAR_Lote_de_Tarimas_Separado_{id_tarima_limpio}.pdf",
-                            mime="application/pdf",
-                            key=f"btn_descarga_maestra_tarima_ind_{id_tarima_limpio}"
-                        )
+                        col_btns1, col_btns2 = st.columns(2)
+                        with col_btns1:
+                            st.download_button(
+                                label=f"📄 Descargar Reporte PDF (FO-MET-11)",
+                                data=pdf_bytes_listos,
+                                file_name=f"TAR_Reporte_Inventario_{id_tarima_limpio}.pdf",
+                                mime="application/pdf",
+                                key=f"btn_descarga_maestra_tarima_ind_{id_tarima_limpio}"
+                            )
+                        with col_btns2:
+                            st.download_button(
+                                label=f"🖨️ Descargar Etiqueta PDF (2 Hojas)",
+                                data=pdf_etiqueta_bytes,
+                                file_name=f"TAR_Etiqueta_Identificacion_{id_tarima_limpio}.pdf",
+                                mime="application/pdf",
+                                key=f"btn_descarga_etiqueta_ind_{id_tarima_limpio}"
+                            )
                     except Exception as e:
                         st.error(f"⚠️ Error al procesar el diseño de ReportLab para la tarima {id_tarima_limpio}: {e}")
 
@@ -1102,9 +1297,23 @@ elif opcion_menu == "🚚 Módulo Remisiones":
         st.write("---")
         st.subheader("📋 Descarga Documental de Remisiones")
         
+        # Obtener folios únicos y ordenarlos descendentemente por su valor numérico
+        def extract_folio_num(folio_str):
+            import re
+            numeros = re.findall(r'\d+', str(folio_str))
+            if numeros:
+                return int(numeros[-1])
+            return 0
+
+        folios_disponibles = sorted(
+            st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique(),
+            key=extract_folio_num,
+            reverse=True
+        )
+
         r_sel = st.selectbox(
             "Seleccione Folio para Descarga:", 
-            st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique(), 
+            options=folios_disponibles, 
             key="rem_download_folio_sel"
         )
         
@@ -1238,25 +1447,25 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
 
 
 
-    # --- SUB-MÓDULO 1: MODIFICACIÓN DIRECTA DE CANTIDADES DE MATERIALES ---
+    # --- SUB-MÓDULO 1: MODIFICACIÓN DIRECTA DE DETALLES DE INVENTARIO ---
     with tab1:
         st.subheader("✏️ Edición Rápida de Inventario (Detalle Tarimas)")
         if not st.session_state.BD_Detalle_Tarimas.empty:
-            st.markdown("Haga doble clic sobre la celda de la columna **Cantidad** para corregir errores de dedo:")
+            st.markdown("Haga doble clic sobre cualquier celda permitida (**SKU, PO, Parcialidad, Descripcion o Cantidad**) para corregir errores:")
             
-            # Editor interactivo tipo Excel bloqueando llaves relacionales para evitar inconsistencias
+            # Editor interactivo bloqueando únicamente llaves primarias y relacionales del sistema
             df_editable = st.data_editor(
                 st.session_state.BD_Detalle_Tarimas, 
                 use_container_width=True, 
-                disabled=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion"], 
+                disabled=["ID_Detalle", "ID_Tarima", "Proyecto"], 
                 hide_index=True, 
                 key="editor_mantenimiento_cantidades_final"
             )
             
-            if st.button("💾 Guardar Cambios de Cantidades en GitHub"):
+            if st.button("💾 Guardar Cambios de Inventario en GitHub"):
                 st.session_state.BD_Detalle_Tarimas = df_editable
                 subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
-                st.success("✅ ¡Cantidades corregidas y sincronizadas con éxito en el repositorio!"); st.rerun()
+                st.success("✅ ¡Inventario corregido y sincronizado con éxito!"); st.rerun()
         else: 
             st.info("No existen registros en el desglose de inventario para modificar.")
 # =============================================================================
@@ -1342,6 +1551,13 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
                     subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
+                    import os
+                    if os.path.exists("consecutivo_override.txt"):
+                        try:
+                            os.remove("consecutivo_override.txt")
+                        except Exception:
+                            pass
+                    st.session_state["siguiente_numero_tpm"] = 1
                     st.success("💥 Sistema purgado por completo a ceros de forma masiva."); st.rerun()
         else:
             st.markdown("### 📦 1. Eliminar Tarimas del Inventario")
@@ -1350,12 +1566,16 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 sel_tarimas = st.dataframe(df_tar_vista, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_tarimas_final_f")
                 filas_tar = sel_tarimas.get("selection", {}).get("rows", [])
                 if filas_tar:
-                    ids_tar_eliminar = st.session_state.BD_Tarimas.iloc[filas_tar]['ID_Tarima'].tolist()
-                    if st.button("🗑️ Eliminar Tarimas Seleccionadas"):
+                    # Filtrar índices válidos para evitar errores de desfase de Streamlit en la recarga
+                    filas_tar_validas = [i for i in filas_tar if i < len(df_tar_vista)]
+                    ids_tar_eliminar = df_tar_vista.iloc[filas_tar_validas]['ID_Tarima'].tolist() if filas_tar_validas else []
+                    
+                    if st.button("🗑️ Eliminar Tarimas Seleccionadas") and ids_tar_eliminar:
                         st.session_state.BD_Tarimas = st.session_state.BD_Tarimas[~st.session_state.BD_Tarimas['ID_Tarima'].isin(ids_tar_eliminar)]
                         st.session_state.BD_Detalle_Tarimas = st.session_state.BD_Detalle_Tarimas[~st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(ids_tar_eliminar)]
                         subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                         subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
+                        st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
                         st.success("✅ Tarimas removidas."); st.rerun()
             else: st.write("No hay tarimas registradas.")
             
@@ -1365,10 +1585,18 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 sel_remisiones = st.dataframe(st.session_state.BD_Datos_Generales_Remision, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_remisiones_final_f")
                 filas_rem = sel_remisiones.get("selection", {}).get("rows", [])
                 if filas_rem:
-                    ids_rem_eliminar = st.session_state.BD_Datos_Generales_Remision.iloc[filas_rem]['Folio_Remision'].tolist()
-                    tarimas_afectadas = []
-                    for idx in filas_rem: tarimas_afectadas.extend(st.session_state.BD_Datos_Generales_Remision.iloc[idx]['Tarimas_Asociadas'])
-                    if st.button("🗑️ Eliminar Remisiones Seleccionadas"):
+                    # Filtrar índices válidos para evitar errores de desfase de Streamlit en la recarga
+                    filas_rem_validas = [i for i in filas_rem if i < len(st.session_state.BD_Datos_Generales_Remision)]
+                    if filas_rem_validas:
+                        ids_rem_eliminar = st.session_state.BD_Datos_Generales_Remision.iloc[filas_rem_validas]['Folio_Remision'].tolist()
+                        tarimas_afectadas = []
+                        for idx in filas_rem_validas:
+                            tarimas_afectadas.extend(st.session_state.BD_Datos_Generales_Remision.iloc[idx]['Tarimas_Asociadas'])
+                    else:
+                        ids_rem_eliminar = []
+                        tarimas_afectadas = []
+
+                    if st.button("🗑️ Eliminar Remisiones Seleccionadas") and ids_rem_eliminar:
                         st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(tarimas_afectadas), 'Estatus'] = 'Disponible'
                         st.session_state.BD_Datos_Generales_Remision = st.session_state.BD_Datos_Generales_Remision[~st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].isin(ids_rem_eliminar)]
                         subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
@@ -1531,8 +1759,8 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             st.write("##### 🔢 Inicializar o Cambiar Consecutivo de Tarimas (TPM)")
             st.info("💡 **Guía de uso:** Defina el número numérico en el que desea que continúe la siguiente tarima que genere el sistema (Ejemplo: Si pone 56, la siguiente será TPM-0056).")
     
-            if "siguiente_numero_tpm" not in st.session_state:
-                st.session_state["siguiente_numero_tpm"] = 36
+            if "siguiente_numero_tpm" not in st.session_state or st.session_state["siguiente_numero_tpm"] is None:
+                st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
     
             nuevo_consecutivo = st.number_input(
                 "Indique el siguiente número de folio a generar:",
@@ -1541,18 +1769,36 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 step=1, key="input_consecutivo_manual_tpm"
             )
     
-            if st.button("💾 Guardar Nuevo Consecutivo de Folio", use_container_width=True):
-                st.session_state["siguiente_numero_tpm"] = nuevo_consecutivo
-                st.success(f"💥 ¡Consecutivo actualizado! La próxima tarima nueva se creará con el folio: **TPM-{nuevo_consecutivo:04d}**")
-                st.rerun()
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("💾 Guardar Nuevo Consecutivo de Folio", use_container_width=True):
+                    st.session_state["siguiente_numero_tpm"] = nuevo_consecutivo
+                    try:
+                        with open("consecutivo_override.txt", "w", encoding="utf-8") as f:
+                            f.write(str(nuevo_consecutivo))
+                    except Exception as e:
+                        st.warning(f"⚠️ No se pudo guardar el consecutivo en disco: {e}")
+                    st.success(f"💥 ¡Consecutivo actualizado! La próxima tarima nueva se creará con el folio: **TPM-{nuevo_consecutivo:04d}**")
+                    st.rerun()
+            with col_btn2:
+                if st.button("🔄 Restablecer a Consecutivo Automático", use_container_width=True):
+                    import os
+                    if os.path.exists("consecutivo_override.txt"):
+                        try:
+                            os.remove("consecutivo_override.txt")
+                        except Exception:
+                            pass
+                    st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
+                    st.success("🔄 Restablecido al siguiente consecutivo automático de la base de datos.")
+                    st.rerun()
     except NameError:
         # Si tab5 no existe, desplegamos un contenedor nativo expandible para que no rompa la aplicación
         with st.expander("🔢 Contador y Consecutivo de Tarimas (TPM)", expanded=True):
             st.write("##### 🔢 Inicializar o Cambiar Consecutivo de Tarimas (TPM)")
             st.info("💡 **Guía de uso:** Defina el número numérico en el que desea que continúe la siguiente tarima que genere el sistema (Ejemplo: Si pone 56, la siguiente será TPM-0056).")
     
-            if "siguiente_numero_tpm" not in st.session_state:
-                st.session_state["siguiente_numero_tpm"] = 36
+            if "siguiente_numero_tpm" not in st.session_state or st.session_state["siguiente_numero_tpm"] is None:
+                st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
     
             nuevo_consecutivo = st.number_input(
                 "Indique el siguiente número de folio a generar:",
@@ -1561,8 +1807,26 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 step=1, key="input_consecutivo_manual_tpm_fallback"
             )
     
-            if st.button("💾 Guardar Nuevo Consecutivo de Folio ", use_container_width=True):
-                st.session_state["siguiente_numero_tpm"] = nuevo_consecutivo
-                st.success(f"💥 ¡Consecutivo actualizado! La próxima tarima nueva se creará con el folio: **TPM-{nuevo_consecutivo:04d}**")
-                st.rerun()
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("💾 Guardar Nuevo Consecutivo de Folio ", use_container_width=True):
+                    st.session_state["siguiente_numero_tpm"] = nuevo_consecutivo
+                    try:
+                        with open("consecutivo_override.txt", "w", encoding="utf-8") as f:
+                            f.write(str(nuevo_consecutivo))
+                    except Exception as e:
+                        st.warning(f"⚠️ No se pudo guardar el consecutivo en disco: {e}")
+                    st.success(f"💥 ¡Consecutivo actualizado! La próxima tarima nueva se creará con el folio: **TPM-{nuevo_consecutivo:04d}**")
+                    st.rerun()
+            with col_btn2:
+                if st.button("🔄 Restablecer a Consecutivo Automático ", use_container_width=True):
+                    import os
+                    if os.path.exists("consecutivo_override.txt"):
+                        try:
+                            os.remove("consecutivo_override.txt")
+                        except Exception:
+                            pass
+                    st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
+                    st.success("🔄 Restablecido al siguiente consecutivo automático de la base de datos.")
+                    st.rerun()
     
