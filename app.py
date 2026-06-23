@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 import pandas as pd
 import datetime
 import io
@@ -12,7 +13,186 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 
 # 1. CONFIGURACIÓN E INTERFAZ BASE RESPONSIVA
-st.set_page_config(page_title="Remisiones de Materiales", layout="wide", page_icon="📦")
+st.set_page_config(
+    page_title="Remisiones de Materiales",
+    layout="wide",
+    page_icon="favicon.png" if os.path.exists("favicon.png") else "📦"
+)
+
+# Inyectar CSS de Imagen Corporativa Oficial (Industria SIGRAMA)
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&family=Questrial&display=swap');
+
+    /* Fuentes globales */
+    html, body, [class*="css"], .stApp {
+        font-family: 'Questrial', sans-serif !important;
+        background-color: #FFFFFF !important;
+    }
+
+    h1, h2, h3, h4, h5, h6, .main-title {
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 700 !important;
+        color: #111111 !important;
+    }
+
+    /* Barra lateral corporativa en Negro profundo #111111 */
+    [data-testid="stSidebar"] {
+        background-color: #111111 !important;
+        border-right: 1px solid #1E293B !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p, 
+    [data-testid="stSidebar"] span, 
+    [data-testid="stSidebar"] label {
+        color: #FFFFFF !important;
+        font-family: 'Questrial', sans-serif !important;
+    }
+    
+    /* Logo negativo en sidebar */
+    [data-testid="stSidebar"] img {
+        filter: grayscale(1) invert(1) brightness(1.2) contrast(1.2) !important;
+    }
+
+    /* Botones de navegación en barra lateral */
+    [data-testid="stSidebar"] div[role="radiogroup"] label {
+        color: #FFFFFF !important;
+        font-size: 14px !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+        color: #EC2024 !important;
+    }
+
+    /* Estilos para inputs de contraseña en barra lateral */
+    [data-testid="stSidebar"] input {
+        background-color: #1E293B !important;
+        color: #FFFFFF !important;
+        border-color: #334155 !important;
+    }
+    [data-testid="stSidebar"] input:focus {
+        border-color: #EC2024 !important;
+    }
+
+    /* Estilo de Botones Oficiales - Rojo Corporativo #EC2024 */
+    div.stButton > button,
+    div.stDownloadButton > button,
+    div.stFormSubmitButton > button,
+    button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]),
+    button[data-testid="baseButton-primary"]:not([role="tab"]):not([data-baseweb="tab"]),
+    button[kind="secondary"]:not([role="tab"]):not([data-baseweb="tab"]),
+    button[kind="primary"]:not([role="tab"]):not([data-baseweb="tab"]) {
+        background-color: #EC2024 !important;
+        color: #FFFFFF !important;
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 700 !important;
+        border-radius: 4px !important;
+        border: 1px solid #EC2024 !important;
+        padding: 8px 20px !important;
+        transition: all 0.3s ease !important;
+        text-transform: uppercase;
+        font-size: 13px !important;
+    }
+    div.stButton > button:hover,
+    div.stDownloadButton > button:hover,
+    div.stFormSubmitButton > button:hover,
+    button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
+    button[data-testid="baseButton-primary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
+    button[kind="secondary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
+    button[kind="primary"]:not([role="tab"]):not([data-baseweb="tab"]):hover {
+        background-color: #FFFFFF !important;
+        color: #EC2024 !important;
+        border: 1px solid #EC2024 !important;
+        box-shadow: 0 4px 12px rgba(236, 32, 36, 0.15) !important;
+    }
+
+    /* Tarjetas de Métricas */
+    [data-testid="metric-container"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #D2D3D5 !important;
+        border-left: 5px solid #EC2024 !important;
+        border-radius: 4px !important;
+        padding: 12px 18px !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+    }
+    [data-testid="metric-container"] label {
+        font-family: 'Montserrat', sans-serif !important;
+        color: #111111 !important;
+        font-weight: 500 !important;
+    }
+    [data-testid="metric-container"] div[data-testid="stMetricValue"] {
+        font-family: 'Montserrat', sans-serif !important;
+        color: #EC2024 !important;
+        font-weight: 700 !important;
+    }
+    
+    /* Configuración del Editor de Datos y Tablas */
+    .stTable header, th {
+        background-color: #111111 !important;
+        color: #FFFFFF !important;
+        font-family: 'Montserrat', sans-serif !important;
+    }
+    
+    /* Inputs y Selectores */
+    div[data-baseweb="input"], div[data-baseweb="select"], textarea {
+        border-color: #D2D3D5 !important;
+        border-radius: 4px !important;
+    }
+    div[data-baseweb="input"]:focus-within, div[data-baseweb="select"]:focus-within {
+        border-color: #EC2024 !important;
+    }
+
+    /* Estilo de las pestañas */
+    button[role="tab"] {
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: bold !important;
+        color: #111111 !important;
+    }
+    
+    button[role="tab"][aria-selected="true"] {
+        color: #EC2024 !important;
+        border-bottom-color: #EC2024 !important;
+    }
+
+    /* Reset del File Uploader para encajar en el estilo secundario */
+    [data-testid="stFileUploader"] button,
+    .stFileUploader button {
+        background-color: #FFFFFF !important;
+        color: #111111 !important;
+        border: 1px solid #D2D3D5 !important;
+        border-radius: 4px !important;
+        padding: 6px 12px !important;
+        font-weight: 500 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+    
+    [data-testid="stFileUploader"] button *,
+    .stFileUploader button * {
+        background-color: transparent !important;
+        color: #111111 !important;
+    }
+    
+    [data-testid="stFileUploader"] button:hover,
+    .stFileUploader button:hover {
+        background-color: #F8F9FA !important;
+        border-color: #EC2024 !important;
+        color: #EC2024 !important;
+    }
+    
+    [data-testid="stFileUploader"] button:hover *,
+    .stFileUploader button:hover * {
+        color: #EC2024 !important;
+    }
+
+    .report-card {
+        background-color: #FFFFFF;
+        border: 1px solid #D2D3D5;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Renderizado de Banner Corporativo Adaptable
 try:
@@ -20,7 +200,10 @@ try:
     st.image(banner_img, use_container_width=True)
 except FileNotFoundError:
     st.warning("⚠️ Cargando interfaz gráfica del banner superior corporativo...")
-st.write("")
+
+# Slogan de Resultados / Transformación Principal
+st.markdown('<p style="text-align: center; font-size: 16px; font-weight: bold; color: #EC2024; font-family: \'Montserrat\', sans-serif; margin-top: 15px; text-transform: uppercase; letter-spacing: 1px;">SOLUCIONES QUE TRANSFORMAN TU EMPRESA</p>', unsafe_allow_html=True)
+st.markdown('<hr style="border: 1px solid #EC2024; margin: 15px 0;">', unsafe_allow_html=True)
 
 # =============================================================================
 # 2. MOTOR DE PERSISTENCIA CERTIFICADO (CONEXIÓN UNIFICADA POR API GITHUB)
@@ -536,6 +719,9 @@ def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
 # =============================================================================
 # 8. CAPA DE CONTROL DE ACCESOS Y ENRUTAMIENTO DE NAVEGACIÓN
 # =============================================================================
+if os.path.exists("logo_sigrama.png"):
+    st.sidebar.image("logo_sigrama.png", use_container_width=True)
+
 st.sidebar.title("🔐 Control de Acceso")
 admin_pass_input = st.sidebar.text_input("Contraseña Administrador:", type="password")
 
@@ -574,6 +760,15 @@ if is_super:
     lista_modulos.append("⚙️ Mantenimiento y Catálogos")
 
 opcion_menu = st.sidebar.radio("Seleccione un Módulo:", lista_modulos)
+
+# Slogan de Resultados en el Cierre de la Barra Lateral
+st.sidebar.markdown("""
+    <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #D2D3D5;">
+        <span style="font-family: 'Questrial', sans-serif; font-style: italic; font-size: 13px; color: #FFFFFF; border-bottom: 2px solid #EC2024; padding-bottom: 4px; display: inline-block;">
+            Ingeniería que da resultados!!
+        </span>
+    </div>
+""", unsafe_allow_html=True)
 
 # =============================================================================
 # 9. INTERFAZ DE USUARIO: DASHBOARD (CON AUTOREPARACIÓN EN CALIENTE)
