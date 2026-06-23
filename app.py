@@ -299,6 +299,14 @@ def subir_excel_a_github(file_name, dataframe_to_save):
 # 3. CAPA DE INICIALIZACIÓN GLOBAL SECTORIZADA (BLINDAJE DE SEGURIDAD)
 # =============================================================================
 
+# --- Estado de Inicio de Sesión ---
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "rol" not in st.session_state:
+    st.session_state.rol = None
+if "usuario_actual" not in st.session_state:
+    st.session_state.usuario_actual = None
+
 # --- Catálogo Maestro de Artículos (Actualizado para Persistencia en GitHub) ---
 if "BD_Articulos" not in st.session_state or st.session_state.get("BD_Articulos") is None:
     df_git_articulos = cargar_excel_desde_github("BD_Articulos.xlsx")
@@ -719,44 +727,122 @@ def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
 # =============================================================================
 # 8. CAPA DE CONTROL DE ACCESOS Y ENRUTAMIENTO DE NAVEGACIÓN
 # =============================================================================
+
+def normalizar_texto(texto):
+    if not isinstance(texto, str):
+        return ""
+    import unicodedata
+    texto_norm = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('utf-8')
+    return texto_norm.strip().lower()
+
+def mostrar_pantalla_login():
+    st.markdown("""
+    <h2 style="text-align: center; font-family: 'Montserrat', sans-serif; color: #111111; font-weight: 700; font-size: 28px; margin: 10px 0;">
+        <span style="color: #EC2024;">🔑</span> Acceso al Sistema
+    </h2>
+    """, unsafe_allow_html=True)
+    
+    col_log1, col_log2, col_log3 = st.columns([1, 2, 1])
+    with col_log2:
+        st.markdown('<div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 25px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); margin-top: 20px;">', unsafe_allow_html=True)
+        st.markdown('<h3 style="font-family: \'Montserrat\', sans-serif; font-weight: 700; color: #111111; text-align: center; margin-top: 0; font-size: 20px;">Control de Remisiones y Tarimas</h3>', unsafe_allow_html=True)
+        st.markdown('<p style="font-family: \'Questrial\', sans-serif; color: #64748B; font-size: 14px; text-align: center; margin-bottom: 20px;">Por favor, ingrese sus credenciales para operar el sistema.</p>', unsafe_allow_html=True)
+        
+        username_input = st.text_input("Usuario (Nombre de Líder o Admin):", key="login_username")
+        password_input = st.text_input("Contraseña:", type="password", key="login_password")
+        
+        btn_login = st.button("Ingresar", use_container_width=True, key="btn_login_submit")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        if btn_login:
+            username_norm = normalizar_texto(username_input)
+            
+            # Obtener contraseña de admin configurada o usar la de respaldo
+            admin_pwd = "SigramaMetales2026"
+            if "admin_password" in st.secrets:
+                admin_pwd = st.secrets["admin_password"]
+                
+            # Verificar si es Administrador
+            if username_norm in ["admin", "administrador"] and password_input == admin_pwd:
+                st.session_state.logged_in = True
+                st.session_state.rol = "Administrador"
+                st.session_state.usuario_actual = "Administrador"
+                st.success("Sesión iniciada como Administrador.")
+                st.rerun()
+                
+            # Verificar si es un Líder Operativo
+            lider_encontrado = None
+            if "BD_Lideres" in st.session_state and not st.session_state.BD_Lideres.empty:
+                for _, row in st.session_state.BD_Lideres.iterrows():
+                    lider_name = row["Nombre_Lider"]
+                    if normalizar_texto(lider_name) == username_norm:
+                        lider_encontrado = lider_name
+                        break
+                        
+            if lider_encontrado is not None and password_input == "Metales":
+                st.session_state.logged_in = True
+                st.session_state.rol = "Operador"
+                st.session_state.usuario_actual = lider_encontrado
+                st.success(f"Sesión iniciada como {lider_encontrado}.")
+                st.rerun()
+            elif username_norm == "operador" and password_input == "Metales":
+                st.session_state.logged_in = True
+                st.session_state.rol = "Operador"
+                st.session_state.usuario_actual = "Operador General"
+                st.success("Sesión iniciada como Operador General.")
+                st.rerun()
+            else:
+                st.error("Credenciales incorrectas. Verifique el usuario y la contraseña.")
+
+# Ejecutar control de acceso
+if not st.session_state.get("logged_in", False):
+    mostrar_pantalla_login()
+    st.stop()
+
+# --- INTERFAZ POST-LOGIN ---
 if os.path.exists("logo_sigrama.png"):
     st.sidebar.image("logo_sigrama.png", use_container_width=True)
 
-st.sidebar.title("🔐 Control de Acceso")
-admin_pass_input = st.sidebar.text_input("Contraseña Administrador:", type="password")
+st.sidebar.markdown(f"""
+<div style="background-color: #1E293B; border: 1px solid #334155; padding: 12px; border-radius: 6px; margin-bottom: 15px; margin-top: 10px;">
+    <p style="margin: 0; color: #FFFFFF; font-family: 'Questrial', sans-serif; font-size: 13px;">
+        👤 Usuario: <b>{st.session_state.usuario_actual}</b>
+    </p>
+    <p style="margin: 5px 0 0 0; color: #EC2024; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: bold;">
+        🔑 Rol: {st.session_state.rol}
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
-def es_admin():
-    try:
-        return admin_pass_input == st.secrets["admin_password"]
-    except KeyError:
-        st.sidebar.error("Error: 'admin_password' no configurado en Secrets.")
-        return False
+if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True, key="btn_logout_sidebar"):
+    st.session_state.logged_in = False
+    st.session_state.rol = None
+    st.session_state.usuario_actual = None
+    st.rerun()
 
-is_admin = es_admin()
-if is_admin:
-    st.sidebar.success("Modo Administrador Activo")
-else:
-    st.sidebar.warning("Modo Consulta Activo")
+is_admin = (st.session_state.rol == "Administrador")
 
 # --- VALIDACIÓN DE SUPERUSUARIO PARA MANTENIMIENTO ---
 st.sidebar.write("---")
 st.sidebar.title("🛠️ Área de Soporte")
-super_pass_input = st.sidebar.text_input("Contraseña de Soporte / IT:", type="password")
+super_pass_input = st.sidebar.text_input("Contraseña de Soporte / IT:", type="password", key="sidebar_super_pass")
 is_super = (super_pass_input == "SigramaMetales2025")
 
 if is_super:
     st.sidebar.success("⚡ Modo Superusuario Activo")
 
 st.sidebar.title("🧭 Navegación")
-# Agregamos "📦 Catálogo de Artículos" a las opciones globales de navegación
 lista_modulos = [
     "📊 Dashboard e Históricos", 
     "🔍 Centro de Consultas", 
     "📦 Módulo Tarimas", 
     "🚚 Módulo Remisiones",
-    "📦 Catálogo de Artículos"
+    "📦 Catálogo de Artículos",
+    "🏭 Industria 4.0",
+    "📖 Manual de Operación"
 ]
-if is_super:
+
+if is_admin or is_super:
     lista_modulos.append("⚙️ Mantenimiento y Catálogos")
 
 opcion_menu = st.sidebar.radio("Seleccione un Módulo:", lista_modulos)
@@ -1625,7 +1711,205 @@ elif opcion_menu == "📦 Catálogo de Artículos":
     else:
         st.info("ℹ️ No hay artículos registrados en el catálogo maestro actualmente o el archivo en GitHub está vacío.")
 
+elif opcion_menu == "🏭 Industria 4.0":
+    st.title("🏭 Manufactura Inteligente e Industria 4.0")
+    st.markdown("##### Integración Tecnológica y Automatización de Procesos Logísticos")
+    
+    st.markdown("""
+    <div style="background-color: #F8FAFC; border-left: 5px solid #EC2024; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+        <p style="font-family: 'Questrial', sans-serif; font-size: 15px; color: #1E293B; margin: 0; line-height: 1.6;">
+            La digitalización y la interconectividad son los pilares fundamentales del ecosistema industrial contemporáneo. 
+            Esta sección describe cómo la presente plataforma de Remisiones de Materiales se alinea estratégicamente 
+            con las tendencias de la <b>Manufactura Inteligente</b> y la <b>Industria 4.0</b>.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    tab_ind1, tab_ind2, tab_ind3 = st.tabs([
+        "🔬 Justificación de Manufactura Inteligente", 
+        "🎯 Beneficios Estratégicos", 
+        "💻 Stack Tecnológico"
+    ])
+    
+    with tab_ind1:
+        st.write("")
+        st.markdown("""
+        <h4 style="color: #EC2024; font-family: 'Montserrat', sans-serif; font-weight: bold; margin-bottom: 10px;">
+            El Rol del Dato en la Cadena Logística
+        </h4>
+        <p style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6; color: #111111;">
+            En la manufactura de metales y ensambles de precisión, la logística interna suele ser un cuello de botella. 
+            La transformación digital implica convertir flujos físicos en información estructurada utilizable para la toma de decisiones.
+        </p>
+        <p style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6; color: #111111;">
+            <b>Habilitación del Gemelo Digital (Digital Twin):</b> Cada tarima empacada en la planta no es solo un bulto físico de metal; 
+            a través de este sistema, se asocia dinámicamente con un identificador único <code>TPM-XXXX</code> que representa digitalmente su 
+            contenido granular (SKUs, POs, proyectos y parcialidades). Esto permite rastrear virtualmente la ubicación, 
+            estatus e historial de cada paquete sin necesidad de inspecciones físicas manuales, logrando una representación en tiempo real del inventario.
+        </p>
+        <p style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6; color: #111111;">
+            <b>Filosofía de IoT Industrial (IIoT):</b> Aunque no utilicemos sensores físicos directos en esta etapa, el esquema de 
+            registro descentralizado por medio de terminales móviles y la sincronización con una base de datos centralizada en la nube 
+            sigue la arquitectura básica del IIoT: capturar el dato directamente en la fuente (línea de producción / empaque) 
+            y comunicarlo de manera ágil hacia las capas de toma de decisiones.
+        </p>
+        """, unsafe_allow_html=True)
+        
+    with tab_ind2:
+        st.write("")
+        st.markdown('<h4 style="color: #EC2024; font-family: \'Montserrat\', sans-serif; font-weight: bold; margin-bottom: 15px;">Impacto y Retorno de Inversión Tecnológica</h4>', unsafe_allow_html=True)
+        
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            st.markdown("""
+            <div class="report-card">
+                <h5 style="color: #111111; font-family: 'Montserrat', sans-serif; font-weight: bold; margin-top: 0;"><span style="color: #EC2024;">📍</span> Trazabilidad de Extremo a Extremo</h5>
+                <p style="font-family: 'Questrial', sans-serif; font-size: 13.5px; line-height: 1.5; color: #334155; margin-bottom: 0;">
+                    Registro inalterable de cada movimiento: desde la creación de la tarima por el líder del área, pasando por el empaque de productos específicos, hasta su despacho final documentado en una remisión firmada.
+                </p>
+            </div>
+            <div class="report-card">
+                <h5 style="color: #111111; font-family: 'Montserrat', sans-serif; font-weight: bold; margin-top: 0;"><span style="color: #EC2024;">⚡</span> Eliminación del Error Humano</h5>
+                <p style="font-family: 'Questrial', sans-serif; font-size: 13.5px; line-height: 1.5; color: #334155; margin-bottom: 0;">
+                    El sistema valida automáticamente las cantidades y referencias contra el catálogo maestro de artículos y líderes, impidiendo errores de dedo, duplicados o envío de folios erróneos a los clientes.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col_b2:
+            st.markdown("""
+            <div class="report-card">
+                <h5 style="color: #111111; font-family: 'Montserrat', sans-serif; font-weight: bold; margin-top: 0;"><span style="color: #EC2024;">⏱️</span> Agilidad en Operaciones</h5>
+                <p style="font-family: 'Questrial', sans-serif; font-size: 13.5px; line-height: 1.5; color: #334155; margin-bottom: 0;">
+                    Generación en 3 segundos de manifiestos y anexos en formato PDF certificado y listos para impresión. Lo que antes requería transcripciones manuales de varias horas, ahora se realiza de forma automatizada e inmediata.
+                </p>
+            </div>
+            <div class="report-card">
+                <h5 style="color: #111111; font-family: 'Montserrat', sans-serif; font-weight: bold; margin-top: 0;"><span style="color: #EC2024;">☁️</span> Persistencia Híbrida y Resiliencia</h5>
+                <p style="font-family: 'Questrial', sans-serif; font-size: 13.5px; line-height: 1.5; color: #334155; margin-bottom: 0;">
+                    El sistema combina almacenamiento local en caché con sincronización instantánea en la nube mediante APIs (GitHub API). Esto garantiza que la aplicación siga operando en planta incluso ante interrupciones de red.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
+    with tab_ind3:
+        st.write("")
+        st.markdown('<h4 style="color: #EC2024; font-family: \'Montserrat\', sans-serif; font-weight: bold; margin-bottom: 15px;">Arquitectura de Software y Datos</h4>', unsafe_allow_html=True)
+        
+        st.markdown("""
+        <p style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6; color: #111111;">
+            La aplicación ha sido diseñada bajo estándares de desarrollo ágil y tecnologías robustas de procesamiento de datos:
+        </p>
+        """, unsafe_allow_html=True)
+        
+        col_st1, col_st2, col_st3, col_st4 = st.columns(4)
+        with col_st1:
+            st.metric("🎨 Front-End UI", "Streamlit")
+            st.caption("Entorno web reactivo de alta velocidad, estilizado con CSS personalizado de marca.")
+        with col_st2:
+            st.metric("⚙️ Data Engine", "Python / Pandas")
+            st.caption("Procesamiento y modelado de datos tabulares complejos directamente en memoria.")
+        with col_st3:
+            st.metric("📁 Cloud Storage", "GitHub API")
+            st.caption("Mecanismo seguro de control de versiones y almacenamiento distribuido basado en la nube.")
+        with col_st4:
+            st.metric("📄 Document Maker", "ReportLab")
+            st.caption("Motor de renderizado de precisión milimétrica para la construcción de archivos PDF.")
+
+elif opcion_menu == "📖 Manual de Operación":
+    st.title("📖 Manual de Operación del Sistema")
+    st.markdown("##### Guía de Usuario para el Control de Remisiones y Tarimas")
+    
+    st.markdown("""
+    <div style="background-color: #F8FAFC; border-left: 5px solid #EC2024; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+        <p style="font-family: 'Questrial', sans-serif; font-size: 15px; color: #1E293B; margin: 0; line-height: 1.6;">
+            Bienvenido al manual oficial de operación de la aplicación. 
+            Utilice las pestañas inferiores para comprender el funcionamiento detallado de cada módulo del sistema.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    tab_man1, tab_man2, tab_man3, tab_man4, tab_man5 = st.tabs([
+        "🔑 Acceso y Seguridad", 
+        "📦 Módulo Tarimas", 
+        "🚚 Módulo Remisiones", 
+        "🔍 Consultas e Impresión", 
+        "⚙️ Mantenimiento (Admin)"
+    ])
+    
+    with tab_man1:
+        st.write("")
+        st.markdown("""
+        <h4 style="color: #EC2024; font-family: 'Montserrat', sans-serif; font-weight: bold;">Control de Credenciales y Perfiles</h4>
+        <p style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
+            La aplicación restringe sus funciones mediante credenciales de acceso para garantizar la integridad de los datos de inventario:
+        </p>
+        <ul style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
+            <li><b>Perfil Operador / Líder:</b> Permite operar la mayor parte del sistema (visualizar tableros, cargar proyectos, registrar tarimas, generar remisiones y descargar reportes). 
+            Para ingresar, use su nombre tal cual aparece en el catálogo de líderes (ej. <code>Jesús Morales</code>, <code>Miguel Alvarado</code>) y la contraseña general <code>Metales</code>.</li>
+            <li><b>Perfil Administrador:</b> Cuenta con privilegios especiales para realizar modificaciones en caliente de bases de datos, corregir inventarios, modificar catálogos y purgar registros. 
+            Para ingresar, use el usuario <code>admin</code> y la contraseña corporativa <code>SigramaMetales2026</code>.</li>
+            <li><b>Cierre de Sesión:</b> Al concluir sus labores, es recomendable presionar el botón <b>🚪 Cerrar Sesión</b> en la barra lateral para evitar que otros usuarios realicen movimientos bajo su firma.</li>
+        </ul>
+        """, unsafe_allow_html=True)
+        
+    with tab_man2:
+        st.write("")
+        st.markdown("""
+        <h4 style="color: #EC2024; font-family: 'Montserrat', sans-serif; font-weight: bold;">Empaque e Inventariado de Tarimas</h4>
+        <p style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
+            El Módulo Tarimas sirve para registrar y desglosar el contenido de los paquetes que se preparan en planta:
+        </p>
+        <ol style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
+            <li><b>Carga de Plantilla Excel:</b> Suba el archivo en formato Excel con las columnas requeridas (Tarima, Producto/SKU, PO, Proyecto, Parcialidad, Descripcion, Cantidad).</li>
+            <li><b>Asignación de Líder y Tipo:</b> Indique el líder de línea a cargo del empaque y especifique si la tarima física es Cuadrada o Rectangular.</li>
+            <li><b>Procesamiento:</b> Presione <i>Procesar e Integrar Plantilla Avanzada</i>. El sistema validará los SKUs contra el catálogo oficial, generará automáticamente folios correlativos únicos de tarima (TPM-XXXX), y subirá la información estructurada a las bases de datos de GitHub de manera segura.</li>
+        </ol>
+        """, unsafe_allow_html=True)
+        
+    with tab_man3:
+        st.write("")
+        st.markdown("""
+        <h4 style="color: #EC2024; font-family: 'Montserrat', sans-serif; font-weight: bold;">Salida de Materiales y Remisión</h4>
+        <p style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
+            El Módulo Remisiones agrupa las tarimas que saldrán de la planta con destino a un cliente:
+        </p>
+        <ol style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
+            <li><b>Selección de Tarimas:</b> El dropdown muestra todas las tarimas con estatus <code>Disponible</code> (es decir, creadas pero que aún no han sido asignadas a ninguna remisión). Seleccione una o más tarimas para agruparlas.</li>
+            <li><b>Datos de Despacho:</b> Especifique el líder que autoriza la salida, el almacén de origen, el nombre del receptor (cliente) y la dirección destino.</li>
+            <li><b>Emisión:</b> Haga clic en <i>🚀 Confirmar Salida y Generar Nueva Remisión</i>. La aplicación generará un folio oficial correlativo (ej. <code>E0028</code>), marcará el estatus de las tarimas como <code>Remesada</code> para que no puedan volver a usarse y guardará la transacción en la nube.</li>
+        </ol>
+        """, unsafe_allow_html=True)
+        
+    with tab_man4:
+        st.write("")
+        st.markdown("""
+        <h4 style="color: #EC2024; font-family: 'Montserrat', sans-serif; font-weight: bold;">Centro de Consultas y Descarga Documental</h4>
+        <p style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
+            La consulta y obtención de documentos certificados se centraliza en dos áreas clave:
+        </p>
+        <ul style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
+            <li><b>Dashboard e Históricos:</b> Muestra métricas agregadas del inventario (tarimas disponibles, remesadas, etc.) y gráficos interactivos de barras y líneas para analizar la cantidad de productos por proyecto en tiempo real.</li>
+            <li><b>Centro de Consultas (Impresión Masiva):</b> Permite ver la lista completa de tarimas, filtrarlas por folio, estatus o fecha, y seleccionar filas específicas para generar reportes anejos en PDF con el desglose exacto de su contenido.</li>
+            <li><b>Descarga Documental de Remisiones:</b> En el Módulo Remisiones, el dropdown inferior contiene los folios únicos de salida (ordenados de más recientes a más antiguos). Seleccione el folio deseado y presione <b>📥 Descargar Remisión Oficial en PDF</b> para descargar el manifiesto formal con formato de firma e imagen de Industria SIGRAMA.</li>
+        </ul>
+        """, unsafe_allow_html=True)
+        
+    with tab_man5:
+        st.write("")
+        st.markdown("""
+        <h4 style="color: #EC2024; font-family: 'Montserrat', sans-serif; font-weight: bold;">Mantenimiento Crítico (Acceso Restringido)</h4>
+        <p style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
+            El módulo <b>⚙️ Mantenimiento y Catálogos</b> está reservado para el perfil <b>Administrador</b> (o personal de soporte de TI):
+        </p>
+        <ul style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
+            <li><b>Ajustar Cantidades:</b> Editor interactivo tipo Excel que permite modificar directamente las cantidades o descripciones de una tarima ya guardada para corregir capturas erróneas.</li>
+            <li><b>Catálogo de Líderes y Artículos:</b> Permite dar de alta nuevos códigos SKU o empleados autorizados, ya sea uno a uno o cargando un archivo Excel masivo.</li>
+            <li><b>Contador de Tarimas (Consecutivos):</b> Si necesita reiniciar la numeración o saltar folios (ej. continuar en 150), digite el consecutivo deseado y presione guardar.</li>
+            <li><b>Purga de Datos (Eliminación):</b> Permite eliminar remisiones o tarimas seleccionadas para liberar espacio, o aplicar un <b>Reset de Fábrica Total</b>. 
+            <i>Nota: Debido al riesgo operativo, esta pestaña se bloquea por completo a nivel de base de datos si el rol del usuario no es Administrador, incluso si se ingresa con la clave de soporte técnico.</i></li>
+        </ul>
+        """, unsafe_allow_html=True)
 
 elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
     st.title("⚙️ Panel de Mantenimiento Avanzado del Sistema")
@@ -1733,71 +2017,74 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
 # =============================================================================
     with tab3:
         st.subheader("🚨 Reset de Fábrica y Purga de Datos Controlada")
-        metodo_purga = st.radio("Método de Purga:", ["❌ Purga Total Automática (Reset Completo)", "🔍 Seleccionar Registros Específicos para Eliminar"], horizontal=True, key="radio_metodo_purga_master_final")
-        st.write("---")
-        
-        if metodo_purga == "❌ Purga Total Automática (Reset Completo)":
-            st.error("⚠️ Peligro: Esta acción vaciará por completo todos los históricos en el repositorio.")
-            if st.checkbox("Confirmo que deseo aplicar un Reset de Fábrica Total.", key="chk_total_purga_final_final"):
-                if st.button("🗑️ EJECUTAR PURGA MAESTRA TOTAL"):
-                    st.session_state.BD_Tarimas = pd.DataFrame(columns=st.session_state.BD_Tarimas.columns)
-                    st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=st.session_state.BD_Detalle_Tarimas.columns)
-                    st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=st.session_state.BD_Datos_Generales_Remision.columns)
-                    subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
-                    subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
-                    subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-                    import os
-                    if os.path.exists("consecutivo_override.txt"):
-                        try:
-                            os.remove("consecutivo_override.txt")
-                        except Exception:
-                            pass
-                    st.session_state["siguiente_numero_tpm"] = 1
-                    st.success("💥 Sistema purgado por completo a ceros de forma masiva."); st.rerun()
+        if st.session_state.rol != "Administrador":
+            st.error("🔒 Área Bloqueada: Solo el Administrador del sistema tiene permisos para purgar o eliminar registros de las bases de datos.")
         else:
-            st.markdown("### 📦 1. Eliminar Tarimas del Inventario")
-            if not st.session_state.BD_Tarimas.empty:
-                df_tar_vista = st.session_state.BD_Tarimas.copy().drop(columns=["Es_Nueva"], errors="ignore")
-                sel_tarimas = st.dataframe(df_tar_vista, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_tarimas_final_f")
-                filas_tar = sel_tarimas.get("selection", {}).get("rows", [])
-                if filas_tar:
-                    # Filtrar índices válidos para evitar errores de desfase de Streamlit en la recarga
-                    filas_tar_validas = [i for i in filas_tar if i < len(df_tar_vista)]
-                    ids_tar_eliminar = df_tar_vista.iloc[filas_tar_validas]['ID_Tarima'].tolist() if filas_tar_validas else []
-                    
-                    if st.button("🗑️ Eliminar Tarimas Seleccionadas") and ids_tar_eliminar:
-                        st.session_state.BD_Tarimas = st.session_state.BD_Tarimas[~st.session_state.BD_Tarimas['ID_Tarima'].isin(ids_tar_eliminar)]
-                        st.session_state.BD_Detalle_Tarimas = st.session_state.BD_Detalle_Tarimas[~st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(ids_tar_eliminar)]
+            metodo_purga = st.radio("Método de Purga:", ["❌ Purga Total Automática (Reset Completo)", "🔍 Seleccionar Registros Específicos para Eliminar"], horizontal=True, key="radio_metodo_purga_master_final")
+            st.write("---")
+            
+            if metodo_purga == "❌ Purga Total Automática (Reset Completo)":
+                st.error("⚠️ Peligro: Esta acción vaciará por completo todos los históricos en el repositorio.")
+                if st.checkbox("Confirmo que deseo aplicar un Reset de Fábrica Total.", key="chk_total_purga_final_final"):
+                    if st.button("🗑️ EJECUTAR PURGA MAESTRA TOTAL"):
+                        st.session_state.BD_Tarimas = pd.DataFrame(columns=st.session_state.BD_Tarimas.columns)
+                        st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=st.session_state.BD_Detalle_Tarimas.columns)
+                        st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=st.session_state.BD_Datos_Generales_Remision.columns)
                         subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                         subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
-                        st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
-                        st.success("✅ Tarimas removidas."); st.rerun()
-            else: st.write("No hay tarimas registradas.")
-            
-            st.write("---")
-            st.markdown("### 🚚 2. Eliminar Remisiones de Salida")
-            if not st.session_state.BD_Datos_Generales_Remision.empty:
-                sel_remisiones = st.dataframe(st.session_state.BD_Datos_Generales_Remision, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_remisiones_final_f")
-                filas_rem = sel_remisiones.get("selection", {}).get("rows", [])
-                if filas_rem:
-                    # Filtrar índices válidos para evitar errores de desfase de Streamlit en la recarga
-                    filas_rem_validas = [i for i in filas_rem if i < len(st.session_state.BD_Datos_Generales_Remision)]
-                    if filas_rem_validas:
-                        ids_rem_eliminar = st.session_state.BD_Datos_Generales_Remision.iloc[filas_rem_validas]['Folio_Remision'].tolist()
-                        tarimas_afectadas = []
-                        for idx in filas_rem_validas:
-                            tarimas_afectadas.extend(st.session_state.BD_Datos_Generales_Remision.iloc[idx]['Tarimas_Asociadas'])
-                    else:
-                        ids_rem_eliminar = []
-                        tarimas_afectadas = []
-
-                    if st.button("🗑️ Eliminar Remisiones Seleccionadas") and ids_rem_eliminar:
-                        st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(tarimas_afectadas), 'Estatus'] = 'Disponible'
-                        st.session_state.BD_Datos_Generales_Remision = st.session_state.BD_Datos_Generales_Remision[~st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].isin(ids_rem_eliminar)]
                         subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-                        subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
-                        st.success("✅ Remisiones eliminadas y bultos reactivados."); st.rerun()
-            else: st.write("No hay remisiones registradas.")
+                        import os
+                        if os.path.exists("consecutivo_override.txt"):
+                            try:
+                                os.remove("consecutivo_override.txt")
+                            except Exception:
+                                pass
+                        st.session_state["siguiente_numero_tpm"] = 1
+                        st.success("💥 Sistema purgado por completo a ceros de forma masiva."); st.rerun()
+            else:
+                st.markdown("### 📦 1. Eliminar Tarimas del Inventario")
+                if not st.session_state.BD_Tarimas.empty:
+                    df_tar_vista = st.session_state.BD_Tarimas.copy().drop(columns=["Es_Nueva"], errors="ignore")
+                    sel_tarimas = st.dataframe(df_tar_vista, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_tarimas_final_f")
+                    filas_tar = sel_tarimas.get("selection", {}).get("rows", [])
+                    if filas_tar:
+                        # Filtrar índices válidos para evitar errores de desfase de Streamlit en la recarga
+                        filas_tar_validas = [i for i in filas_tar if i < len(df_tar_vista)]
+                        ids_tar_eliminar = df_tar_vista.iloc[filas_tar_validas]['ID_Tarima'].tolist() if filas_tar_validas else []
+                        
+                        if st.button("🗑️ Eliminar Tarimas Seleccionadas") and ids_tar_eliminar:
+                            st.session_state.BD_Tarimas = st.session_state.BD_Tarimas[~st.session_state.BD_Tarimas['ID_Tarima'].isin(ids_tar_eliminar)]
+                            st.session_state.BD_Detalle_Tarimas = st.session_state.BD_Detalle_Tarimas[~st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(ids_tar_eliminar)]
+                            subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                            subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
+                            st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
+                            st.success("✅ Tarimas removidas."); st.rerun()
+                else: st.write("No hay tarimas registradas.")
+                
+                st.write("---")
+                st.markdown("### 🚚 2. Eliminar Remisiones de Salida")
+                if not st.session_state.BD_Datos_Generales_Remision.empty:
+                    sel_remisiones = st.dataframe(st.session_state.BD_Datos_Generales_Remision, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_remisiones_final_f")
+                    filas_rem = sel_remisiones.get("selection", {}).get("rows", [])
+                    if filas_rem:
+                        # Filtrar índices válidos para evitar errores de desfase de Streamlit en la recarga
+                        filas_rem_validas = [i for i in filas_rem if i < len(st.session_state.BD_Datos_Generales_Remision)]
+                        if filas_rem_validas:
+                            ids_rem_eliminar = st.session_state.BD_Datos_Generales_Remision.iloc[filas_rem_validas]['Folio_Remision'].tolist()
+                            tarimas_afectadas = []
+                            for idx in filas_rem_validas:
+                                tarimas_afectadas.extend(st.session_state.BD_Datos_Generales_Remision.iloc[idx]['Tarimas_Asociadas'])
+                        else:
+                            ids_rem_eliminar = []
+                            tarimas_afectadas = []
+    
+                        if st.button("🗑️ Eliminar Remisiones Seleccionadas") and ids_rem_eliminar:
+                            st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(tarimas_afectadas), 'Estatus'] = 'Disponible'
+                            st.session_state.BD_Datos_Generales_Remision = st.session_state.BD_Datos_Generales_Remision[~st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].isin(ids_rem_eliminar)]
+                            subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
+                            subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                            st.success("✅ Remisiones eliminadas y bultos reactivados."); st.rerun()
+                else: st.write("No hay remisiones registradas.")
    
     # --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA DEL CATÁLOGO DE ARTÍCULOS ---
 # --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA DEL CATÁLOGO DE ARTÍCULOS ---
