@@ -2546,6 +2546,61 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     key="btn_download_plantilla_maestra_articulos_sgc_v2"
                 )
+
+                st.write("---")
+                st.write("##### Artículos en Tarimas Sin Registro en Catálogo")
+
+                skus_en_tarimas = set()
+                if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                    skus_en_tarimas = set(st.session_state.BD_Detalle_Tarimas['SKU'].astype(str).str.strip().dropna().unique())
+
+                skus_en_articulos = set()
+                if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                    skus_en_articulos = set(st.session_state.BD_Articulos['SKU'].astype(str).str.strip().dropna().unique())
+
+                skus_sin_registro = sorted(list(skus_en_tarimas - skus_en_articulos))
+                # Excluir valores vacíos o de selección
+                skus_sin_registro = [s for s in skus_sin_registro if s and s.upper() not in ["TODOS", "SELECCIONE UN SKU..."]]
+
+                if len(skus_sin_registro) > 0:
+                    st.info(f"🔍 Se encontraron **{len(skus_sin_registro)}** artículos en tarimas que no están registrados en el Catálogo.")
+                else:
+                    st.success("🎉 ¡Todos los artículos en tarimas están registrados en el Catálogo!")
+
+                df_sin_registro = pd.DataFrame(columns=columnas_oficiales)
+                df_sin_registro["SKU"] = skus_sin_registro
+
+                buf_sin_reg = io.BytesIO()
+                with pd.ExcelWriter(buf_sin_reg, engine='openpyxl') as p_writer:
+                    df_sin_registro.to_excel(p_writer, index=False, sheet_name='Datos_Sistema')
+                    worksheet = p_writer.sheets['Datos_Sistema']
+                    worksheet.column_dimensions['A'].width = 20
+                    worksheet.column_dimensions['B'].width = 25
+                    worksheet.column_dimensions['C'].width = 20
+                    worksheet.column_dimensions['D'].width = 25
+                    worksheet.column_dimensions['E'].width = 20
+
+                    opciones_calibres = '"10GA,12GA,14GA,16GA,10GACR,12GACR,14GACR,16GACR","125AL","250AL","188AL"'
+                    dv_calibre = DataValidation(type="list", formula1=opciones_calibres, allow_blank=True)
+                    worksheet.add_data_validation(dv_calibre)
+                    dv_calibre.add("C2:C2000")
+
+                    opciones_acabados = '"Decapado,Ansi 61,Galvanizado,Otro"'
+                    dv_acabado = DataValidation(type="list", formula1=opciones_acabados, allow_blank=True)
+                    worksheet.add_data_validation(dv_acabado)
+                    dv_acabado.add("E2:E2000")
+
+                buf_sin_reg.seek(0)
+
+                st.download_button(
+                    label="📥 Articulos Sin Registro",
+                    data=buf_sin_reg.getvalue(),
+                    file_name="Plantilla_Articulos_Sin_Registro.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_download_articulos_sin_registro",
+                    disabled=len(skus_sin_registro) == 0,
+                    use_container_width=True
+                )
     
             with c_art2:
                 st.write("##### Cargar Catálogo Completo")
