@@ -621,13 +621,21 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
                 except Exception:
                     pass
 
-        desc_cell_flowables = [
-            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{descripcion_final}</font>", style_normal_text)
-        ]
+        desc_paragraph = Paragraph(f"{row['SKU']}<br/><font color='#616161'>{descripcion_final}</font>", style_normal_text)
         if img_encontrada and os.path.exists(img_encontrada):
             from reportlab.platypus import Image as RLImage
-            desc_cell_flowables.append(Spacer(1, 3))
-            desc_cell_flowables.append(RLImage(img_encontrada, width=50, height=50, hAlign='LEFT'))
+            img_flowable = RLImage(img_encontrada, width=75, height=75, hAlign='LEFT')
+            sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[80, 2.3 * inch - 80])
+            sub_t.setStyle(TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ('TOPPADDING', (0,0), (-1,-1), 0),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 0)
+            ]))
+            desc_cell_flowables = sub_t
+        else:
+            desc_cell_flowables = desc_paragraph
 
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
@@ -790,13 +798,21 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                 except Exception:
                     pass
 
-        desc_cell_flowables = [
-            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{concepto_remision}</font>", style_normal_text)
-        ]
+        desc_paragraph = Paragraph(f"{row['SKU']}<br/><font color='#616161'>{concepto_remision}</font>", style_normal_text)
         if img_encontrada and os.path.exists(img_encontrada):
             from reportlab.platypus import Image as RLImage
-            desc_cell_flowables.append(Spacer(1, 3))
-            desc_cell_flowables.append(RLImage(img_encontrada, width=50, height=50, hAlign='LEFT'))
+            img_flowable = RLImage(img_encontrada, width=75, height=75, hAlign='LEFT')
+            sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[80, 2.7 * inch - 80])
+            sub_t.setStyle(TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ('TOPPADDING', (0,0), (-1,-1), 0),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 0)
+            ]))
+            desc_cell_flowables = sub_t
+        else:
+            desc_cell_flowables = desc_paragraph
             
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
@@ -1483,13 +1499,21 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                         except Exception:
                                             pass
 
-                                desc_comercial_flowables = [
-                                    Paragraph(str(art_nom), style_normal_text)
-                                ]
+                                desc_paragraph = Paragraph(str(art_nom), style_normal_text)
                                 if img_encontrada and os.path.exists(img_encontrada):
                                     from reportlab.platypus import Image as RLImage
-                                    desc_comercial_flowables.append(Spacer(1, 3))
-                                    desc_comercial_flowables.append(RLImage(img_encontrada, width=50, height=50, hAlign='LEFT'))
+                                    img_flowable = RLImage(img_encontrada, width=75, height=75, hAlign='LEFT')
+                                    sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[80, 3.5 * inch - 80])
+                                    sub_t.setStyle(TableStyle([
+                                        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                                        ('LEFTPADDING', (0,0), (-1,-1), 0),
+                                        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                                        ('TOPPADDING', (0,0), (-1,-1), 0),
+                                        ('BOTTOMPADDING', (0,0), (-1,-1), 0)
+                                    ]))
+                                    desc_comercial_flowables = sub_t
+                                else:
+                                    desc_comercial_flowables = desc_paragraph
 
                                 tabla_detalles.append([
                                     Paragraph(str(item['PO']), style_normal_text),
@@ -1643,13 +1667,21 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                     except Exception:
                                         pass
 
-                            desc_comercial_flowables = [
-                                Paragraph(str(art_nom), style_normal_text)
-                            ]
+                            desc_paragraph = Paragraph(str(art_nom), style_normal_text)
                             if img_encontrada and os.path.exists(img_encontrada):
                                 from reportlab.platypus import Image as RLImage
-                                desc_comercial_flowables.append(Spacer(1, 3))
-                                desc_comercial_flowables.append(RLImage(img_encontrada, width=50, height=50, hAlign='LEFT'))
+                                img_flowable = RLImage(img_encontrada, width=75, height=75, hAlign='LEFT')
+                                sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[80, 3.5 * inch - 80])
+                                sub_t.setStyle(TableStyle([
+                                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                                    ('LEFTPADDING', (0,0), (-1,-1), 0),
+                                    ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                                    ('TOPPADDING', (0,0), (-1,-1), 0),
+                                    ('BOTTOMPADDING', (0,0), (-1,-1), 0)
+                                ]))
+                                desc_comercial_flowables = sub_t
+                            else:
+                                desc_comercial_flowables = desc_paragraph
 
                             tabla_detalles.append([
                                 Paragraph(str(item['PO']), style_normal_text),
