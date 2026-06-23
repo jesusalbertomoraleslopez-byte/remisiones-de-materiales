@@ -800,15 +800,7 @@ def draw_sigrama_reporte_decorations(canvas, doc):
     canvas.setFillColor(colors.HexColor("#D32F2F"))
     canvas.rect(36, 745, 540, 4, fill=1, stroke=0)
     
-    # Marcador de Control de Calidad Superior Izquierdo Oficial (FO-MET-11)
-    canvas.setFont("Helvetica-Bold", 11)
-    canvas.setFillColor(colors.HexColor("#D32F2F"))
-    canvas.drawString(36, 765, "FO-MET-11")
-    
-    # Metadatos de Revisión de Control Documental
-    canvas.setFont("Helvetica", 8)
-    canvas.setFillColor(colors.black)
-    canvas.drawString(36, 753, "Revisión 01")
+    # Marcador de Control de Calidad y Metadatos de Revisión - Eliminados por requerimiento del cliente
     
     # --- CAMBIO AQUÍ: Fecha más grande, destacada en negrita y desplazada hacia abajo ---
     canvas.setFont("Helvetica-Bold", 10) 
@@ -985,15 +977,7 @@ def draw_sigrama_decorations(canvas, doc):
     canvas.setFillColor(colors.HexColor("#D32F2F"))
     canvas.rect(36, 745, 540, 4, fill=1, stroke=0)
     
-    # Marcador de Control de Calidad Superior Izquierdo (FO-MET-10)
-    canvas.setFont("Helvetica-Bold", 11)
-    canvas.setFillColor(colors.HexColor("#D32F2F"))
-    canvas.drawString(36, 765, "FO-MET-10")
-    
-    # Metadatos de Revisión de Control
-    canvas.setFont("Helvetica", 8)
-    canvas.setFillColor(colors.black)
-    canvas.drawString(36, 753, "Revisión 01")
+    # Marcador de Control de Calidad y Metadatos de Revisión - Eliminados por requerimiento del cliente
     
     # --- CAMBIO SOLICITADO: Fecha más grande (font 10) y desplazada hacia abajo (coordenada 730) ---
     canvas.setFont("Helvetica-Bold", 10)
@@ -1510,7 +1494,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
                 fecha_hora_str = datetime.now().strftime("%Y%m%d:%I:%M%p").lower()
                 
                 st.download_button(
-                    label="📄 Descargar Reporte Oficial en PDF (FO-MET-11)",
+                    label="📄 Descargar Reporte Oficial en PDF",
                     data=pdf_data,
                     file_name=f"TAR_Lote_de_Tarimas_Separado_{fecha_hora_str}.pdf",
                     mime="application/pdf"
@@ -1529,7 +1513,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
         
                 # 1. Creamos los metadatos básicos del reporte
                 df_metadatos = pd.DataFrame([
-                    {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO (FO-MET-11)"},
+                    {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO"},
                     {"Concepto": "EMPRESA", "Valor": "INDUSTRIA SIGRAMA S.A. DE C.V."},
                     {"Concepto": "FECHA DE GENERACIÓN", "Valor": datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
                     {"Concepto": "FILTRO: ORDEN DE COMPRA (PO)", "Valor": str(f_po)},
@@ -1862,7 +1846,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         col_btns1, col_btns2 = st.columns(2)
                         with col_btns1:
                             st.download_button(
-                                label=f"📄 Descargar Reporte PDF (FO-MET-11)",
+                                label=f"📄 Descargar Reporte PDF",
                                 data=pdf_bytes_listos,
                                 file_name=f"TAR_Reporte_Inventario_{id_tarima_limpio}.pdf",
                                 mime="application/pdf",
@@ -2213,9 +2197,9 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                 c1, c2 = st.columns(2)
                 with c1: 
                     st.download_button(
-                        label="📄 Descargar Reporte Oficial (FO-MET-10)", 
+                        label="📄 Descargar Reporte Oficial", 
                         data=generar_pdf_remision_general(row_dict, df_det), 
-                        file_name=f"FO-MET-10_Remision_{r_sel}.pdf", 
+                        file_name=f"Remision_{r_sel}.pdf", 
                         key=f"btn_dl_rem_pdf_{r_sel}",
                         mime="application/pdf"
                     )
