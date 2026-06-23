@@ -322,6 +322,104 @@ def obtener_skus_con_imagen():
             
     return skus
 
+def renderizar_explorador_imagenes():
+    st.write("##### 🖼️ Carpeta de Imágenes de Artículos")
+    st.markdown("Visualice las imágenes guardadas en el sistema y descargue la base de datos de imágenes completa en formato ZIP:")
+
+    import os
+    import zipfile
+    import io
+    import requests
+
+    # Botón de sincronización con GitHub
+    if st.button("🔄 Sincronizar Imágenes con GitHub", use_container_width=True, key="btn_sync_images_explorer"):
+        if "github_token" in st.secrets and st.secrets["github_token"]:
+            try:
+                GITHUB_TOKEN = st.secrets["github_token"]
+                url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+                headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+                res_list = requests.get(url_list, headers=headers)
+                if res_list.status_code == 200:
+                    items_git = res_list.json()
+                    downloaded_count = 0
+                    os.makedirs("imagenes_articulos", exist_ok=True)
+                    for it in items_git:
+                        git_file_path = f"imagenes_articulos/{it['name']}"
+                        if not os.path.exists(git_file_path):
+                            if descargar_imagen_desde_github(git_file_path):
+                                downloaded_count += 1
+                    st.success(f"✅ Sincronización completada. Se descargaron {downloaded_count} imágenes nuevas de GitHub.")
+                    st.rerun()
+                else:
+                    st.error(f"Error al listar repositorio: Código de estado {res_list.status_code}")
+            except Exception as e_sync:
+                st.error(f"Error al sincronizar: {e_sync}")
+        else:
+            st.warning("⚠️ Token de GitHub no configurado para sincronizar de forma remota.")
+
+    st.write("---")
+
+    # Generación de ZIP en memoria
+    buf_zip = io.BytesIO()
+    has_images = False
+    if os.path.exists("imagenes_articulos"):
+        file_list_local = [f for f in os.listdir("imagenes_articulos") if os.path.isfile(os.path.join("imagenes_articulos", f)) and not f.startswith(".")]
+        if len(file_list_local) > 0:
+            has_images = True
+            with zipfile.ZipFile(buf_zip, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for file in file_list_local:
+                    file_path = os.path.join("imagenes_articulos", file)
+                    zip_file.write(file_path, file)
+    buf_zip.seek(0)
+
+    col_explorer1, col_explorer2 = st.columns([3, 1])
+    with col_explorer2:
+        st.download_button(
+            label="📥 Descargar Todo (ZIP)",
+            data=buf_zip.getvalue(),
+            file_name="imagenes_articulos.zip",
+            mime="application/zip",
+            disabled=not has_images,
+            use_container_width=True,
+            key="btn_download_images_zip"
+        )
+        
+    with col_explorer1:
+        cant_imagenes = len(os.listdir("imagenes_articulos")) if os.path.exists("imagenes_articulos") else 0
+        st.write(f"📁 **Directorio:** `imagenes_articulos/` ({cant_imagenes} archivos locales)")
+
+    # Listar archivos
+    if has_images:
+        files_sorted = sorted([f for f in os.listdir("imagenes_articulos") if os.path.isfile(os.path.join("imagenes_articulos", f)) and not f.startswith(".")])
+        for f in files_sorted:
+            f_path = os.path.join("imagenes_articulos", f)
+            f_size = os.path.getsize(f_path) / 1024.0 # KB
+            
+            c_img, c_info, c_actions = st.columns([1, 3, 1])
+            with c_img:
+                try:
+                    st.image(f_path, width=60)
+                except Exception:
+                    st.write("🖼️") # Fallback si la imagen está corrupta
+            with c_info:
+                st.markdown(f"📄 **Archivo:** `{f}`")
+                st.write(f"⚖️ **Tamaño:** `{f_size:.1f} KB`")
+            with c_actions:
+                try:
+                    with open(f_path, "rb") as file_bytes:
+                        st.download_button(
+                            label="📥 Descargar",
+                            data=file_bytes.read(),
+                            file_name=f,
+                            mime="image/png" if f.endswith(".png") else "image/jpeg",
+                            key=f"btn_dl_single_img_{f}"
+                        )
+                except Exception:
+                    st.write("Error")
+            st.write("---")
+    else:
+        st.info("Actualmente no hay imágenes descargadas localmente en la carpeta `imagenes_articulos/`. Haz clic en 'Sincronizar Imágenes con GitHub' para descargar las imágenes que existan en el repositorio.")
+
 
 def subir_imagen_a_github(file_path):
     """Sube una imagen local a GitHub utilizando API REST, codificando la ruta de forma segura."""
@@ -2330,7 +2428,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
         ])
 
     # REVISA QUE TU LÍNEA DE PESTAÑAS SUPERIOR TENGA ESTA ASIGNACIÓN:
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Ajustar Cantidades", "👥 Catálogo de Líderes", "⚠️ Purga de Datos", "📦 Catálogo de Artículos", "🔢 Contador de Tarimas"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📝 Ajustar Cantidades", "👥 Catálogo de Líderes", "⚠️ Purga de Datos", "📦 Catálogo de Artículos", "🔢 Contador de Tarimas", "🖼️ Carpeta de Imágenes"])
 
 
 
@@ -2736,6 +2834,8 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
                     st.success("🔄 Restablecido al siguiente consecutivo automático de la base de datos.")
                     st.rerun()
+        with tab6:
+            renderizar_explorador_imagenes()
     except NameError:
         # Si tab5 no existe, desplegamos un contenedor nativo expandible para que no rompa la aplicación
         with st.expander("🔢 Contador y Consecutivo de Tarimas (TPM)", expanded=True):
@@ -2774,4 +2874,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
                     st.success("🔄 Restablecido al siguiente consecutivo automático de la base de datos.")
                     st.rerun()
+
+        with st.expander("🖼️ Carpeta de Imágenes de Artículos (Mantenimiento)", expanded=False):
+            renderizar_explorador_imagenes()
     
