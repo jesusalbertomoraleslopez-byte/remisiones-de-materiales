@@ -291,6 +291,37 @@ def subir_excel_a_github(file_name, dataframe_to_save):
         st.warning(f"⚠️ No se pudo sincronizar con GitHub: {e}")
         return False
 
+@st.cache_data(ttl=60)
+def obtener_skus_con_imagen():
+    """Obtiene el conjunto de SKUs que tienen una imagen asociada local o remotamente."""
+    import os
+    import requests
+    skus = set()
+    
+    # 1. Escaneo local
+    if os.path.exists("imagenes_articulos"):
+        for f in os.listdir("imagenes_articulos"):
+            if "(" in f:
+                sku = f.split("(")[0]
+                skus.add(sku)
+                
+    # 2. Escaneo remoto (GitHub)
+    if "github_token" in st.secrets and st.secrets["github_token"]:
+        try:
+            GITHUB_TOKEN = st.secrets["github_token"]
+            url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+            res = requests.get(url_list, headers=headers)
+            if res.status_code == 200:
+                for item in res.json():
+                    if "(" in item["name"]:
+                        sku = item["name"].split("(")[0]
+                        skus.add(sku)
+        except Exception:
+            pass
+            
+    return skus
+
 
 def subir_imagen_a_github(file_path):
     """Sube una imagen local a GitHub utilizando API REST, codificando la ruta de forma segura."""
@@ -1949,7 +1980,22 @@ elif opcion_menu == "📦 Catálogo de Artículos":
         st.write("---")
         st.subheader("🖼️ Detalle e Imagen del Artículo")
         
-        opc_skus_img = ["Seleccione un SKU..."] + df_art_filtrado['SKU'].dropna().tolist()
+        filtro_estado_img = st.radio(
+            "Filtrar artículos por estado de imagen:",
+            ["Todos", "Sin imagen", "Con imagen"],
+            horizontal=True,
+            key="filtro_estado_imagen_select"
+        )
+        
+        skus_con_img = obtener_skus_con_imagen()
+        lista_skus_filtrados = df_art_filtrado['SKU'].dropna().tolist()
+        
+        if filtro_estado_img == "Sin imagen":
+            lista_skus_filtrados = [s for s in lista_skus_filtrados if s not in skus_con_img]
+        elif filtro_estado_img == "Con imagen":
+            lista_skus_filtrados = [s for s in lista_skus_filtrados if s in skus_con_img]
+            
+        opc_skus_img = ["Seleccione un SKU..."] + lista_skus_filtrados
         sku_sel = st.selectbox("Seleccione un SKU para administrar su imagen:", opc_skus_img, key="sku_select_img")
         
         if sku_sel != "Seleccione un SKU...":
@@ -1999,6 +2045,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                     
                     if st.button("🗑️ Eliminar Imagen de Artículo", use_container_width=True, key=f"btn_del_img_{sku_sel}"):
                         if eliminar_imagen_de_github(imagen_final_path):
+                            obtener_skus_con_imagen.clear()
                             st.success("¡Imagen eliminada correctamente del servidor y GitHub!")
                             st.rerun()
                         else:
@@ -2057,6 +2104,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                                 nueva_imagen_data.save(nuevo_path)
                                 
                                 if subir_imagen_a_github(nuevo_path):
+                                    obtener_skus_con_imagen.clear()
                                     st.success("¡Imagen guardada y sincronizada correctamente en GitHub!")
                                     st.rerun()
                                 else:
