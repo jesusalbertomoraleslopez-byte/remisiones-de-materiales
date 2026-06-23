@@ -883,12 +883,15 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
                 acabado = str(art_info.get('Acabado_Superficial', '')).strip()
     
                 detalles = []
-                if calibre and calibre.lower() != 'nan': detalles.append(f"Cal: {calibre}")
-                if dims and dims.lower() != 'nan': detalles.append(f"Dim: {dims}")
-                if acabado and acabado.lower() != 'nan': detalles.append(f"Acab: {acabado}")
+                if calibre and calibre.lower() != 'nan' and calibre != '': detalles.append(f"<b>Calibre/Espesor:</b> {calibre}")
+                if dims and dims.lower() != 'nan' and dims != '': detalles.append(f"<b>Dimensiones:</b> {dims}")
+                if acabado and acabado.lower() != 'nan' and acabado != '': detalles.append(f"<b>Material/Acabado:</b> {acabado}")
     
-                sub_detalle = f" ({', '.join(detalles)})" if detalles else ""
-                descripcion_final = f"{nombre_com}{sub_detalle}"
+                espec_str = f" | ".join(detalles)
+                if espec_str:
+                    descripcion_final = f"<b>{nombre_com}</b><br/><font color='#555555' size='7.5'>{espec_str}</font>"
+                else:
+                    descripcion_final = f"<b>{nombre_com}</b>"
             else:
                 descripcion_final = "Articulo No Registrado en BD Remisiones"
         else:
@@ -1053,13 +1056,16 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                 dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
                 acabado = str(art_info.get('Acabado_Superficial', '')).strip()
                 
-                componentes_piezas = []
-                if calibre and calibre.lower() != 'nan': componentes_piezas.append(f"CAL. {calibre}")
-                if dims and dims.lower() != 'nan': componentes_piezas.append(f"DIM. {dims}")
-                if acabado and acabado.lower() != 'nan': componentes_piezas.append(f"{acabado.upper()}")
+                detalles = []
+                if calibre and calibre.lower() != 'nan' and calibre != '': detalles.append(f"<b>Calibre/Espesor:</b> {calibre}")
+                if dims and dims.lower() != 'nan' and dims != '': detalles.append(f"<b>Dimensiones:</b> {dims}")
+                if acabado and acabado.lower() != 'nan' and acabado != '': detalles.append(f"<b>Material/Acabado:</b> {acabado}")
                 
-                formato_especificaciones = f" - {' / '.join(componentes_piezas)}" if componentes_piezas else ""
-                concepto_remision = f"{nombre_com}{formato_especificaciones}"
+                espec_str = f" | ".join(detalles)
+                if espec_str:
+                    concepto_remision = f"<b>{nombre_com}</b><br/><font color='#555555' size='7.5'>{espec_str}</font>"
+                else:
+                    concepto_remision = f"<b>{nombre_com}</b>"
             else:
                 concepto_remision = "Articulo No Registrado en BD Remisiones"
         else:
@@ -1936,7 +1942,25 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     
                         for _, item in det.iterrows():
                             art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
-                            art_nom = art.iloc[0]['Nombre'] if not art.empty else "Articulo No Registrado en BD Remisiones"
+                            if not art.empty:
+                                art_info = art.iloc[0]
+                                nombre_com = str(art_info.get('Nombre', '')).strip()
+                                calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                                dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                                acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                                
+                                detalles = []
+                                if calibre and calibre.lower() != 'nan' and calibre != '': detalles.append(f"<b>Calibre/Espesor:</b> {calibre}")
+                                if dims and dims.lower() != 'nan' and dims != '': detalles.append(f"<b>Dimensiones:</b> {dims}")
+                                if acabado and acabado.lower() != 'nan' and acabado != '': detalles.append(f"<b>Material/Acabado:</b> {acabado}")
+                                
+                                espec_str = f" | ".join(detalles)
+                                if espec_str:
+                                    art_nom = f"<b>{nombre_com}</b><br/><font color='#555555' size='8.5'>{espec_str}</font>"
+                                else:
+                                    art_nom = f"<b>{nombre_com}</b>"
+                            else:
+                                art_nom = "Articulo No Registrado en BD Remisiones"
                             
                             sku_partida = item['SKU']
                             # Buscar si existe una imagen cargada para este SKU
