@@ -292,7 +292,98 @@ def subir_excel_a_github(file_name, dataframe_to_save):
         return False
 
 
+def subir_imagen_a_github(file_path):
+    """Sube una imagen local a GitHub utilizando API REST, codificando la ruta de forma segura."""
+    import os
+    import urllib.parse
+    if not os.path.exists(file_path):
+        return False
+    if "github_token" not in st.secrets or not st.secrets["github_token"]:
+        return True
+    try:
+        with open(file_path, "rb") as f:
+            base64_content = base64.b64encode(f.read()).decode("utf-8")
+        
+        GITHUB_TOKEN = st.secrets["github_token"]
+        quoted_path = urllib.parse.quote(file_path.replace("\\", "/"))
+        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        
+        res_get = requests.get(url, headers=headers)
+        sha = res_get.json().get("sha") if res_get.status_code == 200 else None
+        
+        payload = {
+            "message": f"Sincronizacion de Imagen: {file_path}",
+            "content": base64_content,
+            "branch": BRANCH
+        }
+        if sha:
+            payload["sha"] = sha
+            
+        res_put = requests.put(url, json=payload, headers=headers)
+        return res_put.status_code in [200, 201]
+    except Exception as e:
+        st.warning(f"⚠️ No se pudo sincronizar la imagen {file_path} con GitHub: {e}")
+        return False
 
+
+def descargar_imagen_desde_github(file_path):
+    """Intenta descargar la imagen de GitHub si no existe en local."""
+    import os
+    import urllib.parse
+    if os.path.exists(file_path):
+        return True
+    if "github_token" not in st.secrets or not st.secrets["github_token"]:
+        return False
+    try:
+        quoted_path = urllib.parse.quote(file_path.replace("\\", "/"))
+        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}?ref={BRANCH}"
+        headers = {"Authorization": f"token {st.secrets['github_token']}", "Accept": "application/vnd.github.v3+json"}
+        
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            datos_json = res.json()
+            contenido_base64 = datos_json["content"]
+            with open(file_path, "wb") as f:
+                f.write(base64.b64decode(contenido_base64))
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def eliminar_imagen_de_github(file_path):
+    """Elimina la imagen localmente y en el repositorio de GitHub."""
+    import os
+    import urllib.parse
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            st.error(f"⚠️ Error al borrar imagen local {file_path}: {e}")
+            
+    if "github_token" not in st.secrets or not st.secrets["github_token"]:
+        return True
+    try:
+        GITHUB_TOKEN = st.secrets["github_token"]
+        quoted_path = urllib.parse.quote(file_path.replace("\\", "/"))
+        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        
+        res_get = requests.get(url, headers=headers)
+        if res_get.status_code == 200:
+            sha = res_get.json().get("sha")
+            payload = {
+                "message": f"Eliminar Imagen: {file_path}",
+                "sha": sha,
+                "branch": BRANCH
+            }
+            res_delete = requests.delete(url, json=payload, headers=headers)
+            return res_delete.status_code in [200, 204]
+    except Exception as e:
+        st.warning(f"⚠️ No se pudo eliminar la imagen {file_path} de GitHub: {e}")
+    return False
 
 
 # =============================================================================
@@ -643,13 +734,46 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
 
         
         
+        # Buscar si existe una imagen cargada para este SKU
+        import glob
+        img_encontrada = None
+        matching_imgs = glob.glob(f"imagenes_articulos/{sku_partida}(*.*")
+        if matching_imgs:
+            img_encontrada = matching_imgs[0]
+        else:
+            if "github_token" in st.secrets and st.secrets["github_token"]:
+                try:
+                    GITHUB_TOKEN = st.secrets["github_token"]
+                    url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+                    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+                    res_list = requests.get(url_list, headers=headers)
+                    if res_list.status_code == 200:
+                        items = res_list.json()
+                        for item in items:
+                            if item["name"].startswith(f"{sku_partida}("):
+                                github_file_path = f"imagenes_articulos/{item['name']}"
+                                if descargar_imagen_desde_github(github_file_path):
+                                    img_encontrada = github_file_path
+                                    break
+                except Exception:
+                    pass
+
+        desc_cell_flowables = [
+            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{concepto_remision}</font>", style_normal_text)
+        ]
+        if img_encontrada and os.path.exists(img_encontrada):
+            from reportlab.platypus import Image as RLImage
+            desc_cell_flowables.append(Spacer(1, 3))
+            desc_cell_flowables.append(RLImage(img_encontrada, width=50, height=50, hAlign='LEFT'))
+            
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             Paragraph(str(row['PO']), style_normal_text),
             Paragraph(str(row['Proyecto']), style_normal_text),
-            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{concepto_remision}</font>", style_normal_text),
+            desc_cell_flowables,
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
         ])
+
         
     t_mat = Table(tabla_materiales, colWidths=[1.2 * inch, 1.3 * inch, 1.3 * inch, 2.7 * inch, 1.0 * inch])
     t_mat.setStyle(TableStyle([
@@ -1690,6 +1814,130 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                 "Acabado_Superficial": st.column_config.TextColumn("Acabado Superficial")
             }
         )
+
+        # --- SECCIÓN ADICIONAL: CARGA Y DETALLE DE IMAGEN DE ARTÍCULO ---
+        st.write("---")
+        st.subheader("🖼️ Detalle e Imagen del Artículo")
+        
+        opc_skus_img = ["Seleccione un SKU..."] + df_art_filtrado['SKU'].dropna().tolist()
+        sku_sel = st.selectbox("Seleccione un SKU para administrar su imagen:", opc_skus_img, key="sku_select_img")
+        
+        if sku_sel != "Seleccione un SKU...":
+            art_row = df_art_filtrado[df_art_filtrado['SKU'] == sku_sel].iloc[0]
+            
+            import glob
+            os.makedirs("imagenes_articulos", exist_ok=True)
+            
+            # Escanear localmente
+            matching_files_local = glob.glob(f"imagenes_articulos/{sku_sel}(*.*")
+            
+            imagen_final_path = None
+            if matching_files_local:
+                imagen_final_path = matching_files_local[0]
+            else:
+                # Buscar en GitHub si el token está disponible
+                if "github_token" in st.secrets and st.secrets["github_token"]:
+                    try:
+                        GITHUB_TOKEN = st.secrets["github_token"]
+                        url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+                        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+                        res_list = requests.get(url_list, headers=headers)
+                        if res_list.status_code == 200:
+                            items = res_list.json()
+                            for item in items:
+                                if item["name"].startswith(f"{sku_sel}("):
+                                    github_file_path = f"imagenes_articulos/{item['name']}"
+                                    if descargar_imagen_desde_github(github_file_path):
+                                        imagen_final_path = github_file_path
+                                        break
+                    except Exception:
+                        pass
+            
+            col_ficha, col_cargar = st.columns(2)
+            
+            with col_ficha:
+                st.write("##### Ficha Técnica del Artículo")
+                st.markdown(f"**SKU / Código:** `{sku_sel}`")
+                st.markdown(f"**Nombre:** {art_row['Nombre']}")
+                st.markdown(f"**Calibre / Espesor:** {art_row['Calibre_Espesor']}")
+                st.markdown(f"**Dimensiones:** {art_row['Dimensiones_Pieza']}")
+                st.markdown(f"**Acabado Superficial:** {art_row['Acabado_Superficial']}")
+                
+                st.write("")
+                if imagen_final_path and os.path.exists(imagen_final_path):
+                    st.image(imagen_final_path, caption=f"Imagen cargada para {sku_sel}", use_container_width=True)
+                    
+                    if st.button("🗑️ Eliminar Imagen de Artículo", use_container_width=True, key=f"btn_del_img_{sku_sel}"):
+                        if eliminar_imagen_de_github(imagen_final_path):
+                            st.success("¡Imagen eliminada correctamente del servidor y GitHub!")
+                            st.rerun()
+                        else:
+                            st.error("Error al eliminar la imagen en GitHub.")
+                else:
+                    st.info("Este artículo no cuenta con una imagen asociada actualmente.")
+            
+            with col_cargar:
+                st.write("##### Cargar / Reemplazar Imagen")
+                
+                file_uploaded = st.file_uploader("Subir archivo de imagen (PNG, JPG, JPEG):", type=["png", "jpg", "jpeg"], key=f"file_uploader_{sku_sel}")
+                
+                from streamlit_paste_button import paste_image_button as pbutton
+                paste_result = pbutton(
+                    "📋 Pegar captura de pantalla desde el portapapeles",
+                    key=f"paste_button_{sku_sel}"
+                )
+                
+                nueva_imagen_data = None
+                img_ext = ".png"
+                
+                if file_uploaded:
+                    nueva_imagen_data = Image.open(file_uploaded)
+                    _, ext = os.path.splitext(file_uploaded.name)
+                    if ext.lower() in [".png", ".jpg", ".jpeg"]:
+                        img_ext = ext.lower()
+                elif paste_result.image_data is not None:
+                    nueva_imagen_data = paste_result.image_data
+                    img_ext = ".png"
+                    
+                if nueva_imagen_data is not None:
+                    st.write("---")
+                    st.warning("⚠️ Vista Previa de la Nueva Imagen (Aún no se ha guardado):")
+                    st.image(nueva_imagen_data, caption="Vista Previa de la Carga", use_container_width=True)
+                    
+                    c_save, c_cancel = st.columns(2)
+                    
+                    with c_save:
+                        if st.button("💾 Guardar y Sincronizar Imagen", use_container_width=True, key=f"btn_save_img_{sku_sel}"):
+                            # 1. Crear nombre final en inglés: SKU(dd-Mon-yy)
+                            meses_en = {
+                                1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+                                7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"
+                            }
+                            hoy = datetime.date.today()
+                            fecha_ingles = f"{hoy.day:02d}-{meses_en[hoy.month]}-{str(hoy.year)[-2:]}"
+                            nombre_archivo = f"{sku_sel}({fecha_ingles}){img_ext}"
+                            nuevo_path = f"imagenes_articulos/{nombre_archivo}"
+                            
+                            if imagen_final_path and os.path.exists(imagen_final_path):
+                                eliminar_imagen_de_github(imagen_final_path)
+                            
+                            try:
+                                if img_ext in [".jpg", ".jpeg"] and nueva_imagen_data.mode in ("RGBA", "P"):
+                                    nueva_imagen_data = nueva_imagen_data.convert("RGB")
+                                nueva_imagen_data.save(nuevo_path)
+                                
+                                if subir_imagen_a_github(nuevo_path):
+                                    st.success("¡Imagen guardada y sincronizada correctamente en GitHub!")
+                                    st.rerun()
+                                else:
+                                    st.error("Error al sincronizar la imagen con el repositorio de GitHub.")
+                            except Exception as ex_save:
+                                st.error(f"Error al guardar el archivo localmente: {ex_save}")
+                                
+                    with c_cancel:
+                        if st.button("❌ Descartar", use_container_width=True, key=f"btn_discard_img_{sku_sel}"):
+                            st.rerun()
+
     else:
         st.info("ℹ️ No hay artículos registrados en el catálogo maestro actualmente o el archivo en GitHub está vacío.")
 
