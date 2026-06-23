@@ -2121,65 +2121,106 @@ elif opcion_menu == "🚚 Módulo Remisiones":
         st.write("---")
         st.subheader("📋 Descarga Documental de Remisiones")
         
-        # Obtener folios únicos y ordenarlos descendentemente por su valor numérico
-        def extract_folio_num(folio_str):
-            import re
-            numeros = re.findall(r'\d+', str(folio_str))
-            if numeros:
-                return int(numeros[-1])
-            return 0
-
-        folios_disponibles = sorted(
-            st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].unique(),
-            key=extract_folio_num,
-            reverse=True
-        )
-
-        r_sel = st.selectbox(
-            "Seleccione Folio para Descarga:", 
-            options=folios_disponibles, 
-            key="rem_download_folio_sel"
-        )
-        
-        # Filtramos de forma segura la fila seleccionada
-        lista_remisiones = st.session_state.BD_Datos_Generales_Remision[
-            st.session_state.BD_Datos_Generales_Remision['Folio_Remision'] == r_sel
-        ].to_dict('records')
-        
-        if lista_remisiones:
-            row_dict = lista_remisiones[0]
+        # Filtros de Fechas
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            fecha_inicio = st.date_input("Fecha de Inicio:", value=datetime.date.today() - datetime.timedelta(days=30), key="rem_download_start_date")
+        with col_f2:
+            fecha_fin = st.date_input("Fecha de Fin:", value=datetime.date.today(), key="rem_download_end_date")
             
-            # Convertimos las tarimas asociadas de texto a lista real de Python
-            import ast
-            tarimas_lista = row_dict['Tarimas_Asociadas']
-            if isinstance(tarimas_lista, str):
+        # Parseo de fechas y filtrado
+        df_remisiones = st.session_state.BD_Datos_Generales_Remision.copy()
+        
+        def parsear_fecha_rem(val):
+            import datetime as dt
+            try:
+                return dt.datetime.strptime(str(val).split()[0], "%d/%m/%Y").date()
+            except Exception:
                 try:
-                    tarimas_lista = ast.literal_eval(tarimas_lista)
+                    return dt.datetime.strptime(str(val).split()[0], "%Y-%m-%d").date()
                 except Exception:
-                    tarimas_lista = [tarimas_lista]
+                    return dt.date.today()
+                    
+        df_remisiones['Fecha_Date'] = df_remisiones['Fecha_Hora_Salida'].apply(parsear_fecha_rem)
+        df_remisiones_filtradas = df_remisiones[
+            (df_remisiones['Fecha_Date'] >= fecha_inicio) & 
+            (df_remisiones['Fecha_Date'] <= fecha_fin)
+        ]
+        
+        if df_remisiones_filtradas.empty:
+            st.info("ℹ️ No se encontraron remisiones en el rango de fechas seleccionado.")
+        else:
+            df_mostrar = df_remisiones_filtradas.drop(columns=['Fecha_Date'], errors='ignore')
             
-            # Filtramos el desglose granular de las piezas
-            df_det = st.session_state.BD_Detalle_Tarimas[
-                st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(tarimas_lista)
-            ]
+            # Ordenar descendentemente por número de folio
+            def extract_folio_num(folio_str):
+                import re
+                numeros = re.findall(r'\d+', str(folio_str))
+                if numeros:
+                    return int(numeros[-1])
+                return 0
+                
+            df_mostrar['Folio_Num'] = df_mostrar['Folio_Remision'].apply(extract_folio_num)
+            df_mostrar = df_mostrar.sort_values(by='Folio_Num', ascending=False).drop(columns=['Folio_Num'], errors='ignore')
             
-            # --- RENDERIZADO DE BOTONES EXCLUSIVO SIN CONDICIONES OCULTAS ---
-            c1, c2 = st.columns(2)
-            with c1: 
-                # El formato oficial FO-MET-10 siempre estará visible para ti
-                st.download_button(
-                    label="📄 Descargar Reporte Oficial (FO-MET-10)", 
-                    data=generar_pdf_remision_general(row_dict, df_det), 
-                    file_name=f"FO-MET-10_Remision_{r_sel}.pdf", 
-                    key="btn_dl_rem_pdf", 
-                    mime="application/pdf"
-                )
-            with c2: 
-                # El anexo secundario solo se habilita si tiene renglones de piezas
-                if not df_det.empty:
-                    pass
-                else:
-                    st.info("ℹ️ No hay desglose de piezas registrado para el anexo de este folio.")
+            st.write("Seleccione una remisión de la tabla para habilitar la descarga:")
+            
+            sel_grid = st.dataframe(
+                df_mostrar,
+                use_container_width=True,
+                hide_index=True,
+                on_select="rerun",
+                selection_mode="single-row",
+                key="tabla_descarga_remisiones_final",
+                column_config={
+                    "Folio_Remision": st.column_config.TextColumn("Folio de Remisión"),
+                    "Fecha_Hora_Salida": st.column_config.TextColumn("Fecha de Salida"),
+                    "Nombre_Emisor": st.column_config.TextColumn("Emisor"),
+                    "Nombre_Receptor": st.column_config.TextColumn("Receptor"),
+                    "Tarimas_Asociadas": st.column_config.TextColumn("Tarimas Asociadas")
+                }
+            )
+            
+            filas_seleccionadas = sel_grid.get("selection", {}).get("rows", [])
+            if filas_seleccionadas:
+                idx_seleccionado = filas_seleccionadas[0]
+                row_dict = df_mostrar.iloc[idx_seleccionado].to_dict()
+                r_sel = row_dict['Folio_Remision']
+                
+                # Convertimos las tarimas asociadas de texto a lista real de Python
+                import ast
+                tarimas_lista = row_dict['Tarimas_Asociadas']
+                if isinstance(tarimas_lista, str):
+                    try:
+                        tarimas_lista = ast.literal_eval(tarimas_lista)
+                    except Exception:
+                        tarimas_lista = [tarimas_lista]
+                
+                # Filtramos el desglose granular de las piezas
+                df_det = st.session_state.BD_Detalle_Tarimas[
+                    st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(tarimas_lista)
+                ]
+                
+                st.write("")
+                st.success(f"📌 Folio seleccionado: **{r_sel}**")
+                
+                # --- RENDERIZADO DE BOTONES EXCLUSIVO ---
+                c1, c2 = st.columns(2)
+                with c1: 
+                    st.download_button(
+                        label="📄 Descargar Reporte Oficial (FO-MET-10)", 
+                        data=generar_pdf_remision_general(row_dict, df_det), 
+                        file_name=f"FO-MET-10_Remision_{r_sel}.pdf", 
+                        key=f"btn_dl_rem_pdf_{r_sel}",
+                        mime="application/pdf"
+                    )
+                with c2: 
+                    if not df_det.empty:
+                        pass
+                    else:
+                        st.info("ℹ️ No hay desglose de piezas registrado para el anexo de este folio.")
+            else:
+                st.info("💡 Seleccione una fila haciendo clic en el extremo izquierdo de la remisión deseada para descargar su reporte.")
 
 
 
