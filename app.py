@@ -416,16 +416,7 @@ def draw_sigrama_reporte_decorations(canvas, doc):
     canvas.setFont("Helvetica-Bold", 13)
     canvas.drawCentredString(285, 755, "REPORTE CONSOLIDADO DE INVENTARIO POR FILTRO")
     
-    # Pie de Página Legal y Control del SGC (FO-SGC-02)
-    canvas.setStrokeColor(colors.HexColor("#D32F2F"))
-    canvas.setLineWidth(1)
-    canvas.line(36, 45, 36, 25)
-    canvas.setFont("Helvetica-Bold", 7)
-    canvas.drawString(42, 37, "FO-SGC-02")
-    canvas.setFont("Helvetica", 6)
-    canvas.setFillColor(colors.HexColor("#424242"))
-    texto_legal = "PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, POR CUALQUIER MEDIO O PROCEDIMIENTO, SIN AUTORIZACIÓN DE INDUSTRIA SIGRAMA S.A. DE C.V."
-    canvas.drawString(95, 37, texto_legal)
+    # Pie de Página Legal y Control del SGC (FO-SGC-02) - Eliminado por requerimiento del cliente
     canvas.restoreState()
 
 def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
@@ -570,16 +561,7 @@ def draw_sigrama_decorations(canvas, doc):
     canvas.setFont("Helvetica-Bold", 13)
     canvas.drawCentredString(285, 755, "EMBARQUE-RECEPCIÓN DE MERCANCÍA")
     
-    # Pie de Página Legal y Control del SGC (FO-SGC-02)
-    canvas.setStrokeColor(colors.HexColor("#D32F2F"))
-    canvas.setLineWidth(1)
-    canvas.line(36, 45, 36, 25)
-    canvas.setFont("Helvetica-Bold", 7)
-    canvas.drawString(42, 37, "FO-SGC-02")
-    canvas.setFont("Helvetica", 6)
-    canvas.setFillColor(colors.HexColor("#424242"))
-    texto_legal = "PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, POR CUALQUIER MEDIO O PROCEDIMIENTO, SIN AUTORIZACIÓN DE INDUSTRIA SIGRAMA S.A. DE C.V."
-    canvas.drawString(95, 37, texto_legal)
+    # Pie de Página Legal y Control del SGC (FO-SGC-02) - Eliminado por requerimiento del cliente
     canvas.restoreState()
 
 
