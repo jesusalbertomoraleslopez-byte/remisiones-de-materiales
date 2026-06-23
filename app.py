@@ -709,6 +709,8 @@ if "usuario_actual" not in st.session_state:
 if "BD_Articulos" not in st.session_state or st.session_state.get("BD_Articulos") is None:
     df_git_articulos = cargar_excel_desde_github("BD_Articulos.xlsx")
     if df_git_articulos is not None:
+        if "SKU" in df_git_articulos.columns:
+            df_git_articulos["SKU"] = df_git_articulos["SKU"].astype(str).str.strip().str.upper()
         st.session_state.BD_Articulos = df_git_articulos
     else:
         # Estructura oficial estricta del sistema en caso de que el archivo no exista aún en GitHub
@@ -727,6 +729,8 @@ if "BD_Tarimas" not in st.session_state:
 if "BD_Detalle_Tarimas" not in st.session_state or st.session_state.get("BD_Detalle_Tarimas") is None:
     df_git_detalles = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
     if df_git_detalles is not None:
+        if "SKU" in df_git_detalles.columns:
+            df_git_detalles["SKU"] = df_git_detalles["SKU"].astype(str).str.strip().str.upper()
         st.session_state.BD_Detalle_Tarimas = df_git_detalles
     else:
         st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"])
@@ -1631,6 +1635,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 columnas_requeridas = ["Tarima", "Producto/SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"]
                 if not all(col in df_ex.columns for col in columnas_requeridas): st.error("❌ Error: Columnas incompatibles.")
                 else:
+                    df_ex["Producto/SKU"] = df_ex["Producto/SKU"].astype(str).str.strip().str.upper()
                     if not st.session_state.BD_Tarimas.empty: st.session_state.BD_Tarimas["Es_Nueva"] = False
                     for t_orig in df_ex['Tarima'].unique():
                         # 1. Leer el consecutivo manual configurado, si no existe usa el conteo base
@@ -2953,12 +2958,12 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                             else:
                                 # Limpieza del archivo subido
                                 df_art_excel = df_art_excel.dropna(subset=["SKU"])
-                                df_art_excel["SKU"] = df_art_excel["SKU"].astype(str).str.strip()
+                                df_art_excel["SKU"] = df_art_excel["SKU"].astype(str).str.strip().str.upper()
         
                                 # Integración inteligente: Conserva anteriores y suma/actualiza los nuevos
                                 if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
                                     df_anterior = st.session_state.BD_Articulos.copy()
-                                    df_anterior["SKU"] = df_anterior["SKU"].astype(str).str.strip()
+                                    df_anterior["SKU"] = df_anterior["SKU"].astype(str).str.strip().str.upper()
                                     
                                     # Eliminamos del catálogo anterior los SKUs que vienen en el archivo nuevo para actualizarlos
                                     df_anterior = df_anterior[~df_anterior["SKU"].isin(df_art_excel["SKU"])]
@@ -3010,7 +3015,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 if st.button("💾 Guardar Cambios y Aplicar Bajas en GitHub", use_container_width=True):
                     # Limpieza preventiva de datos antes de subir
                     df_art_final = df_art_editable.dropna(subset=["SKU"])
-                    df_art_final["SKU"] = df_art_final["SKU"].astype(str).str.strip()
+                    df_art_final["SKU"] = df_art_final["SKU"].astype(str).str.strip().str.upper()
         
                     # Actualizar el estado de la sesión local
                     st.session_state.BD_Articulos = df_art_final
