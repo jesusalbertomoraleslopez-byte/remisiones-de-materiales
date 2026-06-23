@@ -420,6 +420,184 @@ def renderizar_explorador_imagenes():
     else:
         st.info("Actualmente no hay imágenes descargadas localmente en la carpeta `imagenes_articulos/`. Haz clic en 'Sincronizar Imágenes con GitHub' para descargar las imágenes que existan en el repositorio.")
 
+def generar_pdf_catalogo_articulos(df_articulos):
+    import io
+    import os
+    import glob
+    import requests
+    import datetime
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    
+    buf = io.BytesIO()
+    
+    # 36pt margins -> 540pt width
+    doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
+    
+    story = []
+    
+    # Decoración de fondo / Cabecera repetitiva
+    def draw_catalog_decorations(canvas, doc):
+        canvas.saveState()
+        # Franja roja en el encabezado
+        canvas.setFillColor(colors.HexColor("#EC2024"))
+        canvas.rect(0, 750, 612, 42, fill=True, stroke=False)
+        
+        # Logotipo (si existe)
+        logo_path = "logo_sigrama.png"
+        if os.path.exists(logo_path):
+            canvas.drawImage(logo_path, 36, 755, width=120, height=32, mask='auto')
+            
+        # Título en la franja roja
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 12)
+        canvas.drawString(180, 765, "REPORTE DE CATALOGO MAESTRO DE ARTICULOS")
+        
+        # Fecha de generación en la esquina
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica", 9)
+        canvas.drawRightString(576, 765, datetime.date.today().strftime("%d-%b-%Y"))
+        
+        # Pie de página
+        canvas.setStrokeColor(colors.HexColor("#EC2024"))
+        canvas.setLineWidth(1)
+        canvas.line(36, 50, 576, 50)
+        
+        canvas.setFillColor(colors.HexColor("#616161"))
+        canvas.setFont("Helvetica", 8)
+        canvas.drawString(36, 38, "Industria SIGRAMA S.A. de C.V. - Sistema Remisiones")
+        canvas.drawRightString(576, 38, f"Página {canvas._pageNumber}")
+        canvas.restoreState()
+
+    styles = getSampleStyleSheet()
+    
+    # Crear estilos personalizados si no existen
+    try:
+        style_header = ParagraphStyle(
+            'CatalogHeaderStyle',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            textColor=colors.white,
+            alignment=1 # Centrado
+        )
+    except Exception:
+        style_header = styles['Normal']
+        
+    try:
+        style_cell = ParagraphStyle(
+            'CatalogCellText',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=9,
+            textColor=colors.HexColor("#212121"),
+            leading=11
+        )
+    except Exception:
+        style_cell = styles['Normal']
+
+    try:
+        style_cell_bold = ParagraphStyle(
+            'CatalogCellTextBold',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=9,
+            textColor=colors.HexColor("#212121"),
+            leading=11
+        )
+    except Exception:
+        style_cell_bold = styles['Normal']
+
+    # Título en el body
+    story.append(Spacer(1, 10))
+    
+    # Construcción de la tabla
+    # Columnas: SKU, Imagen, Descripción, Calibre, Dimensiones, Acabado
+    tabla_datos = [[
+        Paragraph("SKU", style_header),
+        Paragraph("Imagen", style_header),
+        Paragraph("Descripción", style_header),
+        Paragraph("Calibre", style_header),
+        Paragraph("Dimensiones", style_header),
+        Paragraph("Acabado", style_header)
+    ]]
+    
+    # Pre-cargar lista remota si es necesario para evitar múltiples llamadas en bucle
+    github_items = []
+    if "github_token" in st.secrets and st.secrets["github_token"]:
+        try:
+            GITHUB_TOKEN = st.secrets["github_token"]
+            url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+            res_list = requests.get(url_list, headers=headers)
+            if res_list.status_code == 200:
+                github_items = res_list.json()
+        except Exception:
+            pass
+
+    for _, row in df_articulos.iterrows():
+        sku = str(row['SKU']).strip()
+        nombre = str(row['Nombre'])
+        calibre = str(row['Calibre_Espesor'])
+        dimensiones = str(row['Dimensiones_Pieza'])
+        acabado = str(row['Acabado_Superficial'])
+        
+        # Buscar imagen
+        img_path = None
+        matching_local = glob.glob(f"imagenes_articulos/{sku}(*.*")
+        if matching_local:
+            img_path = matching_local[0]
+        else:
+            # Buscar en lista de GitHub pre-cargada
+            for git_item in github_items:
+                if git_item["name"].startswith(f"{sku}("):
+                    github_file_path = f"imagenes_articulos/{git_item['name']}"
+                    if descargar_imagen_desde_github(github_file_path):
+                        img_path = github_file_path
+                        break
+        
+        # Celda de imagen
+        img_cell = ""
+        if img_path and os.path.exists(img_path):
+            try:
+                # Usar tamaño 60x60
+                img_cell = RLImage(img_path, width=60, height=60, hAlign='CENTER')
+            except Exception:
+                img_cell = Paragraph("<font color='red'>Error de carga</font>", style_cell)
+        else:
+            img_cell = Paragraph("<font color='#9e9e9e'>Sin imagen</font>", style_cell)
+            
+        tabla_datos.append([
+            Paragraph(f"<b>{sku}</b>", style_cell_bold),
+            img_cell,
+            Paragraph(nombre, style_cell),
+            Paragraph(calibre, style_cell),
+            Paragraph(dimensiones, style_cell),
+            Paragraph(acabado, style_cell)
+        ])
+        
+    # Ancho total: 540 pt
+    t_cat = Table(tabla_datos, colWidths=[95, 80, 125, 75, 95, 70])
+    t_cat.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#EC2024")),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#E0E0E0")),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (1,1), (1,-1), 'CENTER'),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6)
+    ]))
+    
+    story.append(t_cat)
+    
+    doc.build(story, onFirstPage=draw_catalog_decorations, onLaterPages=draw_catalog_decorations)
+    buf.seek(0)
+    return buf.getvalue()
+
 
 def subir_imagen_a_github(file_path):
     """Sube una imagen local a GitHub utilizando API REST, codificando la ruta de forma segura."""
@@ -2058,7 +2236,20 @@ elif opcion_menu == "📦 Catálogo de Artículos":
         st.write("---")
         
         # Despliegue de métricas rápidas de la consulta
-        st.metric("🔢 Artículos en Selección:", f"{len(df_art_filtrado)} Items")
+        col_metric, col_pdf = st.columns([2, 1])
+        with col_metric:
+            st.metric("🔢 Artículos en Selección:", f"{len(df_art_filtrado)} Items")
+        with col_pdf:
+            st.write("") # Alineación vertical
+            pdf_data = generar_pdf_catalogo_articulos(df_art_filtrado)
+            st.download_button(
+                label="📄 Descargar Catálogo (PDF)",
+                data=pdf_data,
+                file_name="Reporte_Catalogo_Articulos.pdf",
+                mime="application/pdf",
+                key="btn_download_catalogo_pdf_tab",
+                use_container_width=True
+            )
         
         # Despliegue de la tabla de datos estructurada
         st.dataframe(
