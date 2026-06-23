@@ -597,11 +597,43 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
 
         
         
+        # Buscar si existe una imagen cargada para este SKU
+        import glob
+        img_encontrada = None
+        matching_imgs = glob.glob(f"imagenes_articulos/{sku_actual}(*.*")
+        if matching_imgs:
+            img_encontrada = matching_imgs[0]
+        else:
+            if "github_token" in st.secrets and st.secrets["github_token"]:
+                try:
+                    GITHUB_TOKEN = st.secrets["github_token"]
+                    url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+                    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+                    res_list = requests.get(url_list, headers=headers)
+                    if res_list.status_code == 200:
+                        items_git = res_list.json()
+                        for it in items_git:
+                            if it["name"].startswith(f"{sku_actual}("):
+                                github_file_path = f"imagenes_articulos/{it['name']}"
+                                if descargar_imagen_desde_github(github_file_path):
+                                    img_encontrada = github_file_path
+                                    break
+                except Exception:
+                    pass
+
+        desc_cell_flowables = [
+            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{descripcion_final}</font>", style_normal_text)
+        ]
+        if img_encontrada and os.path.exists(img_encontrada):
+            from reportlab.platypus import Image as RLImage
+            desc_cell_flowables.append(Spacer(1, 3))
+            desc_cell_flowables.append(RLImage(img_encontrada, width=50, height=50, hAlign='LEFT'))
+
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             Paragraph(str(row['PO']), style_normal_text),
             Paragraph(str(row['Proyecto']), style_normal_text),
-            Paragraph(f"{row['SKU']}<br/><font color='#616161'>{descripcion_final}</font>", style_normal_text),
+            desc_cell_flowables,
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text),
             Paragraph(str(row['Estatus_Envio']), style_normal_text)
         ])
@@ -1426,10 +1458,43 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                 art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
                                 art_nom = art.iloc[0]['Nombre'] if not art.empty else "Articulo No Registrado en BD Remisiones"
                                 
+                                sku_partida = item['SKU']
+                                # Buscar si existe una imagen cargada para este SKU
+                                import glob
+                                img_encontrada = None
+                                matching_imgs = glob.glob(f"imagenes_articulos/{sku_partida}(*.*")
+                                if matching_imgs:
+                                    img_encontrada = matching_imgs[0]
+                                else:
+                                    if "github_token" in st.secrets and st.secrets["github_token"]:
+                                        try:
+                                            GITHUB_TOKEN = st.secrets["github_token"]
+                                            url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+                                            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+                                            res_list = requests.get(url_list, headers=headers)
+                                            if res_list.status_code == 200:
+                                                items_git = res_list.json()
+                                                for it in items_git:
+                                                    if it["name"].startswith(f"{sku_partida}("):
+                                                        github_file_path = f"imagenes_articulos/{it['name']}"
+                                                        if descargar_imagen_desde_github(github_file_path):
+                                                            img_encontrada = github_file_path
+                                                            break
+                                        except Exception:
+                                            pass
+
+                                desc_comercial_flowables = [
+                                    Paragraph(str(art_nom), style_normal_text)
+                                ]
+                                if img_encontrada and os.path.exists(img_encontrada):
+                                    from reportlab.platypus import Image as RLImage
+                                    desc_comercial_flowables.append(Spacer(1, 3))
+                                    desc_comercial_flowables.append(RLImage(img_encontrada, width=50, height=50, hAlign='LEFT'))
+
                                 tabla_detalles.append([
                                     Paragraph(str(item['PO']), style_normal_text),
                                     Paragraph(str(item['SKU']), style_normal_text),
-                                    Paragraph(str(art_nom), style_normal_text),
+                                    desc_comercial_flowables,
                                     Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
                                 ])
                                 
@@ -1553,10 +1618,43 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
                             art_nom = art.iloc[0]['Nombre'] if not art.empty else "Articulo No Registrado en BD Remisiones"
                             
+                            sku_partida = item['SKU']
+                            # Buscar si existe una imagen cargada para este SKU
+                            import glob
+                            img_encontrada = None
+                            matching_imgs = glob.glob(f"imagenes_articulos/{sku_partida}(*.*")
+                            if matching_imgs:
+                                img_encontrada = matching_imgs[0]
+                            else:
+                                if "github_token" in st.secrets and st.secrets["github_token"]:
+                                    try:
+                                        GITHUB_TOKEN = st.secrets["github_token"]
+                                        url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+                                        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+                                        res_list = requests.get(url_list, headers=headers)
+                                        if res_list.status_code == 200:
+                                            items_git = res_list.json()
+                                            for it in items_git:
+                                                if it["name"].startswith(f"{sku_partida}("):
+                                                    github_file_path = f"imagenes_articulos/{it['name']}"
+                                                    if descargar_imagen_desde_github(github_file_path):
+                                                        img_encontrada = github_file_path
+                                                        break
+                                    except Exception:
+                                        pass
+
+                            desc_comercial_flowables = [
+                                Paragraph(str(art_nom), style_normal_text)
+                            ]
+                            if img_encontrada and os.path.exists(img_encontrada):
+                                from reportlab.platypus import Image as RLImage
+                                desc_comercial_flowables.append(Spacer(1, 3))
+                                desc_comercial_flowables.append(RLImage(img_encontrada, width=50, height=50, hAlign='LEFT'))
+
                             tabla_detalles.append([
                                 Paragraph(str(item['PO']), style_normal_text),
                                 Paragraph(str(item['SKU']), style_normal_text),
-                                Paragraph(str(art_nom), style_normal_text),
+                                desc_comercial_flowables,
                                 Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
                             ])
                             
