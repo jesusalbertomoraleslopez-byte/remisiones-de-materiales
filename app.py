@@ -739,6 +739,8 @@ if "BD_Detalle_Tarimas" not in st.session_state or st.session_state.get("BD_Deta
 if "BD_Datos_Generales_Remision" not in st.session_state:
     df_git_remisiones = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
     if df_git_remisiones is not None:
+        if "Tarimas_Asociadas" in df_git_remisiones.columns:
+            df_git_remisiones["Tarimas_Asociadas"] = df_git_remisiones["Tarimas_Asociadas"].astype(str)
         st.session_state.BD_Datos_Generales_Remision = df_git_remisiones
     else:
         st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=["ID_Remision", "Folio_Remision", "Fecha_Hora_Salida", "Nombre_Emisor", "Direccion_Emisor", "Nombre_Receptor", "Direccion_Receptor", "Tarimas_Asociadas"])
@@ -2096,7 +2098,7 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                 if not t_sel or not nom_r: st.error("Complete los campos obligatorios.")
                 else:
                     fol = f"E00{27 + len(st.session_state.BD_Datos_Generales_Remision)}"
-                    reg = {"ID_Remision": len(st.session_state.BD_Datos_Generales_Remision)+1, "Folio_Remision": fol, "Fecha_Hora_Salida": datetime.datetime.now().strftime("%d/%m/%Y"), "Nombre_Emisor": nom_e, "Direccion_Emisor": dir_e, "Nombre_Receptor": nom_r, "Direccion_Receptor": dir_r, "Tarimas_Asociadas": t_sel}
+                    reg = {"ID_Remision": len(st.session_state.BD_Datos_Generales_Remision)+1, "Folio_Remision": fol, "Fecha_Hora_Salida": datetime.datetime.now().strftime("%d/%m/%Y"), "Nombre_Emisor": nom_e, "Direccion_Emisor": dir_e, "Nombre_Receptor": nom_r, "Direccion_Receptor": dir_r, "Tarimas_Asociadas": str(t_sel)}
                     st.session_state.BD_Datos_Generales_Remision = pd.concat([st.session_state.BD_Datos_Generales_Remision, pd.DataFrame([reg])], ignore_index=True)
                     st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(t_sel), 'Estatus'] = 'Remesada'
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
@@ -2154,6 +2156,9 @@ elif opcion_menu == "🚚 Módulo Remisiones":
             
             st.write("Seleccione una remisión de la tabla para habilitar la descarga:")
             
+            if 'Tarimas_Asociadas' in df_mostrar.columns:
+                df_mostrar['Tarimas_Asociadas'] = df_mostrar['Tarimas_Asociadas'].astype(str)
+                
             sel_grid = st.dataframe(
                 df_mostrar,
                 use_container_width=True,
@@ -2791,7 +2796,10 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 st.write("---")
                 st.markdown("### 🚚 2. Eliminar Remisiones de Salida")
                 if not st.session_state.BD_Datos_Generales_Remision.empty:
-                    sel_remisiones = st.dataframe(st.session_state.BD_Datos_Generales_Remision, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_remisiones_final_f")
+                    df_rem_purga = st.session_state.BD_Datos_Generales_Remision.copy()
+                    if 'Tarimas_Asociadas' in df_rem_purga.columns:
+                        df_rem_purga['Tarimas_Asociadas'] = df_rem_purga['Tarimas_Asociadas'].astype(str)
+                    sel_remisiones = st.dataframe(df_rem_purga, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_remisiones_final_f")
                     filas_rem = sel_remisiones.get("selection", {}).get("rows", [])
                     if filas_rem:
                         # Filtrar índices válidos para evitar errores de desfase de Streamlit en la recarga
