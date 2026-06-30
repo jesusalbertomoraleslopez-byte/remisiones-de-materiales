@@ -1652,6 +1652,45 @@ elif opcion_menu == "🔍 Centro de Consultas":
                 writer_c = pd.ExcelWriter(buf_c, engine='openpyxl')
                 df_metadatos.to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
                 df_exportar_inventario.to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
+                
+                # --- APLICACIÓN DE DISEÑO CORPORATIVO AL EXCEL ---
+                workbook = writer_c.book
+                
+                # Definir estilos
+                header_fill = PatternFill(start_color="111111", end_color="111111", fill_type="solid") # Negro Corporativo para contraste o EC2024
+                # Vamos a usar el gris oscuro del PDF o Rojo
+                header_fill = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid") # Rojo Institucional
+                header_font = Font(color="FFFFFF", bold=True)
+                center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                
+                for sheet_name in workbook.sheetnames:
+                    sheet = workbook[sheet_name]
+                    
+                    # Formatear encabezados
+                    for cell in sheet[1]:
+                        cell.fill = header_fill
+                        cell.font = header_font
+                        cell.alignment = center_alignment
+                        
+                    # Centrar todos los datos
+                    for row in sheet.iter_rows(min_row=2):
+                        for cell in row:
+                            cell.alignment = center_alignment
+                            
+                    # Ajuste automático del ancho de las columnas
+                    for col in sheet.columns:
+                        max_length = 0
+                        column = col[0].column_letter
+                        for cell in col:
+                            try:
+                                if len(str(cell.value)) > max_length:
+                                    max_length = len(str(cell.value))
+                            except:
+                                pass
+                        # Darle un poco más de margen
+                        adjusted_width = (max_length + 2)
+                        sheet.column_dimensions[column].width = min(adjusted_width, 60) # Límite máximo de ancho
+
                 writer_c.close()
                 
                 buf_c.seek(0)
