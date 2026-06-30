@@ -1516,6 +1516,54 @@ if opcion_menu == "📊 Dashboard e Históricos":
                 if col_r in resumen_avanzado.columns:
                     resumen_avanzado[col_r] = pd.to_numeric(resumen_avanzado[col_r], errors='coerce').fillna(0).astype(int)
             st.dataframe(resumen_avanzado, use_container_width=True, hide_index=True)
+            
+            # Botón de Descarga Excel para Cumplimiento y Parcialidades
+            from datetime import datetime
+            buf_parc = io.BytesIO()
+            writer_p = pd.ExcelWriter(buf_parc, engine='openpyxl')
+            resumen_avanzado.to_excel(writer_p, index=False, sheet_name='Cumplimiento_Parcialidades')
+            
+            # --- APLICACIÓN DE DISEÑO CORPORATIVO ---
+            from openpyxl.styles import Font, PatternFill, Alignment
+            workbook_p = writer_p.book
+            header_fill_p = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
+            header_font_p = Font(color="FFFFFF", bold=True)
+            center_alignment_p = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            
+            sheet_p = workbook_p['Cumplimiento_Parcialidades']
+            for cell in sheet_p[1]:
+                cell.fill = header_fill_p
+                cell.font = header_font_p
+                cell.alignment = center_alignment_p
+                
+            for row in sheet_p.iter_rows(min_row=2):
+                for cell in row:
+                    cell.alignment = center_alignment_p
+                    
+            for col in sheet_p.columns:
+                max_length = 0
+                column = col[0].column_letter
+                for cell in col:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                sheet_p.column_dimensions[column].width = min(max_length + 2, 60)
+                
+            sheet_p.auto_filter.ref = sheet_p.dimensions
+            sheet_p.freeze_panes = "A2"
+            
+            writer_p.close()
+            buf_parc.seek(0)
+            
+            st.download_button(
+                label="📥 Generar Reporte de Parcialidades en Excel (.xlsx)",
+                data=buf_parc.getvalue(),
+                file_name=f"TAR_Cumplimiento_Parcialidades_{datetime.now().strftime('%Y%m%d:%I:%M%p').lower()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_download_parcialidades_excel"
+            )
         else:
             st.info("No existen parcialidades registradas para el filtro seleccionado.")
     else:
