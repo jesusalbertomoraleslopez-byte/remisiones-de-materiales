@@ -745,6 +745,62 @@ if "BD_Datos_Generales_Remision" not in st.session_state:
     else:
         st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=["ID_Remision", "Folio_Remision", "Fecha_Hora_Salida", "Nombre_Emisor", "Direccion_Emisor", "Nombre_Receptor", "Direccion_Receptor", "Tarimas_Asociadas"])
 
+def sincronizar_estatus_tarimas(auto_save=True):
+    """Compara las tarimas remesadas con las remisiones activas y corrige huérfanas."""
+    if "BD_Tarimas" not in st.session_state or "BD_Datos_Generales_Remision" not in st.session_state:
+        return 0
+    
+    df_tarimas = st.session_state.BD_Tarimas
+    df_remisiones = st.session_state.BD_Datos_Generales_Remision
+    
+    if df_tarimas.empty:
+        return 0
+        
+    import ast
+    remesadas_activas = set()
+    if not df_remisiones.empty:
+        for _, row in df_remisiones.iterrows():
+            val = row.get('Tarimas_Asociadas')
+            if isinstance(val, str):
+                try:
+                    t_list = ast.literal_eval(val)
+                except Exception:
+                    t_list = [val]
+            elif isinstance(val, list):
+                t_list = val
+            else:
+                t_list = []
+            for t in t_list:
+                remesadas_activas.add(str(t).strip())
+                
+    corregidas = 0
+    for idx, row in df_tarimas.iterrows():
+        t_id = str(row['ID_Tarima']).strip()
+        est = str(row['Estatus']).strip()
+        
+        # Si está marcada como Remesada pero no está en ninguna remisión activa, vuelve a Disponible
+        if est == 'Remesada' and t_id not in remesadas_activas:
+            df_tarimas.at[idx, 'Estatus'] = 'Disponible'
+            corregidas += 1
+        # Si está marcada como Disponible pero sí está en una remisión activa, se corrige a Remesada
+        elif est == 'Disponible' and t_id in remesadas_activas:
+            df_tarimas.at[idx, 'Estatus'] = 'Remesada'
+            corregidas += 1
+            
+    if corregidas > 0:
+        st.session_state.BD_Tarimas = df_tarimas
+        if auto_save:
+            subir_excel_a_github("BD_Tarimas.xlsx", df_tarimas)
+            
+    return corregidas
+
+# --- Corrección automática de Estatus de Tarimas ---
+if "BD_Tarimas" in st.session_state and "BD_Datos_Generales_Remision" in st.session_state:
+    try:
+        sincronizar_estatus_tarimas(auto_save=True)
+    except Exception:
+        pass
+
 # --- Catálogo Operativo de Líderes ---
 if "BD_Lideres" not in st.session_state:
     df_git_lideres = cargar_excel_desde_github("BD_Lideres.xlsx")
@@ -885,12 +941,15 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
                 acabado = str(art_info.get('Acabado_Superficial', '')).strip()
     
                 detalles = []
-                if calibre and calibre.lower() != 'nan': detalles.append(f"Cal: {calibre}")
-                if dims and dims.lower() != 'nan': detalles.append(f"Dim: {dims}")
-                if acabado and acabado.lower() != 'nan': detalles.append(f"Acab: {acabado}")
+                if calibre and calibre.lower() != 'nan' and calibre != '': detalles.append(f"<b>Calibre/Espesor:</b> {calibre}")
+                if dims and dims.lower() != 'nan' and dims != '': detalles.append(f"<b>Dimensiones:</b> {dims}")
+                if acabado and acabado.lower() != 'nan' and acabado != '': detalles.append(f"<b>Material/Acabado:</b> {acabado}")
     
-                sub_detalle = f" ({', '.join(detalles)})" if detalles else ""
-                descripcion_final = f"{nombre_com}{sub_detalle}"
+                espec_str = f" | ".join(detalles)
+                if espec_str:
+                    descripcion_final = f"<b>{nombre_com}</b><br/><font color='#555555' size='7.5'>{espec_str}</font>"
+                else:
+                    descripcion_final = f"<b>{nombre_com}</b>"
             else:
                 descripcion_final = "Articulo No Registrado en BD Remisiones"
         else:
@@ -1055,13 +1114,16 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                 dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
                 acabado = str(art_info.get('Acabado_Superficial', '')).strip()
                 
-                componentes_piezas = []
-                if calibre and calibre.lower() != 'nan': componentes_piezas.append(f"CAL. {calibre}")
-                if dims and dims.lower() != 'nan': componentes_piezas.append(f"DIM. {dims}")
-                if acabado and acabado.lower() != 'nan': componentes_piezas.append(f"{acabado.upper()}")
+                detalles = []
+                if calibre and calibre.lower() != 'nan' and calibre != '': detalles.append(f"<b>Calibre/Espesor:</b> {calibre}")
+                if dims and dims.lower() != 'nan' and dims != '': detalles.append(f"<b>Dimensiones:</b> {dims}")
+                if acabado and acabado.lower() != 'nan' and acabado != '': detalles.append(f"<b>Material/Acabado:</b> {acabado}")
                 
-                formato_especificaciones = f" - {' / '.join(componentes_piezas)}" if componentes_piezas else ""
-                concepto_remision = f"{nombre_com}{formato_especificaciones}"
+                espec_str = f" | ".join(detalles)
+                if espec_str:
+                    concepto_remision = f"<b>{nombre_com}</b><br/><font color='#555555' size='7.5'>{espec_str}</font>"
+                else:
+                    concepto_remision = f"<b>{nombre_com}</b>"
             else:
                 concepto_remision = "Articulo No Registrado en BD Remisiones"
         else:
@@ -1956,7 +2018,25 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     
                         for _, item in det.iterrows():
                             art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
-                            art_nom = art.iloc[0]['Nombre'] if not art.empty else "Articulo No Registrado en BD Remisiones"
+                            if not art.empty:
+                                art_info = art.iloc[0]
+                                nombre_com = str(art_info.get('Nombre', '')).strip()
+                                calibre = str(art_info.get('Calibre_Espesor', '')).strip()
+                                dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
+                                acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                                
+                                detalles = []
+                                if calibre and calibre.lower() != 'nan' and calibre != '': detalles.append(f"<b>Calibre/Espesor:</b> {calibre}")
+                                if dims and dims.lower() != 'nan' and dims != '': detalles.append(f"<b>Dimensiones:</b> {dims}")
+                                if acabado and acabado.lower() != 'nan' and acabado != '': detalles.append(f"<b>Material/Acabado:</b> {acabado}")
+                                
+                                espec_str = f" | ".join(detalles)
+                                if espec_str:
+                                    art_nom = f"<b>{nombre_com}</b><br/><font color='#555555' size='8.5'>{espec_str}</font>"
+                                else:
+                                    art_nom = f"<b>{nombre_com}</b>"
+                            else:
+                                art_nom = "Articulo No Registrado en BD Remisiones"
                             
                             sku_partida = item['SKU']
                             # Buscar si existe una imagen cargada para este SKU
@@ -2921,8 +3001,20 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                         if filas_rem_validas:
                             ids_rem_eliminar = st.session_state.BD_Datos_Generales_Remision.iloc[filas_rem_validas]['Folio_Remision'].tolist()
                             tarimas_afectadas = []
+                            import ast
                             for idx in filas_rem_validas:
-                                tarimas_afectadas.extend(st.session_state.BD_Datos_Generales_Remision.iloc[idx]['Tarimas_Asociadas'])
+                                raw_tarimas = st.session_state.BD_Datos_Generales_Remision.iloc[idx]['Tarimas_Asociadas']
+                                if isinstance(raw_tarimas, str):
+                                    try:
+                                        t_list = ast.literal_eval(raw_tarimas)
+                                    except Exception:
+                                        t_list = [raw_tarimas]
+                                elif isinstance(raw_tarimas, list):
+                                    t_list = raw_tarimas
+                                else:
+                                    t_list = []
+                                for t in t_list:
+                                    tarimas_afectadas.append(str(t).strip())
                         else:
                             ids_rem_eliminar = []
                             tarimas_afectadas = []
@@ -2934,6 +3026,17 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                             subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                             st.success("✅ Remisiones eliminadas y bultos reactivados."); st.rerun()
                 else: st.write("No hay remisiones registradas.")
+                
+                st.write("---")
+                st.markdown("### 🔄 3. Sincronización y Reparación de Estatus de Tarimas")
+                st.info("Utilice esta herramienta para buscar tarimas marcadas como 'Remesadas' pero que no pertenecen a ninguna remisión activa (por ejemplo, remisiones borradas manualmente), y regresarlas al estatus de 'Disponible'.")
+                if st.button("🔄 Sincronizar y Reparar Estatus de Tarimas"):
+                    corregidas = sincronizar_estatus_tarimas(auto_save=True)
+                    if corregidas > 0:
+                        st.success(f"✅ ¡Operación completada! Se corrigieron y liberaron {corregidas} tarimas huérfanas.")
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ No se detectaron tarimas con estatus incorrecto. Todo está sincronizado correctamente.")
    
     # --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA DEL CATÁLOGO DE ARTÍCULOS ---
 # --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA DEL CATÁLOGO DE ARTÍCULOS ---
