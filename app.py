@@ -2749,14 +2749,17 @@ elif opcion_menu == "🏢 Reporte por Receptor":
     
     if not st.session_state.BD_Datos_Generales_Remision.empty and not st.session_state.BD_Detalle_Tarimas.empty:
         df_rems = st.session_state.BD_Datos_Generales_Remision.copy()
-        receptores_disp = ["Seleccione un Receptor..."] + sorted(df_rems['Nombre_Receptor'].dropna().unique().tolist())
+        receptores_disp = ["Seleccione un Receptor...", "Todos"] + sorted(df_rems['Nombre_Receptor'].dropna().unique().tolist())
         
         col_rec1, col_rec2 = st.columns([3, 1])
         with col_rec1:
             receptor_sel = st.selectbox("Seleccione el Receptor (Cliente):", receptores_disp, key="sel_receptor_reporte")
             
         if receptor_sel != "Seleccione un Receptor...":
-            df_rems_filtradas = df_rems[df_rems['Nombre_Receptor'] == receptor_sel]
+            if receptor_sel == "Todos":
+                df_rems_filtradas = df_rems.copy()
+            else:
+                df_rems_filtradas = df_rems[df_rems['Nombre_Receptor'] == receptor_sel]
             
             tarimas_asociadas = []
             import ast
@@ -2775,7 +2778,8 @@ elif opcion_menu == "🏢 Reporte por Receptor":
                     tarimas_asociadas.append({
                         "ID_Tarima": str(t).strip(),
                         "Folio_Remision": row['Folio_Remision'],
-                        "Fecha_Salida": row['Fecha_Hora_Salida']
+                        "Fecha_Salida": row['Fecha_Hora_Salida'],
+                        "Receptor": row['Nombre_Receptor']
                     })
                     
             if tarimas_asociadas:
@@ -2795,12 +2799,13 @@ elif opcion_menu == "🏢 Reporte por Receptor":
                         "ID_Tarima": "Tarima",
                         "Folio_Remision": "Remisión",
                         "Fecha_Salida": "Fecha Envío",
+                        "Receptor": "Cliente / Receptor",
                         "SKU": "Código (SKU)",
                         "Nombre": "Descripción Comercial",
                         "Cantidad": "Piezas"
                     })
                     
-                    columnas_mostrar = ["Remisión", "Fecha Envío", "Tarima", "Código (SKU)", "Descripción Comercial", "Piezas", "PO", "Proyecto"]
+                    columnas_mostrar = ["Remisión", "Fecha Envío", "Cliente / Receptor", "Tarima", "Código (SKU)", "Descripción Comercial", "Piezas", "PO", "Proyecto"]
                     columnas_mostrar = [c for c in columnas_mostrar if c in df_cruce.columns]
                     
                     df_mostrar = df_cruce[columnas_mostrar].copy()
