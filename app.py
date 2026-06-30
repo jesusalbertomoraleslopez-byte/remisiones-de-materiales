@@ -796,7 +796,7 @@ if "siguiente_numero_tpm" not in st.session_state or st.session_state["siguiente
 # CAPA DE CONTROL DOCUMENTAL Y DISEÑO IMPRESO CORPORATIVO (INDUSTRIA SIGRAMA)
 # =============================================================================
 def draw_sigrama_reporte_decorations(canvas, doc):
-    """Dibuja los elementos de marca institucionales y códigos de sistema fijos para el formato FO-MET-11."""
+    """Dibuja los elementos de marca institucionales y diseño de encabezado corporativo del Reporte Consolidado."""
     canvas.saveState()
     # Franja superior roja Sigrama
     canvas.setFillColor(colors.HexColor("#D32F2F"))
@@ -816,7 +816,7 @@ def draw_sigrama_reporte_decorations(canvas, doc):
     canvas.restoreState()
 
 def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
-    """Construye el documento PDF oficial FO-MET-11 con el panel de filtros y la cuadrícula de inventario."""
+    """Construye el documento PDF oficial de Reporte Consolidado de Inventario con el panel de filtros y la cuadrícula."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
     story, styles = [], getSampleStyleSheet()
@@ -969,11 +969,11 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
 
 
 # =============================================================================
-# DECORADORES BASE SEPARADOS PARA EVITAR NAMEERROR (FO-MET-10)
+# DECORADORES BASE CORPORATIVOS PARA DOCUMENTOS DE EMBARQUE
 # =============================================================================
 
 def draw_sigrama_decorations(canvas, doc):
-    """Dibuja los elementos de marca institucionales y códigos de sistema fijos para el formato FO-MET-10."""
+    """Dibuja los elementos de marca institucionales y diseño de encabezado corporativo del documento de Embarque."""
     canvas.saveState()
     # Franja superior roja Sigrama
     canvas.setFillColor(colors.HexColor("#D32F2F"))
@@ -994,7 +994,7 @@ def draw_sigrama_decorations(canvas, doc):
 
 
 # =============================================================================
-# FUNCIÓN DE REMISIÓN GENERAL TOTALMENTE RECONSTRUIDA (FO-MET-10)
+# FUNCIÓN DE REMISIÓN GENERAL (EMBARQUE-RECEPCIÓN DE MERCANCÍA)
 # =============================================================================
 def generar_pdf_remision_general(datos_remision, df_detalles_remision):
     """Construye el documento oficial de despacho rellenando las páginas de ReportLab con datos válidos."""
@@ -1290,7 +1290,8 @@ lista_modulos = [
     "🚚 Módulo Remisiones",
     "📦 Catálogo de Artículos",
     "🏭 Industria 4.0",
-    "📖 Manual de Operación"
+    "📖 Manual de Operación",
+    "🏢 Reporte por Receptor"
 ]
 
 if is_admin or is_super:
@@ -1413,6 +1414,13 @@ if opcion_menu == "📊 Dashboard e Históricos":
             
             # Renombrar columnas con el encabezado oficial del Proyecto Planta Rio solicitado
             resumen_avanzado.columns = ["Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "Cant. Tarimas", "Total Piezas", "Piezas Disponibles", "Piezas Remesadas", "% Avance Salida"]
+            # Normalizar tipos para evitar error pyarrow.lib.ArrowInvalid
+            for col_r in ["Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "% Avance Salida"]:
+                if col_r in resumen_avanzado.columns:
+                    resumen_avanzado[col_r] = resumen_avanzado[col_r].astype(str)
+            for col_r in ["Cant. Tarimas", "Total Piezas", "Piezas Disponibles", "Piezas Remesadas"]:
+                if col_r in resumen_avanzado.columns:
+                    resumen_avanzado[col_r] = pd.to_numeric(resumen_avanzado[col_r], errors='coerce').fillna(0).astype(int)
             st.dataframe(resumen_avanzado, use_container_width=True, hide_index=True)
         else:
             st.info("No existen parcialidades registradas para el filtro seleccionado.")
@@ -1422,7 +1430,11 @@ if opcion_menu == "📊 Dashboard e Históricos":
     st.write("---")
     st.subheader("📋 Estado Detallado del Inventario Entarimado (Maestro)")
     if not st.session_state.BD_Tarimas.empty:
-        vista_dash = st.session_state.BD_Tarimas.drop(columns=["Es_Nueva"], errors="ignore")
+        vista_dash = st.session_state.BD_Tarimas.drop(columns=["Es_Nueva"], errors="ignore").copy()
+        # Normalizar tipos para evitar error pyarrow.lib.ArrowInvalid
+        for col_d in vista_dash.columns:
+            if vista_dash[col_d].dtype == object:
+                vista_dash[col_d] = vista_dash[col_d].astype(str)
         st.dataframe(vista_dash, use_container_width=True)
     else:
         st.info("No hay tarimas registradas en el inventario.")
@@ -1473,6 +1485,12 @@ elif opcion_menu == "🔍 Centro de Consultas":
         if not df_resultado.empty:
             df_rep = df_resultado[["ID_Tarima", "PO", "Proyecto", "Parcialidad", "Descripcion", "SKU", "Cantidad", "Estatus_Envio", "Fecha_Creacion"]].copy()
             df_rep.columns = ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Cantidad (Pzs)", "Estatus de Envío", "Fecha de Ingreso"]
+            
+            # Normalizar tipos para evitar error pyarrow.lib.ArrowInvalid al serializar DataFrame mixto
+            for col in ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Estatus de Envío", "Fecha de Ingreso"]:
+                if col in df_rep.columns:
+                    df_rep[col] = df_rep[col].astype(str)
+            df_rep["Cantidad (Pzs)"] = pd.to_numeric(df_rep["Cantidad (Pzs)"], errors='coerce').fillna(0).astype(int)
             
             total_piezas_consulta = int(df_rep['Cantidad (Pzs)'].sum())
             st.metric("🔢 Total Piezas en Selección:", f"{total_piezas_consulta:,} PZS")
@@ -2156,8 +2174,10 @@ elif opcion_menu == "🚚 Módulo Remisiones":
             
             st.write("Seleccione una remisión de la tabla para habilitar la descarga:")
             
-            if 'Tarimas_Asociadas' in df_mostrar.columns:
-                df_mostrar['Tarimas_Asociadas'] = df_mostrar['Tarimas_Asociadas'].astype(str)
+            # Normalizar TODOS los tipos de columnas para evitar pyarrow.lib.ArrowInvalid
+            for col_m in df_mostrar.columns:
+                if df_mostrar[col_m].dtype == object:
+                    df_mostrar[col_m] = df_mostrar[col_m].astype(str)
                 
             sel_grid = st.dataframe(
                 df_mostrar,
@@ -2642,6 +2662,100 @@ elif opcion_menu == "📖 Manual de Operación":
             <i>Nota: Debido al riesgo operativo, esta pestaña se bloquea por completo a nivel de base de datos si el rol del usuario no es Administrador, incluso si se ingresa con la clave de soporte técnico.</i></li>
         </ul>
         """, unsafe_allow_html=True)
+
+elif opcion_menu == "🏢 Reporte por Receptor":
+    st.title("🏢 Reporte de Piezas Remisionadas por Receptor")
+    st.markdown("Consulte el detalle de piezas y tarimas enviadas a cada cliente o receptor de remisiones.")
+    
+    if not st.session_state.BD_Datos_Generales_Remision.empty and not st.session_state.BD_Detalle_Tarimas.empty:
+        df_rems = st.session_state.BD_Datos_Generales_Remision.copy()
+        receptores_disp = ["Seleccione un Receptor..."] + sorted(df_rems['Nombre_Receptor'].dropna().unique().tolist())
+        
+        col_rec1, col_rec2 = st.columns([3, 1])
+        with col_rec1:
+            receptor_sel = st.selectbox("Seleccione el Receptor (Cliente):", receptores_disp, key="sel_receptor_reporte")
+            
+        if receptor_sel != "Seleccione un Receptor...":
+            df_rems_filtradas = df_rems[df_rems['Nombre_Receptor'] == receptor_sel]
+            
+            tarimas_asociadas = []
+            import ast
+            for _, row in df_rems_filtradas.iterrows():
+                t_val = row['Tarimas_Asociadas']
+                t_list = []
+                if isinstance(t_val, str):
+                    try:
+                        t_list = ast.literal_eval(t_val)
+                    except Exception:
+                        t_list = [t_val]
+                elif isinstance(t_val, list):
+                    t_list = t_val
+                
+                for t in t_list:
+                    tarimas_asociadas.append({
+                        "ID_Tarima": str(t).strip(),
+                        "Folio_Remision": row['Folio_Remision'],
+                        "Fecha_Salida": row['Fecha_Hora_Salida']
+                    })
+                    
+            if tarimas_asociadas:
+                df_tarimas_receptor = pd.DataFrame(tarimas_asociadas)
+                df_detalle = st.session_state.BD_Detalle_Tarimas.copy()
+                df_detalle['ID_Tarima'] = df_detalle['ID_Tarima'].astype(str).str.strip()
+                
+                df_cruce = pd.merge(df_tarimas_receptor, df_detalle, on="ID_Tarima", how="inner")
+                
+                if not df_cruce.empty:
+                    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                        df_cruce = pd.merge(df_cruce, st.session_state.BD_Articulos[['SKU', 'Nombre']], on="SKU", how="left")
+                    else:
+                        df_cruce['Nombre'] = "N/A"
+                        
+                    df_cruce = df_cruce.rename(columns={
+                        "ID_Tarima": "Tarima",
+                        "Folio_Remision": "Remisión",
+                        "Fecha_Salida": "Fecha Envío",
+                        "SKU": "Código (SKU)",
+                        "Nombre": "Descripción Comercial",
+                        "Cantidad": "Piezas"
+                    })
+                    
+                    columnas_mostrar = ["Remisión", "Fecha Envío", "Tarima", "Código (SKU)", "Descripción Comercial", "Piezas", "PO", "Proyecto"]
+                    columnas_mostrar = [c for c in columnas_mostrar if c in df_cruce.columns]
+                    
+                    df_mostrar = df_cruce[columnas_mostrar].copy()
+                    
+                    for col in df_mostrar.columns:
+                        if col != "Piezas":
+                            df_mostrar[col] = df_mostrar[col].astype(str)
+                    df_mostrar["Piezas"] = pd.to_numeric(df_mostrar["Piezas"], errors='coerce').fillna(0).astype(int)
+                    
+                    total_pzs = df_mostrar["Piezas"].sum()
+                    
+                    st.write("---")
+                    col_met1, col_met2 = st.columns(2)
+                    col_met1.metric(f"📦 Total Piezas Remisionadas a {receptor_sel}", f"{total_pzs:,} Pzs")
+                    col_met2.metric("🚚 Total Remisiones Relacionadas", df_mostrar["Remisión"].nunique())
+                    
+                    st.write("#### Detalle Operativo")
+                    st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+                    
+                    with col_rec2:
+                        st.write("") # Alineación vertical
+                        csv = df_mostrar.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="📥 Descargar CSV",
+                            data=csv,
+                            file_name=f"Reporte_Receptor_{receptor_sel}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                else:
+                    st.warning("No hay registros de piezas para las tarimas enviadas a este receptor.")
+            else:
+                st.warning("No hay tarimas asociadas a las remisiones de este receptor.")
+    else:
+        st.info("No hay datos suficientes (Falta Base de Remisiones o Detalle de Tarimas).")
 
 elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
     st.title("⚙️ Panel de Mantenimiento Avanzado del Sistema")
