@@ -1578,10 +1578,40 @@ elif opcion_menu == "🔍 Centro de Consultas":
         
         if not df_resultado.empty:
             df_rep = df_resultado[["ID_Tarima", "PO", "Proyecto", "Parcialidad", "Descripcion", "SKU", "Cantidad", "Estatus_Envio", "Fecha_Creacion"]].copy()
-            df_rep.columns = ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Cantidad (Pzs)", "Estatus de Envío", "Fecha de Ingreso"]
+            
+            # Enriquecer con Receptor y Fecha de Envío
+            mapa_remisiones_ui = {}
+            if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
+                import ast
+                for _, rem_row in st.session_state.BD_Datos_Generales_Remision.iterrows():
+                    t_val = rem_row['Tarimas_Asociadas']
+                    receptor = rem_row.get('Nombre_Receptor', 'N/A')
+                    fecha_salida = rem_row.get('Fecha_Hora_Salida', 'N/A')
+                    t_list = []
+                    if isinstance(t_val, str):
+                        try:
+                            t_list = ast.literal_eval(t_val)
+                        except Exception:
+                            t_list = [t_val]
+                    elif isinstance(t_val, list):
+                        t_list = t_val
+                    for t in t_list:
+                        mapa_remisiones_ui[str(t).strip()] = {"Receptor": receptor, "Fecha_Salida": str(fecha_salida).split()[0] if fecha_salida else "N/A"}
+            
+            df_rep['Enviado a (Receptor)'] = "N/A"
+            df_rep['Fecha de Envío'] = "N/A"
+            for idx, row in df_rep.iterrows():
+                if row['Estatus_Envio'] == 'Remesado':
+                    t_id = str(row['ID_Tarima']).strip()
+                    info = mapa_remisiones_ui.get(t_id, {})
+                    df_rep.at[idx, 'Enviado a (Receptor)'] = info.get("Receptor", "N/A")
+                    df_rep.at[idx, 'Fecha de Envío'] = info.get("Fecha_Salida", "N/A")
+            
+            df_rep = df_rep[["ID_Tarima", "PO", "Proyecto", "Parcialidad", "Descripcion", "SKU", "Cantidad", "Estatus_Envio", "Enviado a (Receptor)", "Fecha de Envío", "Fecha_Creacion"]]
+            df_rep.columns = ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Cantidad (Pzs)", "Estatus de Envío", "Enviado a (Receptor)", "Fecha de Envío", "Fecha de Ingreso"]
             
             # Normalizar tipos para evitar error pyarrow.lib.ArrowInvalid al serializar DataFrame mixto
-            for col in ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Estatus de Envío", "Fecha de Ingreso"]:
+            for col in ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Estatus de Envío", "Enviado a (Receptor)", "Fecha de Envío", "Fecha de Ingreso"]:
                 if col in df_rep.columns:
                     df_rep[col] = df_rep[col].astype(str)
             df_rep["Cantidad (Pzs)"] = pd.to_numeric(df_rep["Cantidad (Pzs)"], errors='coerce').fillna(0).astype(int)
@@ -1645,7 +1675,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
                     df_exportar_inventario = df_rep.copy()
                 else:
                     # Si no hay datos, creamos una tabla vacía segura con los encabezados oficiales
-                    df_exportar_inventario = pd.DataFrame(columns=["ID_Tarima", "PO", "Proyecto", "SKU", "Cantidad", "Estatus_Envio"])
+                    df_exportar_inventario = pd.DataFrame(columns=["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Cantidad (Pzs)", "Estatus de Envío", "Enviado a (Receptor)", "Fecha de Envío", "Fecha de Ingreso"])
                     df_metadatos.loc[len(df_metadatos)] = {"Concepto": "AVISO", "Valor": "No se encontraron registros con los filtros seleccionados."}
         
                 # 3. Escritura segura y directa en el archivo Excel
