@@ -1690,6 +1690,11 @@ elif opcion_menu == "🔍 Centro de Consultas":
                         # Darle un poco más de margen
                         adjusted_width = (max_length + 2)
                         sheet.column_dimensions[column].width = min(adjusted_width, 60) # Límite máximo de ancho
+                        
+                    # Configurar filtros y renglón fijo para Listado_Inventario
+                    if sheet_name == 'Listado_Inventario':
+                        sheet.auto_filter.ref = sheet.dimensions
+                        sheet.freeze_panes = "A2"
 
                 writer_c.close()
                 
