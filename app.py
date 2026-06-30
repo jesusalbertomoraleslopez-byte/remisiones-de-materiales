@@ -920,6 +920,26 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
         Paragraph("ESTATUS", style_blanco_bold)
     ]]
     
+    # Mapeo de tarimas a su información de remisión para enriquecer el Estatus
+    mapa_remisiones = {}
+    if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
+        import ast
+        for _, rem_row in st.session_state.BD_Datos_Generales_Remision.iterrows():
+            t_val = rem_row['Tarimas_Asociadas']
+            receptor = rem_row.get('Nombre_Receptor', 'Desconocido')
+            fecha_salida = rem_row.get('Fecha_Hora_Salida', '')
+            t_list = []
+            if isinstance(t_val, str):
+                try:
+                    t_list = ast.literal_eval(t_val)
+                except Exception:
+                    t_list = [t_val]
+            elif isinstance(t_val, list):
+                t_list = t_val
+                
+            for t in t_list:
+                mapa_remisiones[str(t).strip()] = {"Receptor": receptor, "Fecha": fecha_salida}
+    
     for _, row in df_resultado_piezas.iterrows():
     
         sku_actual = row.get('SKU', '')
@@ -1001,13 +1021,25 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
         else:
             desc_cell_flowables = desc_paragraph
 
+        # Generar texto de estatus extendido
+        estatus_texto = str(row['Estatus_Envio'])
+        if estatus_texto.lower() == "remesado":
+            t_id = str(row['ID_Tarima']).strip()
+            if t_id in mapa_remisiones:
+                receptor_info = str(mapa_remisiones[t_id]["Receptor"])
+                fecha_info = str(mapa_remisiones[t_id]["Fecha"]).split()[0] if mapa_remisiones[t_id]["Fecha"] else ""
+                # Si el receptor es muy largo, cortarlo para que no desborde la celda
+                if len(receptor_info) > 18:
+                    receptor_info = receptor_info[:15] + "..."
+                estatus_texto = f"<b>Remesado</b><br/><font color='#555555' size='7'>{receptor_info}<br/>{fecha_info}</font>"
+
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             Paragraph(str(row['PO']), style_normal_text),
             Paragraph(str(row['Proyecto']), style_normal_text),
             desc_cell_flowables,
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text),
-            Paragraph(str(row['Estatus_Envio']), style_normal_text)
+            Paragraph(estatus_texto, style_normal_text)
         ])
         
     t_mat = Table(tabla_materiales, colWidths=[1.0 * inch, 1.1 * inch, 1.2 * inch, 2.3 * inch, 0.9 * inch, 1.0 * inch])
