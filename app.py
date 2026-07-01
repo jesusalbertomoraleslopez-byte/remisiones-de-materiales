@@ -1730,14 +1730,46 @@ elif opcion_menu == "🔍 Centro de Consultas":
                 # 3. Escritura segura y directa en el archivo Excel
                 writer_c = pd.ExcelWriter(buf_c, engine='openpyxl')
                 df_metadatos.to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
-                df_exportar_inventario.to_excel(writer_c, index=False, sheet_name='Listado_Inventario')
+                
+                if not df_exportar_inventario.empty:
+                    df_temp = df_exportar_inventario.copy()
+                    df_temp['Cant_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if str(r['Estatus de Envío']).strip() == 'Remesado' else 0, axis=1)
+                    df_temp['Cant_No_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if str(r['Estatus de Envío']).strip() != 'Remesado' else 0, axis=1)
+                    
+                    df_resumen = df_temp.groupby('SKU / Producto').agg({
+                        'Orden de Compra (PO)': lambda x: ', '.join(x.astype(str).dropna().unique()),
+                        'Cant_Remesada': 'sum',
+                        'Cant_No_Remesada': 'sum',
+                        'Cantidad (Pzs)': 'sum'
+                    }).reset_index()
+                    df_resumen.columns = ["No. SKU", "PO'S", "Cantidad Remesada", "Cantidad No Remesada", "Total Fabricado"]
+                    
+                    total_row = pd.DataFrame([{
+                        "No. SKU": "TOTALES",
+                        "PO'S": "",
+                        "Cantidad Remesada": df_resumen["Cantidad Remesada"].sum(),
+                        "Cantidad No Remesada": df_resumen["Cantidad No Remesada"].sum(),
+                        "Total Fabricado": df_resumen["Total Fabricado"].sum()
+                    }])
+                    df_resumen = pd.concat([df_resumen, total_row], ignore_index=True)
+                    
+                    df_remesados = df_exportar_inventario[df_exportar_inventario['Estatus de Envío'].astype(str).str.strip() == 'Remesado'].copy()
+                    df_no_remesados = df_exportar_inventario[df_exportar_inventario['Estatus de Envío'].astype(str).str.strip() != 'Remesado'].copy()
+                else:
+                    df_resumen = pd.DataFrame(columns=["No. SKU", "PO'S", "Cantidad Remesada", "Cantidad No Remesada", "Total Fabricado"])
+                    df_remesados = df_exportar_inventario.copy()
+                    df_no_remesados = df_exportar_inventario.copy()
+
+                df_resumen.to_excel(writer_c, index=False, sheet_name='Resumen por pieza')
+                df_exportar_inventario.to_excel(writer_c, index=False, sheet_name='Total Tarimas y Cantidades')
+                df_remesados.to_excel(writer_c, index=False, sheet_name='Filtro de Remesados')
+                df_no_remesados.to_excel(writer_c, index=False, sheet_name='Filtro No Remesado')
                 
                 # --- APLICACIÓN DE DISEÑO CORPORATIVO AL EXCEL ---
                 workbook = writer_c.book
                 
                 # Definir estilos
-                header_fill = PatternFill(start_color="111111", end_color="111111", fill_type="solid") # Negro Corporativo para contraste o EC2024
-                # Vamos a usar el gris oscuro del PDF o Rojo
+                from openpyxl.styles import Font, PatternFill, Alignment
                 header_fill = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid") # Rojo Institucional
                 header_font = Font(color="FFFFFF", bold=True)
                 center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -1766,12 +1798,11 @@ elif opcion_menu == "🔍 Centro de Consultas":
                                     max_length = len(str(cell.value))
                             except:
                                 pass
-                        # Darle un poco más de margen
                         adjusted_width = (max_length + 2)
-                        sheet.column_dimensions[column].width = min(adjusted_width, 60) # Límite máximo de ancho
+                        sheet.column_dimensions[column].width = min(adjusted_width, 60)
                         
-                    # Configurar filtros y renglón fijo para Listado_Inventario
-                    if sheet_name == 'Listado_Inventario':
+                    # Configurar filtros y renglón fijo para todas las hojas de datos
+                    if sheet_name in ['Resumen por pieza', 'Total Tarimas y Cantidades', 'Filtro de Remesados', 'Filtro No Remesado']:
                         sheet.auto_filter.ref = sheet.dimensions
                         sheet.freeze_panes = "A2"
 
