@@ -3510,6 +3510,10 @@ elif opcion_menu == "🕰️ Carga Histórica":
         else:
             try:
                 df_hist = pd.read_excel(archivo_cargado)
+                # Soportar ambas formas del encabezado: "Folio de Remisión" o "Folio Remisión"
+                if "Folio Remisión" in df_hist.columns and "Folio de Remisión" not in df_hist.columns:
+                    df_hist = df_hist.rename(columns={"Folio Remisión": "Folio de Remisión"})
+                    
                 cols_requeridas = ["Tarima", "Producto/SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad", "Fecha de Remisión", "Folio de Remisión"]
                 
                 # Validar columnas
@@ -3517,111 +3521,166 @@ elif opcion_menu == "🕰️ Carga Histórica":
                 if faltantes:
                     st.error(f"❌ El archivo no tiene el formato correcto. Faltan las columnas: {', '.join(faltantes)}")
                 else:
-                    st.info("Procesando archivo masivo...")
-                    
-                    # 1. Identificar Tarimas Únicas en el Excel
-                    tarimas_excel = df_hist['Tarima'].dropna().unique().tolist()
-                    
-                    # 2. Generar nuevos IDs de Tarima en el sistema (TPM-XXXX) 
-                    mapa_tpm = {}
-                    nuevo_id = obtener_siguiente_consecutivo_tpm()
-                    for t in tarimas_excel:
-                        mapa_tpm[t] = f"TPM-{nuevo_id:04d}"
-                        nuevo_id += 1
-                        
-                    st.session_state["siguiente_numero_tpm"] = nuevo_id
-                    
-                    # 3. Preparar BD_Tarimas
-                    nuevas_tarimas = []
-                    for t in tarimas_excel:
-                        sub_df = df_hist[df_hist['Tarima'] == t]
-                        fecha_str = str(sub_df.iloc[0]['Fecha de Remisión']).split(' ')[0]
-                        nuevas_tarimas.append({
-                            "ID_Tarima": mapa_tpm[t],
-                            "Tarima_Origen_Excel": t,
-                            "Fecha_Creacion": fecha_str,
-                            "Ubicacion_Actual": "Planta Rio",
-                            "Creado_Por": "Carga Historica",
-                            "Tipo_Tarima": "Mixta",
-                            "Estatus": "Remesada",
-                            "Es_Nueva": "No"
-                        })
-                    df_nuevas_tarimas = pd.DataFrame(nuevas_tarimas)
-                    st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, df_nuevas_tarimas], ignore_index=True)
-                    
-                    # 4. Preparar BD_Detalle_Tarimas
-                    nuevos_detalles = []
-                    id_det = 1
-                    if not st.session_state.BD_Detalle_Tarimas.empty:
-                        try:
-                            id_det = int(st.session_state.BD_Detalle_Tarimas['ID_Detalle'].max()) + 1
-                        except:
-                            id_det = len(st.session_state.BD_Detalle_Tarimas) + 1
-                            
-                    for _, row in df_hist.iterrows():
-                        t_excel = row['Tarima']
-                        nuevos_detalles.append({
-                            "ID_Detalle": id_det,
-                            "ID_Tarima": mapa_tpm[t_excel],
-                            "SKU": row['Producto/SKU'],
-                            "PO": row['PO'],
-                            "Proyecto": row['Proyecto'],
-                            "Parcialidad": row['Parcialidad'],
-                            "Descripcion": row['Descripcion'],
-                            "Cantidad": row['Cantidad']
-                        })
-                        id_det += 1
-                    df_nuevos_detalles = pd.DataFrame(nuevos_detalles)
-                    st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, df_nuevos_detalles], ignore_index=True)
-                    
-                    # 5. Preparar BD_Datos_Generales_Remision (Agrupando por Folio)
-                    import json
-                    folios_excel = df_hist['Folio de Remisión'].dropna().unique().tolist()
-                    nuevas_remisiones = []
-                    
-                    id_rem = 1
-                    if not st.session_state.BD_Datos_Generales_Remision.empty:
-                        try:
-                            id_rem = int(st.session_state.BD_Datos_Generales_Remision['ID_Remision'].max()) + 1
-                        except:
-                            id_rem = len(st.session_state.BD_Datos_Generales_Remision) + 1
-                            
-                    for folio in folios_excel:
-                        # Extraer la fecha y tarimas que corresponden a este folio
-                        sub_df_folio = df_hist[df_hist['Folio de Remisión'] == folio]
-                        fecha_rem = str(sub_df_folio.iloc[0]['Fecha de Remisión']).split(' ')[0]
-                        tarimas_de_este_folio_excel = sub_df_folio['Tarima'].dropna().unique().tolist()
-                        tarimas_asignadas_list = [mapa_tpm[t] for t in tarimas_de_este_folio_excel]
-                        
-                        nuevas_remisiones.append({
-                            "ID_Remision": id_rem,
-                            "Folio_Remision": str(folio).strip(),
-                            "Fecha_Hora_Salida": fecha_rem,
-                            "Nombre_Emisor": "Carga Historica",
-                            "Direccion_Emisor": "N/A",
-                            "Nombre_Receptor": receptor_input.strip(),
-                            "Direccion_Receptor": direccion_input.strip(),
-                            "Tarimas_Asociadas": json.dumps(tarimas_asignadas_list)
-                        })
-                        id_rem += 1
-                        
-                    df_nuevas_remisiones = pd.DataFrame(nuevas_remisiones)
-                    st.session_state.BD_Datos_Generales_Remision = pd.concat([st.session_state.BD_Datos_Generales_Remision, df_nuevas_remisiones], ignore_index=True)
-                    
-                    # 6. Guardar todo
-                    subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
-                    subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
-                    subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-                    
-                    # Actualizar consecutivo en disco
-                    try:
-                        with open("consecutivo_override.txt", "w", encoding="utf-8") as f:
-                            f.write(str(nuevo_id))
-                    except:
-                        pass
-                        
-                    st.success(f"✅ ¡Carga Exitosa! Se crearon {len(tarimas_excel)} tarimas distribuidas en {len(folios_excel)} remisiones históricas.")
-                    st.balloons()
+                    # Auditoría de Datos
+                    st.session_state['df_historico_auditado'] = df_hist
+                    st.session_state['receptor_auditado'] = receptor_input
+                    st.session_state['direccion_auditada'] = direccion_input
             except Exception as e:
-                st.error(f"❌ Ocurrió un error al procesar el archivo: {e}")
+                st.error(f"❌ Ocurrió un error al leer el archivo: {e}")
+
+    # Sección de Auditoría y Confirmación
+    if 'df_historico_auditado' in st.session_state:
+        df_hist = st.session_state['df_historico_auditado']
+        receptor_input = st.session_state['receptor_auditado']
+        direccion_input = st.session_state['direccion_auditada']
+        
+        st.markdown("---")
+        st.subheader("📋 Auditoría de Información a Cargar")
+        
+        tarimas_excel = df_hist['Tarima'].dropna().unique().tolist()
+        folios_excel = df_hist['Folio de Remisión'].dropna().unique().tolist()
+        skus_excel = df_hist['Producto/SKU'].dropna().unique().tolist()
+        
+        # Validar si los folios ya existen
+        folios_existentes = []
+        if not st.session_state.BD_Datos_Generales_Remision.empty:
+            folios_bd = st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].astype(str).str.strip().tolist()
+            for f in folios_excel:
+                if str(f).strip() in folios_bd:
+                    folios_existentes.append(str(f).strip())
+                    
+        # Validar si los SKUs existen
+        skus_no_encontrados = []
+        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+            skus_bd = st.session_state.BD_Articulos['SKU'].astype(str).str.strip().tolist()
+            for s in skus_excel:
+                if str(s).strip() not in skus_bd:
+                    skus_no_encontrados.append(str(s).strip())
+                    
+        col_res1, col_res2 = st.columns(2)
+        with col_res1:
+            st.metric("Total Tarimas a Crear", len(tarimas_excel))
+            st.metric("Total Remisiones a Generar", len(folios_excel))
+        with col_res2:
+            st.metric("Total de Partidas (Filas)", len(df_hist))
+            st.metric("SKUs únicos procesados", len(skus_excel))
+            
+        hay_conflictos = False
+        if folios_existentes:
+            hay_conflictos = True
+            st.error(f"⚠️ **ALERTA DE CONFLICTO:** Los siguientes folios ya existen en el sistema: {', '.join(folios_existentes)}. Por seguridad, no puedes cargar duplicados.")
+            
+        if skus_no_encontrados:
+            st.warning(f"⚠️ **ADVERTENCIA:** Se encontraron {len(skus_no_encontrados)} SKUs que no están en el Catálogo de Artículos. (Se pueden cargar, pero la descripción no se enriquecerá automáticamente).")
+            
+        if hay_conflictos:
+            st.error("❌ Debes corregir el archivo Excel y volver a subirlo para evitar duplicar folios.")
+            if st.button("Cancelar Carga"):
+                del st.session_state['df_historico_auditado']
+                st.rerun()
+        else:
+            st.success("✅ **Auditoría superada sin conflictos graves.** La información está lista para consolidarse.")
+            
+            if st.button("✅ Confirmar y Ejecutar Carga Masiva", use_container_width=True):
+                with st.spinner("Procesando la carga en las bases de datos..."):
+                    try:
+                        mapa_tpm = {}
+                        nuevo_id = obtener_siguiente_consecutivo_tpm()
+                        for t in tarimas_excel:
+                            mapa_tpm[t] = f"TPM-{nuevo_id:04d}"
+                            nuevo_id += 1
+                            
+                        st.session_state["siguiente_numero_tpm"] = nuevo_id
+                        
+                        # 3. Preparar BD_Tarimas
+                        nuevas_tarimas = []
+                        for t in tarimas_excel:
+                            sub_df = df_hist[df_hist['Tarima'] == t]
+                            fecha_str = str(sub_df.iloc[0]['Fecha de Remisión']).split(' ')[0]
+                            nuevas_tarimas.append({
+                                "ID_Tarima": mapa_tpm[t],
+                                "Tarima_Origen_Excel": t,
+                                "Fecha_Creacion": fecha_str,
+                                "Ubicacion_Actual": "Planta Rio",
+                                "Creado_Por": "Carga Historica",
+                                "Tipo_Tarima": "Mixta",
+                                "Estatus": "Remesada",
+                                "Es_Nueva": "No"
+                            })
+                        df_nuevas_tarimas = pd.DataFrame(nuevas_tarimas)
+                        st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, df_nuevas_tarimas], ignore_index=True)
+                        
+                        # 4. Preparar BD_Detalle_Tarimas
+                        nuevos_detalles = []
+                        id_det = 1
+                        if not st.session_state.BD_Detalle_Tarimas.empty:
+                            try:
+                                id_det = int(st.session_state.BD_Detalle_Tarimas['ID_Detalle'].max()) + 1
+                            except:
+                                id_det = len(st.session_state.BD_Detalle_Tarimas) + 1
+                                
+                        for _, row in df_hist.iterrows():
+                            t_excel = row['Tarima']
+                            nuevos_detalles.append({
+                                "ID_Detalle": id_det,
+                                "ID_Tarima": mapa_tpm[t_excel],
+                                "SKU": row['Producto/SKU'],
+                                "PO": row['PO'],
+                                "Proyecto": row['Proyecto'],
+                                "Parcialidad": row['Parcialidad'],
+                                "Descripcion": row['Descripcion'],
+                                "Cantidad": row['Cantidad']
+                            })
+                            id_det += 1
+                        df_nuevos_detalles = pd.DataFrame(nuevos_detalles)
+                        st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, df_nuevos_detalles], ignore_index=True)
+                        
+                        # 5. Preparar BD_Datos_Generales_Remision (Agrupando por Folio)
+                        import json
+                        nuevas_remisiones = []
+                        
+                        id_rem = 1
+                        if not st.session_state.BD_Datos_Generales_Remision.empty:
+                            try:
+                                id_rem = int(st.session_state.BD_Datos_Generales_Remision['ID_Remision'].max()) + 1
+                            except:
+                                id_rem = len(st.session_state.BD_Datos_Generales_Remision) + 1
+                                
+                        for folio in folios_excel:
+                            sub_df_folio = df_hist[df_hist['Folio de Remisión'] == folio]
+                            fecha_rem = str(sub_df_folio.iloc[0]['Fecha de Remisión']).split(' ')[0]
+                            tarimas_de_este_folio_excel = sub_df_folio['Tarima'].dropna().unique().tolist()
+                            tarimas_asignadas_list = [mapa_tpm[t] for t in tarimas_de_este_folio_excel]
+                            
+                            nuevas_remisiones.append({
+                                "ID_Remision": id_rem,
+                                "Folio_Remision": str(folio).strip(),
+                                "Fecha_Hora_Salida": fecha_rem,
+                                "Nombre_Emisor": "Carga Historica",
+                                "Direccion_Emisor": "N/A",
+                                "Nombre_Receptor": receptor_input.strip(),
+                                "Direccion_Receptor": direccion_input.strip(),
+                                "Tarimas_Asociadas": json.dumps(tarimas_asignadas_list)
+                            })
+                            id_rem += 1
+                            
+                        df_nuevas_remisiones = pd.DataFrame(nuevas_remisiones)
+                        st.session_state.BD_Datos_Generales_Remision = pd.concat([st.session_state.BD_Datos_Generales_Remision, df_nuevas_remisiones], ignore_index=True)
+                        
+                        # 6. Guardar todo
+                        subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                        subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
+                        subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
+                        
+                        try:
+                            with open("consecutivo_override.txt", "w", encoding="utf-8") as f:
+                                f.write(str(nuevo_id))
+                        except:
+                            pass
+                            
+                        del st.session_state['df_historico_auditado']
+                        st.success(f"✅ ¡Carga Exitosa! Se crearon {len(tarimas_excel)} tarimas en {len(folios_excel)} remisiones.")
+                        st.balloons()
+                    except Exception as e:
+                        st.error(f"❌ Ocurrió un error crítico durante la carga: {e}")
     
