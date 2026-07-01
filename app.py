@@ -1386,7 +1386,8 @@ lista_modulos = [
     "🏭 Industria 4.0",
     "📖 Manual de Operación",
     "🏢 Reporte por Receptor",
-    "🕰️ Carga Histórica"
+    "🕰️ Carga Histórica",
+    "📉 Análisis de Faltantes"
 ]
 
 if is_admin or is_super:
@@ -3717,4 +3718,136 @@ elif opcion_menu == "🕰️ Carga Histórica":
                         st.balloons()
                     except Exception as e:
                         st.error(f"❌ Ocurrió un error crítico durante la carga: {e}")
+                        
+# =============================================================================
+# 16. ANÁLISIS DE FALTANTES POR FABRICAR
+# =============================================================================
+elif opcion_menu == "📉 Análisis de Faltantes":
+    st.title("📉 Análisis de Faltantes de Producción")
+    st.markdown("Carga tu archivo maestro de requerimientos (Órdenes de Compra / Proyectos) para compararlo globalmente contra el inventario registrado en el sistema y descubrir exactamente qué piezas faltan por fabricar.")
+    
+    archivo_maestro = st.file_uploader("📥 Selecciona el archivo Excel Maestro (Requerimientos)", type=['xlsx'])
+    
+    if archivo_maestro:
+        try:
+            df_maestro = pd.read_excel(archivo_maestro)
+            st.success("✅ Archivo cargado correctamente. Selecciona las columnas clave para hacer el cruce:")
+            
+            columnas_excel = df_maestro.columns.tolist()
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                col_sku = st.selectbox("Columna que contiene el Número de SKU/Material:", columnas_excel)
+            with col2:
+                col_qty = st.selectbox("Columna que contiene la Cantidad Requerida:", columnas_excel)
+                
+            if st.button("🚀 Calcular Faltantes"):
+                with st.spinner("Cruzando información..."):
+                    # 1. Agrupar el Maestro
+                    # Limpiar SKUs
+                    df_maestro[col_sku] = df_maestro[col_sku].astype(str).str.strip()
+                    df_maestro[col_qty] = pd.to_numeric(df_maestro[col_qty], errors='coerce').fillna(0)
+                    
+                    df_req = df_maestro.groupby(col_sku, as_index=False)[col_qty].sum()
+                    df_req = df_req.rename(columns={col_sku: 'SKU', col_qty: 'Requerido'})
+                    
+                    # 2. Agrupar la BD de Producción
+                    if not st.session_state.BD_Detalle_Tarimas.empty:
+                        df_prod = st.session_state.BD_Detalle_Tarimas.copy()
+                        df_prod['SKU'] = df_prod['SKU'].astype(str).str.strip()
+                        df_prod['Cantidad'] = pd.to_numeric(df_prod['Cantidad'], errors='coerce').fillna(0)
+                        df_fab = df_prod.groupby('SKU', as_index=False)['Cantidad'].sum()
+                        df_fab = df_fab.rename(columns={'Cantidad': 'Fabricado'})
+                    else:
+                        df_fab = pd.DataFrame(columns=['SKU', 'Fabricado'])
+                        
+                    # 3. Cruzar Datos (Merge)
+                    # Queremos todos los SKUs requeridos (Left join)
+                    df_cruce = pd.merge(df_req, df_fab, on='SKU', how='left')
+                    df_cruce['Fabricado'] = df_cruce['Fabricado'].fillna(0)
+                    
+                    # Calcular Faltante
+                    df_cruce['Faltante_por_Fabricar'] = df_cruce['Requerido'] - df_cruce['Fabricado']
+                    
+                    # Enriquecer con Nombre y Descripción si existen en Catálogo
+                    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                        df_art = st.session_state.BD_Articulos.copy()
+                        df_art['SKU'] = df_art['SKU'].astype(str).str.strip()
+                        df_cruce = pd.merge(df_cruce, df_art[['SKU', 'Nombre']], on='SKU', how='left')
+                        df_cruce['Nombre'] = df_cruce['Nombre'].fillna("Desconocido")
+                        # Reordenar
+                        df_cruce = df_cruce[['SKU', 'Nombre', 'Requerido', 'Fabricado', 'Faltante_por_Fabricar']]
+                    else:
+                        df_cruce = df_cruce[['SKU', 'Requerido', 'Fabricado', 'Faltante_por_Fabricar']]
+                        
+                    # Filtrar solo los que realmente faltan? No, el usuario podría querer ver si se fabricó de más.
+                    # Ordenar por Faltante de mayor a menor
+                    df_cruce = df_cruce.sort_values(by='Faltante_por_Fabricar', ascending=False)
+                    
+                    # Convertir a enteros para mejor visualización
+                    df_cruce['Requerido'] = df_cruce['Requerido'].astype(int)
+                    df_cruce['Fabricado'] = df_cruce['Fabricado'].astype(int)
+                    df_cruce['Faltante_por_Fabricar'] = df_cruce['Faltante_por_Fabricar'].astype(int)
+                    
+                    st.markdown("---")
+                    st.subheader("📊 Resultado del Análisis")
+                    
+                    col_m1, col_m2, col_m3 = st.columns(3)
+                    with col_m1:
+                        st.metric("Total Requerido", f"{df_cruce['Requerido'].sum():,}")
+                    with col_m2:
+                        st.metric("Total Fabricado Global", f"{df_cruce['Fabricado'].sum():,}")
+                    with col_m3:
+                        faltante_neto = df_cruce[df_cruce['Faltante_por_Fabricar'] > 0]['Faltante_por_Fabricar'].sum()
+                        st.metric("Total Pendiente de Fabricar", f"{faltante_neto:,}")
+                        
+                    st.dataframe(df_cruce, use_container_width=True, hide_index=True)
+                    
+                    # Exportar a Excel
+                    buf_c = io.BytesIO()
+                    writer_c = pd.ExcelWriter(buf_c, engine='openpyxl')
+                    df_cruce.to_excel(writer_c, index=False, sheet_name='Analisis de Faltantes')
+                    
+                    from openpyxl.styles import Font, PatternFill, Alignment
+                    workbook = writer_c.book
+                    sheet = workbook['Analisis de Faltantes']
+                    header_fill = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
+                    header_font = Font(color="FFFFFF", bold=True)
+                    center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                    
+                    for cell in sheet[1]:
+                        cell.fill = header_fill
+                        cell.font = header_font
+                        cell.alignment = center_alignment
+                        
+                    for row in sheet.iter_rows(min_row=2):
+                        for cell in row:
+                            cell.alignment = center_alignment
+                            
+                    for col in sheet.columns:
+                        max_length = 0
+                        column = col[0].column_letter
+                        for cell in col:
+                            try:
+                                if len(str(cell.value)) > max_length:
+                                    max_length = len(str(cell.value))
+                            except:
+                                pass
+                        sheet.column_dimensions[column].width = min((max_length + 2), 60)
+                        
+                    sheet.auto_filter.ref = sheet.dimensions
+                    sheet.freeze_panes = "A2"
+                    
+                    writer_c.close()
+                    buf_c.seek(0)
+                    
+                    st.download_button(
+                        label="📥 Descargar Reporte de Faltantes (.xlsx)",
+                        data=buf_c.getvalue(),
+                        file_name="Reporte_Faltantes_Globales.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                    
+        except Exception as e:
+            st.error(f"❌ No se pudo leer el archivo: {e}")
     
