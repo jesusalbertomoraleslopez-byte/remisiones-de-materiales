@@ -1732,6 +1732,9 @@ elif opcion_menu == "🔍 Centro de Consultas":
                 df_metadatos.to_excel(writer_c, index=False, sheet_name='Resumen_Filtros')
                 
                 if not df_exportar_inventario.empty:
+                    # Ordenar ascendentemente por ID Tarima
+                    df_exportar_inventario = df_exportar_inventario.sort_values(by="ID Tarima", ascending=True)
+                    
                     df_temp = df_exportar_inventario.copy()
                     df_temp['Cant_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if str(r['Estatus de Envío']).strip() == 'Remesado' else 0, axis=1)
                     df_temp['Cant_No_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if str(r['Estatus de Envío']).strip() != 'Remesado' else 0, axis=1)
