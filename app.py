@@ -822,24 +822,51 @@ def obtener_siguiente_consecutivo_tpm():
         except Exception:
             pass
 
-    # 2. De lo contrario, calcular dinámicamente a partir de la base de datos
-    if "BD_Tarimas" not in st.session_state or st.session_state.BD_Tarimas.empty:
-        return 1
-    try:
-        # Extraer números de los IDs tipo TPM-XXXX
-        ids = st.session_state.BD_Tarimas['ID_Tarima'].astype(str)
-        numeros = []
-        for id_val in ids:
-            partes = id_val.split('-')
-            if len(partes) > 1 and partes[1].strip().isdigit():
-                numeros.append(int(partes[1].strip()))
-            elif id_val.startswith('TPM') and id_val[3:].strip().isdigit():
-                numeros.append(int(id_val[3:].strip()))
-        if numeros:
-            return max(numeros) + 1
-    except Exception:
-        pass
-    return len(st.session_state.BD_Tarimas) + 1
+    # 2. Calcular dinámicamente a partir de BD_Tarimas y BD_Datos_Generales_Remision
+    numeros = []
+    
+    # Escanear BD_Tarimas
+    if "BD_Tarimas" in st.session_state and not st.session_state.BD_Tarimas.empty:
+        try:
+            ids = st.session_state.BD_Tarimas['ID_Tarima'].astype(str)
+            for id_val in ids:
+                partes = id_val.split('-')
+                if len(partes) > 1 and partes[1].strip().isdigit():
+                    numeros.append(int(partes[1].strip()))
+                elif id_val.startswith('TPM') and id_val[3:].strip().isdigit():
+                    numeros.append(int(id_val[3:].strip()))
+        except Exception:
+            pass
+            
+    # Escanear BD_Datos_Generales_Remision (para evitar colisiones con remisiones existentes)
+    if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
+        try:
+            import ast
+            for _, row in st.session_state.BD_Datos_Generales_Remision.iterrows():
+                val = row.get('Tarimas_Asociadas')
+                if isinstance(val, str):
+                    try:
+                        t_list = ast.literal_eval(val)
+                    except Exception:
+                        t_list = [val]
+                elif isinstance(val, list):
+                    t_list = val
+                else:
+                    t_list = []
+                    
+                for t in t_list:
+                    t_str = str(t).strip()
+                    partes = t_str.split('-')
+                    if len(partes) > 1 and partes[1].strip().isdigit():
+                        numeros.append(int(partes[1].strip()))
+                    elif t_str.startswith('TPM') and t_str[3:].strip().isdigit():
+                        numeros.append(int(t_str[3:].strip()))
+        except Exception:
+            pass
+            
+    if numeros:
+        return max(numeros) + 1
+    return 1
 
 if "siguiente_numero_tpm" not in st.session_state or st.session_state["siguiente_numero_tpm"] is None:
     st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
