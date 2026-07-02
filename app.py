@@ -1425,7 +1425,8 @@ lista_modulos = [
     "📖 Manual de Operación",
     "🏢 Reporte por Receptor",
     "🕰️ Carga Histórica",
-    "📉 Análisis de Faltantes"
+    "📉 Análisis de Faltantes",
+    "📋 Consulta por Lote SKU"
 ]
 
 if is_admin or is_super:
@@ -3964,4 +3965,201 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                     
         except Exception as e:
             st.error(f"❌ No se pudo leer el archivo: {e}")
+            
+# =============================================================================
+# 17. CONSULTA POR LOTE SKU
+# =============================================================================
+elif opcion_menu == "📋 Consulta por Lote SKU":
+    st.title("📋 Consulta de Inventario por Lote SKU")
+    st.markdown("Carga un archivo de Excel con un listado de SKUs para obtener un reporte dinámico con el desglose de piezas disponibles, remesadas y los totales enviados a cada receptor.")
+    
+    archivo_skus = st.file_uploader("📥 Selecciona el archivo Excel con los SKUs a consultar", type=['xlsx'])
+    
+    if archivo_skus:
+        try:
+            df_skus_input = pd.read_excel(archivo_skus)
+            st.success("✅ Archivo cargado correctamente. Selecciona la columna del SKU:")
+            
+            columnas_excel = df_skus_input.columns.tolist()
+            col_sku_sel = st.selectbox("Columna que contiene el SKU/Material:", columnas_excel)
+            
+            if st.button("🔍 Iniciar Consulta por Lote"):
+                with st.spinner("Procesando consulta..."):
+                    # 1. Limpiar y obtener SKUs únicos del Excel
+                    skus_consultados = df_skus_input[col_sku_sel].astype(str).str.strip().dropna().unique().tolist()
+                    skus_consultados = [s for s in skus_consultados if s and s.upper() not in ["TODOS", "SELECCIONE UN SKU..."]]
+                    
+                    if not skus_consultados:
+                        st.warning("⚠️ No se encontraron SKUs válidos en la columna seleccionada.")
+                    else:
+                        # 2. Obtener la producción detallada de estos SKUs
+                        if not st.session_state.BD_Detalle_Tarimas.empty:
+                            df_det = st.session_state.BD_Detalle_Tarimas.copy()
+                            df_det['SKU'] = df_det['SKU'].astype(str).str.strip()
+                            df_det_filtrado = df_det[df_det['SKU'].isin(skus_consultados)].copy()
+                        else:
+                            df_det_filtrado = pd.DataFrame(columns=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"])
+                            
+                        # 3. Cruzar con BD_Tarimas para obtener el Estatus actual de la tarima
+                        if not df_det_filtrado.empty and not st.session_state.BD_Tarimas.empty:
+                            df_t = st.session_state.BD_Tarimas[['ID_Tarima', 'Estatus']].copy()
+                            df_t['ID_Tarima'] = df_t['ID_Tarima'].astype(str).str.strip()
+                            df_det_filtrado['ID_Tarima'] = df_det_filtrado['ID_Tarima'].astype(str).str.strip()
+                            df_det_cruce = pd.merge(df_det_filtrado, df_t, on='ID_Tarima', how='left')
+                        else:
+                            df_det_cruce = df_det_filtrado.copy()
+                            df_det_cruce['Estatus'] = 'Disponible'
+                            
+                        # 4. Relacionar con Receptores desde BD_Datos_Generales_Remision
+                        mapa_tarima_receptor = {}
+                        if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
+                            import ast
+                            for _, r_row in st.session_state.BD_Datos_Generales_Remision.iterrows():
+                                rec = r_row['Nombre_Receptor']
+                                tarimas_str = r_row['Tarimas_Asociadas']
+                                try:
+                                    t_list = ast.literal_eval(tarimas_str)
+                                except:
+                                    t_list = [tarimas_str]
+                                for t in t_list:
+                                    mapa_tarima_receptor[str(t).strip()] = str(rec).strip()
+                                    
+                        df_det_cruce['Receptor'] = df_det_cruce['ID_Tarima'].map(mapa_tarima_receptor).fillna("N/A")
+                        
+                        # 5. Segmentar Cantidades (Disponible vs Remesado)
+                        df_det_cruce['Cant_Disponible'] = df_det_cruce.apply(lambda r: pd.to_numeric(r['Cantidad'], errors='coerce').fill(0) if str(r['Estatus']).strip() != 'Remesada' else 0, axis=1)
+                        # Nota: el método .fill(0) no existe para float simples, usaremos fillna(0) antes o convertiremos
+                        df_det_cruce['Cantidad'] = pd.to_numeric(df_det_cruce['Cantidad'], errors='coerce').fillna(0)
+                        df_det_cruce['Cant_Disponible'] = df_det_cruce.apply(lambda r: r['Cantidad'] if str(r['Estatus']).strip() != 'Remesada' else 0, axis=1)
+                        df_det_cruce['Cant_Remesada'] = df_det_cruce.apply(lambda r: r['Cantidad'] if str(r['Estatus']).strip() == 'Remesada' else 0, axis=1)
+                        
+                        # Columnas dinámicas por Receptor (solo de las tarimas que han sido remesadas)
+                        receptores_remesados = df_det_cruce[df_det_cruce['Estatus'] == 'Remesada']['Receptor'].dropna().unique().tolist()
+                        receptores_remesados = [r for r in receptores_remesados if r != "N/A"]
+                        
+                        for rec in receptores_remesados:
+                            df_det_cruce[f"Remesado a: {rec}"] = df_det_cruce.apply(lambda r: r['Cantidad'] if str(r['Estatus']).strip() == 'Remesada' and r['Receptor'] == rec else 0, axis=1)
+                            
+                        # 6. Agrupar por SKU
+                        agg_dict = {
+                            'Cant_Disponible': 'sum',
+                            'Cant_Remesada': 'sum',
+                            'Cantidad': 'sum'
+                        }
+                        for rec in receptores_remesados:
+                            agg_dict[f"Remesado a: {rec}"] = 'sum'
+                            
+                        if not df_det_cruce.empty:
+                            df_grouped = df_det_cruce.groupby('SKU').agg(agg_dict).reset_index()
+                            df_grouped = df_grouped.rename(columns={
+                                'Cant_Disponible': 'Disponible (No Remesado)',
+                                'Cant_Remesada': 'Total Remesado',
+                                'Cantidad': 'Total Fabricado'
+                            })
+                        else:
+                            df_grouped = pd.DataFrame(columns=['SKU', 'Disponible (No Remesado)', 'Total Remesado', 'Total Fabricado'])
+                            
+                        # 7. Asegurar que todos los SKUs de la lista cargada se muestren (incluso si tienen 0 en inventario)
+                        df_base_skus = pd.DataFrame({'SKU': skus_consultados})
+                        df_final = pd.merge(df_base_skus, df_grouped, on='SKU', how='left')
+                        
+                        # Llenar nulos con 0
+                        columnas_numericas = ['Disponible (No Remesado)', 'Total Remesado', 'Total Fabricado'] + [f"Remesado a: {r}" for r in receptores_remesados]
+                        for col in columnas_numericas:
+                            if col in df_final.columns:
+                                df_final[col] = df_final[col].fillna(0).astype(int)
+                                
+                        # Enriquecer con Nombre / Descripción
+                        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                            df_art = st.session_state.BD_Articulos[['SKU', 'Nombre']].copy()
+                            df_art['SKU'] = df_art['SKU'].astype(str).str.strip()
+                            df_final = pd.merge(df_final, df_art, on='SKU', how='left')
+                            df_final['Nombre'] = df_final['Nombre'].fillna("Sin Registro en Catálogo")
+                            
+                            # Reordenar columnas para poner Nombre después de SKU
+                            cols_orden = ['SKU', 'Nombre', 'Disponible (No Remesado)', 'Total Remesado'] + [f"Remesado a: {r}" for r in receptores_remesados] + ['Total Fabricado']
+                            # Filtrar solo las que existen por seguridad
+                            cols_orden = [c for c in cols_orden if c in df_final.columns]
+                            df_final = df_final[cols_orden]
+                            
+                        # 8. Agregar Fila de Totales Generales al final
+                        total_row = {}
+                        for col in df_final.columns:
+                            if col == 'SKU':
+                                total_row['SKU'] = 'TOTALES'
+                            elif col == 'Nombre':
+                                total_row['Nombre'] = ''
+                            else:
+                                total_row[col] = df_final[col].sum()
+                                
+                        df_final = pd.concat([df_final, pd.DataFrame([total_row])], ignore_index=True)
+                        
+                        # --- PANEL DE VISUALIZACIÓN ---
+                        st.markdown("---")
+                        st.subheader("📊 Consolidado de Inventario por Lote")
+                        
+                        col_m1, col_m2, col_m3 = st.columns(3)
+                        with col_m1:
+                            st.metric("Total Disponible (En Patio)", f"{total_row.get('Disponible (No Remesado)', 0):,} PZS")
+                        with col_m2:
+                            st.metric("Total Remesado (Enviado)", f"{total_row.get('Total Remesado', 0):,} PZS")
+                        with col_m3:
+                            st.metric("Total Fabricado Consolidado", f"{total_row.get('Total Fabricado', 0):,} PZS")
+                            
+                        st.dataframe(df_final, use_container_width=True, hide_index=True)
+                        
+                        # --- MOTOR DE EXPORTACIÓN A EXCEL FORMATEADO ---
+                        buf_c = io.BytesIO()
+                        writer_c = pd.ExcelWriter(buf_c, engine='openpyxl')
+                        df_final.to_excel(writer_c, index=False, sheet_name='Reporte por Lote')
+                        
+                        from openpyxl.styles import Font, PatternFill, Alignment
+                        workbook = writer_c.book
+                        sheet = workbook['Reporte por Lote']
+                        
+                        header_fill = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
+                        header_font = Font(color="FFFFFF", bold=True)
+                        center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                        
+                        # Dar formato al encabezado
+                        for cell in sheet[1]:
+                            cell.fill = header_fill
+                            cell.font = header_font
+                            cell.alignment = center_alignment
+                            
+                        # Formatear celdas de datos
+                        for row in sheet.iter_rows(min_row=2):
+                            for cell in row:
+                                cell.alignment = center_alignment
+                                
+                        # Auto-ajuste de columnas
+                        for col in sheet.columns:
+                            max_length = 0
+                            column = col[0].column_letter
+                            for cell in col:
+                                try:
+                                    if len(str(cell.value)) > max_length:
+                                        max_length = len(str(cell.value))
+                                except:
+                                    pass
+                            sheet.column_dimensions[column].width = min((max_length + 2), 60)
+                            
+                        # Filtros e inmovilización
+                        sheet.auto_filter.ref = sheet.dimensions
+                        sheet.freeze_panes = "A2"
+                        
+                        writer_c.close()
+                        buf_c.seek(0)
+                        
+                        st.download_button(
+                            label="📥 Descargar Reporte de Lote en Excel (.xlsx)",
+                            data=buf_c.getvalue(),
+                            file_name="Reporte_Consolidado_Lote.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="btn_download_reporte_lote_excel_v3"
+                        )
+                        
+        except Exception as e:
+            st.error(f"❌ Ocurrió un error al procesar la consulta por lote: {e}")
+
     
