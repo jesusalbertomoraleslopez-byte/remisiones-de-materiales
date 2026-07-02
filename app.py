@@ -809,6 +809,17 @@ if "BD_Lideres" not in st.session_state:
     else:
         st.session_state.BD_Lideres = pd.DataFrame([{"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}])
 
+# --- Catálogo de Receptores / Destinos ---
+if "BD_Receptores" not in st.session_state:
+    df_git_receptores = cargar_excel_desde_github("BD_Receptores.xlsx")
+    if df_git_receptores is not None:
+        st.session_state.BD_Receptores = df_git_receptores
+    else:
+        st.session_state.BD_Receptores = pd.DataFrame([
+            {"ID_Receptor": "REC-01", "Nombre_Receptor": "Galvatec Industrias", "Direccion": "Prol. Valle Guadiana 919, Parque Industrial II, 35078 Gómez Palacio, Dgo.", "Estatus": "Activo"},
+            {"ID_Receptor": "REC-02", "Nombre_Receptor": "COVISA", "Direccion": "Calle Inde 714, 35079 Gómez Palacio, Durango", "Estatus": "Activo"}
+        ])
+
 # --- Función Auxiliar y Consecutivo Dinámico de Tarimas (TPM) ---
 def obtener_siguiente_consecutivo_tpm():
     # 1. Intentar cargar el consecutivo manual configurado desde disco local
@@ -2405,8 +2416,19 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                 nom_e = st.selectbox("Líder / Emisor Autorizado:", options=["Jesus Morales", "Supervisor General"], key="rem_lider_backup_unique")
             dir_e = st.text_input("Almacén de Origen:", "Metales")
         with col_r:
-            nom_r = st.text_input("Receptor / Cliente:", "Galvatec Industrias")
-            dir_r = st.text_input("Dirección Destino:", "Prol. Valle Guadiana 919, Parque Industrial II, 35078 Gómez Palacio, Dgo.")
+            if "BD_Receptores" in st.session_state and not st.session_state.BD_Receptores.empty:
+                df_receptores_activos = st.session_state.BD_Receptores[st.session_state.BD_Receptores['Estatus'] == 'Activo']
+                lista_nombres_receptores = df_receptores_activos['Nombre_Receptor'].unique().tolist()
+                
+                nom_r_sel = st.selectbox("Receptor / Cliente:", options=lista_nombres_receptores, key="rem_receptor_sel_unique")
+                
+                # Obtener dirección correspondiente
+                dir_r_default = df_receptores_activos[df_receptores_activos['Nombre_Receptor'] == nom_r_sel]['Direccion'].values[0]
+                dir_r = st.text_input("Dirección Destino:", value=dir_r_default)
+                nom_r = nom_r_sel
+            else:
+                nom_r = st.text_input("Receptor / Cliente:", "Galvatec Industrias")
+                dir_r = st.text_input("Dirección Destino:", "Prol. Valle Guadiana 919, Parque Industrial II, 35078 Gómez Palacio, Dgo.")
         if not is_admin: st.error("🔒 Operación Bloqueada: Se requiere contraseña de Administrador.")
         else:
             if st.button("🚀 Confirmar Salida y Generar Nueva Remisión"):
@@ -3069,8 +3091,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             {"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}
         ])
 
-    # REVISA QUE TU LÍNEA DE PESTAÑAS SUPERIOR TENGA ESTA ASIGNACIÓN:
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📝 Ajustar Cantidades", "👥 Catálogo de Líderes", "⚠️ Purga de Datos", "📦 Catálogo de Artículos", "🔢 Contador de Tarimas", "🖼️ Carpeta de Imágenes"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📝 Ajustar Cantidades", "👥 Catálogo de Líderes", "⚠️ Purga de Datos", "📦 Catálogo de Artículos", "🔢 Contador de Tarimas", "🖼️ Carpeta de Imágenes", "🏢 Catálogo de Receptores"])
 
 
 
@@ -3546,7 +3567,73 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
         with st.expander("🖼️ Carpeta de Imágenes de Artículos (Mantenimiento)", expanded=False):
             renderizar_explorador_imagenes()
 
-# =============================================================================
+    # --- SUB-MÓDULO 7: CATÁLOGO DE RECEPTORES / DESTINOS ---
+    with tab7:
+        st.subheader("🏢 Catálogo de Receptores / Destinos de Remisiones")
+        
+        # 1. Plantilla descargable
+        df_r_plantilla = pd.DataFrame([
+            {"Nombre_Receptor": "Cliente Ejemplo 1", "Direccion": "Calle Principal 123, Ciudad, Estado"},
+            {"Nombre_Receptor": "Cliente Ejemplo 2", "Direccion": "Av. Tecnologico 456, Ciudad, Estado"}
+        ])
+        
+        from openpyxl.styles import Font, PatternFill
+        buf_r = io.BytesIO()
+        with pd.ExcelWriter(buf_r, engine='openpyxl') as wr_r:
+            df_r_plantilla.to_excel(wr_r, index=False, sheet_name='Plantilla_Receptores')
+            ws_r = wr_r.sheets['Plantilla_Receptores']
+            
+            fill_header = PatternFill(start_color="757575", end_color="757575", fill_type="solid")
+            font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            for col_idx in range(1, 3):
+                cell = ws_r.cell(row=1, column=col_idx)
+                cell.font, cell.fill = font_header, fill_header
+                
+        st.write("Descargue el formato base para rellenar la lista de receptores autorizados:")
+        st.download_button(label="📥 Descargar Plantilla de Receptores (.xlsx)", data=buf_r.getvalue(), file_name="plantilla_receptores_sigrama.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="btn_download_plantilla_receptores")
+        st.write("---")
+        
+        # 2. Carga masiva
+        arch_receptores = st.file_uploader("Suba la Plantilla de Receptores Rellenada:", type=["xlsx"], key="uploader_receptores_masivo")
+        if arch_receptores and st.button("🚀 Procesar e Integrar Receptores Masivos"):
+            try:
+                df_r_excel = pd.read_excel(arch_receptores)
+                if not all(col in df_r_excel.columns for col in ["Nombre_Receptor", "Direccion"]):
+                    st.error("❌ Error: Columnas incompatibles. Use: Nombre_Receptor, Direccion")
+                else:
+                    for _, row_r in df_r_excel.iterrows():
+                        if pd.notna(row_r['Nombre_Receptor']) and str(row_r['Nombre_Receptor']).strip() != "":
+                            n_id_r = f"REC-{(len(st.session_state.BD_Receptores) + 1):02d}"
+                            n_r_row = {"ID_Receptor": n_id_r, "Nombre_Receptor": str(row_r['Nombre_Receptor']).strip(), "Direccion": str(row_r['Direccion']).strip() if pd.notna(row_r['Direccion']) else "N/A", "Estatus": "Activo"}
+                            st.session_state.BD_Receptores = pd.concat([st.session_state.BD_Receptores, pd.DataFrame([n_r_row])], ignore_index=True)
+                    subir_excel_a_github("BD_Receptores.xlsx", st.session_state.BD_Receptores)
+                    st.success("✅ ¡Lista de receptores integrada y respaldada con éxito!"); st.rerun()
+            except Exception as e: st.error(f"Error: {e}")
+            
+        st.write("---")
+        
+        # 3. Alta individual
+        with st.expander("➕ Dar de Alta Nuevo Receptor Individual"):
+            c_rec1, c_rec2 = st.columns(2)
+            with c_rec1: nuevo_rec_nom = st.text_input("Nombre del Receptor / Cliente:", key="txt_input_nuevo_receptor_name")
+            with c_rec2: nueva_rec_dir = st.text_input("Dirección del Destino:", key="txt_input_nuevo_receptor_dir")
+            if st.button("➕ Registrar Receptor Individual"):
+                if nuevo_rec_nom:
+                    n_id_r = f"REC-{(len(st.session_state.BD_Receptores) + 1):02d}"
+                    n_row = {"ID_Receptor": n_id_r, "Nombre_Receptor": nuevo_rec_nom.strip(), "Direccion": nueva_rec_dir.strip(), "Estatus": "Activo"}
+                    st.session_state.BD_Receptores = pd.concat([st.session_state.BD_Receptores, pd.DataFrame([n_row])], ignore_index=True)
+                    subir_excel_a_github("BD_Receptores.xlsx", st.session_state.BD_Receptores)
+                    st.success("Receptor registrado exitosamente."); st.rerun()
+                    
+        # 4. Tabla de edición y visualización
+        st.write("📋 Catálogo Maestro de Receptores Autorizados (Editable):")
+        df_r_edit = st.data_editor(st.session_state.BD_Receptores, use_container_width=True, hide_index=True, key="editor_catalogo_receptores_master")
+        if st.button("💾 Sincronizar Cambios Manuales de Receptores"):
+            st.session_state.BD_Receptores = df_r_edit
+            subir_excel_a_github("BD_Receptores.xlsx", st.session_state.BD_Receptores)
+            st.success("Catálogo de receptores actualizado en GitHub.")
+
+# =============================================================================================
 # 15. CARGA MASIVA HISTÓRICA
 # =============================================================================
 elif opcion_menu == "🕰️ Carga Histórica":
