@@ -3981,34 +3981,64 @@ elif opcion_menu == "📋 Consulta por Lote SKU":
             st.success("✅ Archivo cargado correctamente. Selecciona la columna del SKU:")
             
             columnas_excel = df_skus_input.columns.tolist()
-            col_sku_sel = st.selectbox("Columna que contiene el SKU/Material:", columnas_excel)
+            col_sku_sel = st.selectbox("Columna que contiene el SKU/Material:", columnas_excel, key="lote_sku_col_select")
             
-            if st.button("🔍 Iniciar Consulta por Lote"):
-                with st.spinner("Procesando consulta..."):
-                    # 1. Limpiar y obtener SKUs únicos del Excel
-                    skus_consultados = df_skus_input[col_sku_sel].astype(str).str.strip().dropna().unique().tolist()
-                    skus_consultados = [s for s in skus_consultados if s and s.upper() not in ["TODOS", "SELECCIONE UN SKU..."]]
+            # 1. Limpiar y obtener SKUs únicos del Excel
+            skus_consultados = df_skus_input[col_sku_sel].astype(str).str.strip().dropna().unique().tolist()
+            skus_consultados = [s for s in skus_consultados if s and s.upper() not in ["TODOS", "SELECCIONE UN SKU..."]]
+            
+            if not skus_consultados:
+                st.warning("⚠️ No se encontraron SKUs válidos en la columna seleccionada.")
+            else:
+                # 2. Obtener la producción detallada de estos SKUs (Base)
+                if not st.session_state.BD_Detalle_Tarimas.empty:
+                    df_det = st.session_state.BD_Detalle_Tarimas.copy()
+                    df_det['SKU'] = df_det['SKU'].astype(str).str.strip()
+                    df_det_filtrado = df_det[df_det['SKU'].isin(skus_consultados)].copy()
+                else:
+                    df_det_filtrado = pd.DataFrame(columns=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"])
+                
+                # --- FILTROS GLOBALES INTERACTIVOS ---
+                st.markdown("##### 🔍 Filtrar resultados de la consulta:")
+                col_f1, col_f2, col_f3 = st.columns(3)
+                
+                with col_f1:
+                    opciones_proy = ["Todos"] + sorted(df_det_filtrado['Proyecto'].dropna().astype(str).unique().tolist()) if not df_det_filtrado.empty else ["Todos"]
+                    filtro_proy = st.selectbox("Filtrar por Proyecto Interno:", opciones_proy, key="lote_filtro_proy_unique")
+                
+                with col_f2:
+                    df_temp_po = df_det_filtrado.copy()
+                    if filtro_proy != "Todos":
+                        df_temp_po = df_temp_po[df_temp_po['Proyecto'] == filtro_proy]
+                    opciones_po = ["Todos"] + sorted(df_temp_po['PO'].dropna().astype(str).unique().tolist()) if not df_temp_po.empty else ["Todos"]
+                    filtro_po = st.selectbox("Filtrar por Orden de Compra (PO):", opciones_po, key="lote_filtro_po_unique")
                     
-                    if not skus_consultados:
-                        st.warning("⚠️ No se encontraron SKUs válidos en la columna seleccionada.")
+                with col_f3:
+                    df_temp_desc = df_temp_po.copy()
+                    if filtro_po != "Todos":
+                        df_temp_desc = df_temp_desc[df_temp_desc['PO'] == filtro_po]
+                    opciones_desc = ["Todas"] + sorted(df_temp_desc['Descripcion'].dropna().astype(str).unique().tolist()) if not df_temp_desc.empty else ["Todas"]
+                    filtro_desc = st.selectbox("Filtrar por Descripción de Proyecto:", opciones_desc, key="lote_filtro_desc_unique")
+                
+                with st.spinner("Procesando consulta..."):
+                    # Aplicar filtros a la producción base
+                    df_corte = df_det_filtrado.copy()
+                    if filtro_proy != "Todos":
+                        df_corte = df_corte[df_corte['Proyecto'] == filtro_proy]
+                    if filtro_po != "Todos":
+                        df_corte = df_corte[df_corte['PO'] == filtro_po]
+                    if filtro_desc != "Todas":
+                        df_corte = df_corte[df_corte['Descripcion'] == filtro_desc]
+                        
+                    # 3. Cruzar con BD_Tarimas para obtener el Estatus actual de la tarima
+                    if not df_corte.empty and not st.session_state.BD_Tarimas.empty:
+                        df_t = st.session_state.BD_Tarimas[['ID_Tarima', 'Estatus']].copy()
+                        df_t['ID_Tarima'] = df_t['ID_Tarima'].astype(str).str.strip()
+                        df_corte['ID_Tarima'] = df_corte['ID_Tarima'].astype(str).str.strip()
+                        df_det_cruce = pd.merge(df_corte, df_t, on='ID_Tarima', how='left')
                     else:
-                        # 2. Obtener la producción detallada de estos SKUs
-                        if not st.session_state.BD_Detalle_Tarimas.empty:
-                            df_det = st.session_state.BD_Detalle_Tarimas.copy()
-                            df_det['SKU'] = df_det['SKU'].astype(str).str.strip()
-                            df_det_filtrado = df_det[df_det['SKU'].isin(skus_consultados)].copy()
-                        else:
-                            df_det_filtrado = pd.DataFrame(columns=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"])
-                            
-                        # 3. Cruzar con BD_Tarimas para obtener el Estatus actual de la tarima
-                        if not df_det_filtrado.empty and not st.session_state.BD_Tarimas.empty:
-                            df_t = st.session_state.BD_Tarimas[['ID_Tarima', 'Estatus']].copy()
-                            df_t['ID_Tarima'] = df_t['ID_Tarima'].astype(str).str.strip()
-                            df_det_filtrado['ID_Tarima'] = df_det_filtrado['ID_Tarima'].astype(str).str.strip()
-                            df_det_cruce = pd.merge(df_det_filtrado, df_t, on='ID_Tarima', how='left')
-                        else:
-                            df_det_cruce = df_det_filtrado.copy()
-                            df_det_cruce['Estatus'] = 'Disponible'
+                        df_det_cruce = df_corte.copy()
+                        df_det_cruce['Estatus'] = 'Disponible'
                             
                         # 4. Relacionar con Receptores desde BD_Datos_Generales_Remision
                         mapa_tarima_receptor = {}
