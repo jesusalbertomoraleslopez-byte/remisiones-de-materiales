@@ -1464,7 +1464,7 @@ if opcion_menu == "📊 Dashboard e Históricos":
         po_global_sel = st.selectbox("Filtrar por Orden de Compra (PO):", opciones_global_po, key="dash_global_po_select_unique")
 
     with col_g4:
-        est_global_sel = st.selectbox("Filtrar por Estatus de Envío:", ["Todos", "Remesado", "No Remesado"], key="dash_global_est_select_unique")
+        est_global_sel = st.selectbox("Filtrar por Estatus de Envío:", ["Todos", "Remesado", "No Remesado"], index=2, key="dash_global_est_select_unique")
 
     st.write("---")
     
