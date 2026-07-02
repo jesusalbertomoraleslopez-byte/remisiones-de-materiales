@@ -4027,8 +4027,6 @@ elif opcion_menu == "📋 Consulta por Lote SKU":
                         df_det_cruce['Receptor'] = df_det_cruce['ID_Tarima'].map(mapa_tarima_receptor).fillna("N/A")
                         
                         # 5. Segmentar Cantidades (Disponible vs Remesado)
-                        df_det_cruce['Cant_Disponible'] = df_det_cruce.apply(lambda r: pd.to_numeric(r['Cantidad'], errors='coerce').fill(0) if str(r['Estatus']).strip() != 'Remesada' else 0, axis=1)
-                        # Nota: el método .fill(0) no existe para float simples, usaremos fillna(0) antes o convertiremos
                         df_det_cruce['Cantidad'] = pd.to_numeric(df_det_cruce['Cantidad'], errors='coerce').fillna(0)
                         df_det_cruce['Cant_Disponible'] = df_det_cruce.apply(lambda r: r['Cantidad'] if str(r['Estatus']).strip() != 'Remesada' else 0, axis=1)
                         df_det_cruce['Cant_Remesada'] = df_det_cruce.apply(lambda r: r['Cantidad'] if str(r['Estatus']).strip() == 'Remesada' else 0, axis=1)
