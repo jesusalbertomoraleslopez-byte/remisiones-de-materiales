@@ -2010,14 +2010,32 @@ elif opcion_menu == "📦 Módulo Tarimas":
             cell.font, cell.border = font_data, borde_c
             if col_idx in [1, 3, 4, 5, 7]:
                 cell.alignment = align_center
-
-            else: cell.alignment = align_left
+            else:
+                cell.alignment = align_left
                 
-        # Ajuste de anchos automático corregido leyendo la propiedad de la primera celda
+        # Ajuste de anchos automático corregido
         for col in worksheet.columns:
             max_len = max(len(str(cell.value or '')) for cell in col)
-            col_letter = get_column_letter(col[0].column)  # <-- SOLUCIÓN ACÁ: col[0].column
+            col_letter = get_column_letter(col[0].column)
             worksheet.column_dimensions[col_letter].width = max(max_len + 4, 15)
+            
+        # Inyectar validación de SKUs en base al catálogo
+        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+            df_skus_validos = pd.DataFrame({"SKU": sorted(st.session_state.BD_Articulos['SKU'].dropna().astype(str).str.strip().unique())})
+            df_skus_validos.to_excel(wr, index=False, sheet_name='SKUs_Validos')
+            ws_skus = wr.sheets['SKUs_Validos']
+            ws_skus.column_dimensions['A'].width = 25
+            
+            # Validación de datos en la hoja principal (columna B: Producto/SKU)
+            from openpyxl.worksheet.datavalidation import DataValidation
+            max_r = len(df_skus_validos) + 1
+            dv = DataValidation(type="list", formula1=f"=SKUs_Validos!$A$2:$A${max_r}", allow_blank=True)
+            dv.error = 'El SKU ingresado no existe en el catálogo oficial del sistema. Selecciona un SKU de la lista o regístralo primero en la app.'
+            dv.errorTitle = 'SKU Inválido o No Registrado'
+            dv.prompt = 'Selecciona o escribe un SKU válido del catálogo'
+            dv.promptTitle = 'SKU Autorizado'
+            worksheet.add_data_validation(dv)
+            dv.add("B2:B2000")
 
             
     buf_p.seek(0)
@@ -2041,6 +2059,16 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 if not all(col in df_ex.columns for col in columnas_requeridas): st.error("❌ Error: Columnas incompatibles.")
                 else:
                     df_ex["Producto/SKU"] = df_ex["Producto/SKU"].astype(str).str.strip().str.upper()
+                    
+                    # --- VALIDACIÓN DE SKUs CONTRA CATÁLOGO ---
+                    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                        skus_validos = set(st.session_state.BD_Articulos['SKU'].astype(str).str.strip().str.upper())
+                        skus_archivo = set(df_ex['Producto/SKU'])
+                        skus_no_validos = skus_archivo - skus_validos
+                        if skus_no_validos:
+                            st.error(f"❌ Error de Validación: Los siguientes SKUs no están registrados en el Catálogo de Artículos: {sorted(list(skus_no_validos))}. Registre los artículos primero para poder cargarlos a una tarima.")
+                            st.stop()
+                            
                     if not st.session_state.BD_Tarimas.empty: st.session_state.BD_Tarimas["Es_Nueva"] = False
                     for t_orig in df_ex['Tarima'].unique():
                         # 1. Leer el consecutivo manual configurado, si no existe usa el conteo base
