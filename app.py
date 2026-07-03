@@ -2041,6 +2041,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
             df_skus_validos.to_excel(wr, index=False, sheet_name='SKUs_Validos')
             ws_skus = wr.sheets['SKUs_Validos']
             ws_skus.column_dimensions['A'].width = 25
+            ws_skus.sheet_state = 'hidden'
             
             # Validación de datos en la hoja principal (columna B: Producto/SKU)
             from openpyxl.worksheet.datavalidation import DataValidation
