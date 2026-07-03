@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import os
 import pandas as pd
 import datetime
@@ -440,29 +441,25 @@ def generar_pdf_catalogo_articulos(df_articulos):
     
     story = []
     
-    # Decoración de fondo / Cabecera repetitiva
+    # Decoración de fondo / Cabecera repetitiva limpia sin logotipo
     def draw_catalog_decorations(canvas, doc):
         canvas.saveState()
-        # Franja roja en el encabezado
-        canvas.setFillColor(colors.HexColor("#EC2024"))
-        canvas.rect(0, 750, 612, 42, fill=True, stroke=False)
+        # Línea roja corporativa fina superior (Pantone 485 C)
+        canvas.setStrokeColor(colors.HexColor("#EC2024"))
+        canvas.setLineWidth(1.5)
+        canvas.line(36, 755, 576, 755)
         
-        # Logotipo (si existe)
-        logo_path = "logo_sigrama.png"
-        if os.path.exists(logo_path):
-            canvas.drawImage(logo_path, 36, 755, width=120, height=32, mask='auto')
-            
-        # Título en la franja roja
-        canvas.setFillColor(colors.white)
-        canvas.setFont("Helvetica-Bold", 12)
-        canvas.drawString(180, 765, "REPORTE DE CATALOGO MAESTRO DE ARTICULOS")
+        # Título principal en negro/gris alineado a la izquierda
+        canvas.setFillColor(colors.HexColor("#212121"))
+        canvas.setFont("Helvetica-Bold", 10)
+        canvas.drawString(36, 762, "INDUSTRIA SIGRAMA S.A. DE C.V. — REPORTE DE CATÁLOGO MAESTRO")
         
-        # Fecha de generación en la esquina
-        canvas.setFillColor(colors.white)
-        canvas.setFont("Helvetica", 9)
-        canvas.drawRightString(576, 765, datetime.date.today().strftime("%d-%b-%Y"))
+        # Fecha de generación alineada a la derecha
+        canvas.setFillColor(colors.HexColor("#616161"))
+        canvas.setFont("Helvetica", 8)
+        canvas.drawRightString(576, 762, datetime.date.today().strftime("%d-%b-%Y"))
         
-        # Pie de página
+        # Pie de página (Línea roja fina)
         canvas.setStrokeColor(colors.HexColor("#EC2024"))
         canvas.setLineWidth(1)
         canvas.line(36, 50, 576, 50)
@@ -2878,6 +2875,50 @@ elif opcion_menu == "📦 Catálogo de Artículos":
             
             with col_ficha:
                 st.write("##### Ficha Técnica del Artículo")
+                
+                # Widget HTML/JS para copiar SKU automáticamente al seleccionar, con botón físico de respaldo
+                copiar_html = f"""
+                    <div style="margin-bottom: 12px; font-family: sans-serif; display: flex; align-items: center; gap: 8px;">
+                        <button id="btn-copiar-sku" style="
+                            background-color: #EC2024;
+                            color: white;
+                            border: none;
+                            padding: 8px 16px;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-weight: bold;
+                            font-size: 13px;
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 8px;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        ">
+                            📋 Copiar SKU
+                        </button>
+                        <span id="msg-copiado" style="color: #2E7D32; font-weight: bold; display: none; font-size: 13px; animation: fadeIn 0.3s;">¡Copiado al portapapeles!</span>
+                    </div>
+                    <script>
+                        function copiarTexto() {{
+                            navigator.clipboard.writeText("{sku_sel}").then(function() {{
+                                var msg = document.getElementById("msg-copiado");
+                                msg.style.display = "inline";
+                                setTimeout(function() {{
+                                    msg.style.display = "none";
+                                }}, 2000);
+                            }}).catch(function(err) {{
+                                console.error("Error al copiar: ", err);
+                            }});
+                        }}
+                        // Ejecución inmediata
+                        try {{
+                            copiarTexto();
+                        }} catch(e) {{}}
+                        // Listener del botón
+                        document.getElementById("btn-copiar-sku").addEventListener("click", copiarTexto);
+                    </script>
+                """
+                components.html(copiar_html, height=45)
+                
                 st.markdown(f"**SKU / Código:** `{sku_sel}`")
                 st.markdown(f"**Nombre:** {art_row['Nombre']}")
                 st.markdown(f"**Calibre / Espesor:** {art_row['Calibre_Espesor']}")
