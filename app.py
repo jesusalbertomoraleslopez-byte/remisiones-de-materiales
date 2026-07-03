@@ -2047,6 +2047,8 @@ elif opcion_menu == "📦 Módulo Tarimas":
             from openpyxl.worksheet.datavalidation import DataValidation
             max_r = len(df_skus_validos) + 1
             dv = DataValidation(type="list", formula1=f"=SKUs_Validos!$A$2:$A${max_r}", allow_blank=True)
+            dv.showErrorMessage = True
+            dv.errorStyle = 'stop'
             dv.error = 'El SKU ingresado no existe en el catálogo ni en la lista de SKUs autorizados. Selecciona un SKU de la lista o regístralo primero en la app.'
             dv.errorTitle = 'SKU Inválido o No Registrado'
             dv.prompt = 'Selecciona o escribe un SKU válido'
