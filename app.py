@@ -3542,18 +3542,31 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     if st.button("🔄 Procesar e Integrar Catálogo en GitHub", use_container_width=True):
                         try:
                             df_art_excel = pd.read_excel(arch_articulos)
-                            columnas_requeridas = ["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
-        
-                            # Verificación manual y limpia de columnas para evitar fallas de sintaxis
-                            columnas_correctas = True
-                            for col in columnas_requeridas:
-                                if col not in df_art_excel.columns:
-                                    columnas_correctas = False
-        
-                            if not columnas_correctas:
-                                st.error("❌ Error: Columnas incompatibles. Use la estructura oficial.")
+                            
+                            # Limpieza y normalización de nombres de columnas
+                            df_art_excel.columns = [str(c).strip() for c in df_art_excel.columns]
+                            
+                            # Buscar si existe una columna SKU
+                            sku_col = None
+                            for col in df_art_excel.columns:
+                                if col.upper() == "SKU":
+                                    sku_col = col
+                                    break
+                                    
+                            if sku_col is None:
+                                st.error("❌ Error: El archivo de Excel debe contener al menos una columna llamada 'SKU'.")
                             else:
-                                # Limpieza del archivo subido
+                                # Normalizar columna SKU
+                                if sku_col != "SKU":
+                                    df_art_excel = df_art_excel.rename(columns={sku_col: "SKU"})
+                                    
+                                # Rellenar las demás columnas oficiales si no vienen en el archivo
+                                for col in ["Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]:
+                                    if col not in df_art_excel.columns:
+                                        df_art_excel[col] = "N/A"
+                                        
+                                # Filtrar y conservar únicamente las columnas oficiales estructuradas
+                                df_art_excel = df_art_excel[["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]]
                                 df_art_excel = df_art_excel.dropna(subset=["SKU"])
                                 df_art_excel["SKU"] = df_art_excel["SKU"].astype(str).str.strip().str.upper()
         
