@@ -2818,6 +2818,157 @@ elif opcion_menu == "📦 Catálogo de Artículos":
             }
         )
 
+        # --- SECCIÓN DE AUDITORÍA DE INFORMACIÓN FALTANTE ---
+        st.write("---")
+        st.subheader("🔍 Auditoría de Información Faltante en el Catálogo")
+        
+        # Definir las columnas que deben tener información completa
+        columnas_auditadas = ["Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
+        etiquetas_col = {
+            "Nombre": "Descripción Comercial",
+            "Calibre_Espesor": "Calibre / Espesor", 
+            "Dimensiones_Pieza": "Dimensiones",
+            "Acabado_Superficial": "Acabado Superficial"
+        }
+        
+        df_auditoria = df_articulos_base.copy()
+        
+        # Detectar campos vacíos: None, NaN, "None", cadena vacía, "N/A"
+        def campo_vacio(val):
+            if pd.isna(val):
+                return True
+            s = str(val).strip().upper()
+            return s in ["", "NONE", "N/A", "NAN", "NA", "-"]
+        
+        # Crear columna de conteo de campos faltantes por artículo
+        df_auditoria["_campos_faltantes"] = 0
+        df_auditoria["_detalle_faltante"] = ""
+        
+        for _, row in df_auditoria.iterrows():
+            faltantes = []
+            for col in columnas_auditadas:
+                if col in row.index and campo_vacio(row[col]):
+                    faltantes.append(etiquetas_col.get(col, col))
+            df_auditoria.at[row.name, "_campos_faltantes"] = len(faltantes)
+            df_auditoria.at[row.name, "_detalle_faltante"] = ", ".join(faltantes) if faltantes else "✅ Completo"
+        
+        df_incompletos = df_auditoria[df_auditoria["_campos_faltantes"] > 0].copy()
+        df_completos = df_auditoria[df_auditoria["_campos_faltantes"] == 0].copy()
+        
+        # Métricas de auditoría
+        col_aud1, col_aud2, col_aud3, col_aud4 = st.columns(4)
+        with col_aud1:
+            st.metric("📦 Total Artículos", len(df_auditoria))
+        with col_aud2:
+            st.metric("✅ Completos", len(df_completos))
+        with col_aud3:
+            st.metric("⚠️ Incompletos", len(df_incompletos))
+        with col_aud4:
+            pct = round((len(df_completos) / max(len(df_auditoria), 1)) * 100, 1)
+            st.metric("📊 % Cumplimiento", f"{pct}%")
+        
+        if not df_incompletos.empty:
+            # Desglose por campo faltante
+            st.write("")
+            st.markdown("**Desglose de campos faltantes:**")
+            col_det1, col_det2, col_det3, col_det4 = st.columns(4)
+            for i, col in enumerate(columnas_auditadas):
+                cnt = sum(1 for _, r in df_incompletos.iterrows() if campo_vacio(r.get(col, "")))
+                with [col_det1, col_det2, col_det3, col_det4][i]:
+                    st.metric(f"Sin {etiquetas_col[col]}", cnt)
+            
+            st.write("")
+            
+            # Tabla de artículos incompletos
+            st.warning(f"⚠️ Se detectaron **{len(df_incompletos)} artículos** con información faltante. Revise la tabla y descargue el Excel para completar los datos.")
+            
+            df_mostrar = df_incompletos[["SKU"] + columnas_auditadas + ["_detalle_faltante"]].copy()
+            df_mostrar = df_mostrar.rename(columns={"_detalle_faltante": "Campos Faltantes"})
+            
+            st.dataframe(
+                df_mostrar,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "SKU": st.column_config.TextColumn("SKU / Código"),
+                    "Nombre": st.column_config.TextColumn("Descripción Comercial"),
+                    "Calibre_Espesor": st.column_config.TextColumn("Calibre / Espesor"),
+                    "Dimensiones_Pieza": st.column_config.TextColumn("Dimensiones"),
+                    "Acabado_Superficial": st.column_config.TextColumn("Acabado Superficial"),
+                    "Campos Faltantes": st.column_config.TextColumn("Campos Faltantes")
+                }
+            )
+            
+            # Generar Excel descargable con los artículos incompletos (formato de plantilla oficial)
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+            
+            buf_aud = io.BytesIO()
+            df_export_aud = df_incompletos[["SKU"] + columnas_auditadas].copy()
+            # Limpiar valores vacíos para que el usuario vea celdas vacías claras
+            for col in columnas_auditadas:
+                df_export_aud[col] = df_export_aud[col].apply(lambda x: "" if campo_vacio(x) else x)
+            
+            with pd.ExcelWriter(buf_aud, engine='openpyxl') as wr_aud:
+                df_export_aud.to_excel(wr_aud, index=False, sheet_name='Articulos_Incompletos')
+                ws_aud = wr_aud.sheets['Articulos_Incompletos']
+                
+                # Formato de encabezado corporativo
+                fill_header = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
+                font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                fill_vacio = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="solid")  # Amarillo claro para celdas vacías
+                font_normal = Font(name="Calibri", size=11)
+                thin_border = Border(
+                    left=Side(style='thin'), right=Side(style='thin'),
+                    top=Side(style='thin'), bottom=Side(style='thin')
+                )
+                
+                for cell in ws_aud[1]:
+                    cell.fill = fill_header
+                    cell.font = font_header
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    cell.border = thin_border
+                
+                # Formatear celdas de datos: resaltar en amarillo las vacías
+                for row in ws_aud.iter_rows(min_row=2, max_row=ws_aud.max_row, max_col=ws_aud.max_column):
+                    for cell in row:
+                        cell.font = font_normal
+                        cell.border = thin_border
+                        if cell.column > 1 and (cell.value is None or str(cell.value).strip() == ""):
+                            cell.fill = fill_vacio
+                
+                # Ajustar anchos
+                ws_aud.column_dimensions['A'].width = 20
+                ws_aud.column_dimensions['B'].width = 35
+                ws_aud.column_dimensions['C'].width = 18
+                ws_aud.column_dimensions['D'].width = 28
+                ws_aud.column_dimensions['E'].width = 22
+                
+                # Agregar validaciones de datos (Calibre y Acabado)
+                opciones_calibres = '"10GA,12GA,14GA,16GA,10GACR,12GACR,14GACR,16GACR,125AL,250AL,188AL"'
+                dv_cal = DataValidation(type="list", formula1=opciones_calibres, allow_blank=True)
+                ws_aud.add_data_validation(dv_cal)
+                dv_cal.add(f"C2:C{ws_aud.max_row + 1}")
+                
+                opciones_acabados = '"Decapado,Ansi 61,Galvanizado,Otro"'
+                dv_acab = DataValidation(type="list", formula1=opciones_acabados, allow_blank=True)
+                ws_aud.add_data_validation(dv_acab)
+                dv_acab.add(f"E2:E{ws_aud.max_row + 1}")
+                
+            buf_aud.seek(0)
+            
+            st.download_button(
+                label="📥 Descargar Artículos Incompletos (Excel para completar)",
+                data=buf_aud.getvalue(),
+                file_name="Articulos_Informacion_Faltante.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_download_auditoria_faltantes",
+                use_container_width=True
+            )
+            st.info("💡 **Instrucciones:** Descargue el archivo, complete las celdas amarillas vacías y vuelva a subirlo en **Mantenimiento y Catálogos → Catálogo Maestro Detallado → Carga Masiva**. El sistema actualizará automáticamente los registros existentes con la nueva información.")
+        else:
+            st.success("🎉 ¡Excelente! Todos los artículos del catálogo tienen su información al 100%. No hay campos vacíos.")
+
         # --- SECCIÓN ADICIONAL: CARGA Y DETALLE DE IMAGEN DE ARTÍCULO ---
         st.write("---")
         st.subheader("🖼️ Detalle e Imagen del Artículo")
