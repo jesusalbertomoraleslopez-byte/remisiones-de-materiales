@@ -11,6 +11,7 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+from openpyxl.worksheet.datavalidation import DataValidation
 
 # 1. CONFIGURACIÓN E INTERFAZ BASE RESPONSIVA
 st.set_page_config(
