@@ -2056,14 +2056,21 @@ elif opcion_menu == "📦 Módulo Tarimas":
             worksheet.add_data_validation(dv)
             dv.add("B2:B2000")
             
-            # Formato Condicional: Pone la celda en rojo si el SKU no coincide con los autorizados (burlado por copiado/pegado)
+            # Formato Condicional: Pone la celda en verde si existe, y en rojo si no existe
             from openpyxl.formatting.rule import FormulaRule
+            
+            # Regla Rojo (No Existe)
             red_fill = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
             red_font = Font(name="Calibri", size=11, color='9C0006', bold=True)
-            rule = FormulaRule(formula=[f'AND(B2<>"", ISERROR(MATCH(B2, SKUs_Validos!$A$2:$A${max_r}, 0)))'], fill=red_fill, font=red_font)
-            worksheet.conditional_formatting.add('B2:B2000', rule)
+            rule_red = FormulaRule(formula=[f'AND(B2<>"", ISERROR(MATCH(B2, SKUs_Validos!$A$2:$A${max_r}, 0)))'], fill=red_fill, font=red_font)
+            worksheet.conditional_formatting.add('B2:B2000', rule_red)
             
-            # Asegurar que se guarde el archivo en el buffer
+            # Regla Verde (Sí Existe)
+            green_fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
+            green_font = Font(name="Calibri", size=11, color='006100', bold=True)
+            rule_green = FormulaRule(formula=[f'AND(B2<>"", NOT(ISERROR(MATCH(B2, SKUs_Validos!$A$2:$A${max_r}, 0))))'], fill=green_fill, font=green_font)
+            worksheet.conditional_formatting.add('B2:B2000', rule_green)
+            
             pass
 
             
