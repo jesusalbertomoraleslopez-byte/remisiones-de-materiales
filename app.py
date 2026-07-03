@@ -717,6 +717,17 @@ if "BD_Articulos" not in st.session_state or st.session_state.get("BD_Articulos"
         st.session_state.BD_Articulos = pd.DataFrame(columns=["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"])
 
 
+# --- Lista de SKUs Autorizados (Base de Datos de Nombres SKU) ---
+if "BD_SKUs_Autorizados" not in st.session_state or st.session_state.get("BD_SKUs_Autorizados") is None:
+    df_git_skus_aut = cargar_excel_desde_github("BD_SKUs_Autorizados.xlsx")
+    if df_git_skus_aut is not None:
+        if "SKU" in df_git_skus_aut.columns:
+            df_git_skus_aut["SKU"] = df_git_skus_aut["SKU"].astype(str).str.strip().str.upper()
+        st.session_state.BD_SKUs_Autorizados = df_git_skus_aut
+    else:
+        st.session_state.BD_SKUs_Autorizados = pd.DataFrame(columns=["SKU"])
+
+
 # --- Catálogo Maestro de Tarimas ---
 if "BD_Tarimas" not in st.session_state:
     df_git_tarimas = cargar_excel_desde_github("BD_Tarimas.xlsx")
@@ -2019,9 +2030,13 @@ elif opcion_menu == "📦 Módulo Tarimas":
             col_letter = get_column_letter(col[0].column)
             worksheet.column_dimensions[col_letter].width = max(max_len + 4, 15)
             
-        # Inyectar validación de SKUs en base al catálogo
-        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-            df_skus_validos = pd.DataFrame({"SKU": sorted(st.session_state.BD_Articulos['SKU'].dropna().astype(str).str.strip().unique())})
+        # Inyectar validación de SKUs en base al catálogo + la lista de SKUs autorizados
+        set_skus_art = set(st.session_state.BD_Articulos['SKU'].dropna().astype(str).str.strip().unique()) if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty else set()
+        set_skus_aut = set(st.session_state.BD_SKUs_Autorizados['SKU'].dropna().astype(str).str.strip().unique()) if "BD_SKUs_Autorizados" in st.session_state and not st.session_state.BD_SKUs_Autorizados.empty else set()
+        union_skus = sorted(list(set_skus_art | set_skus_aut))
+        
+        if union_skus:
+            df_skus_validos = pd.DataFrame({"SKU": union_skus})
             df_skus_validos.to_excel(wr, index=False, sheet_name='SKUs_Validos')
             ws_skus = wr.sheets['SKUs_Validos']
             ws_skus.column_dimensions['A'].width = 25
@@ -2030,9 +2045,9 @@ elif opcion_menu == "📦 Módulo Tarimas":
             from openpyxl.worksheet.datavalidation import DataValidation
             max_r = len(df_skus_validos) + 1
             dv = DataValidation(type="list", formula1=f"=SKUs_Validos!$A$2:$A${max_r}", allow_blank=True)
-            dv.error = 'El SKU ingresado no existe en el catálogo oficial del sistema. Selecciona un SKU de la lista o regístralo primero en la app.'
+            dv.error = 'El SKU ingresado no existe en el catálogo ni en la lista de SKUs autorizados. Selecciona un SKU de la lista o regístralo primero en la app.'
             dv.errorTitle = 'SKU Inválido o No Registrado'
-            dv.prompt = 'Selecciona o escribe un SKU válido del catálogo'
+            dv.prompt = 'Selecciona o escribe un SKU válido'
             dv.promptTitle = 'SKU Autorizado'
             worksheet.add_data_validation(dv)
             dv.add("B2:B2000")
@@ -2060,14 +2075,16 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 else:
                     df_ex["Producto/SKU"] = df_ex["Producto/SKU"].astype(str).str.strip().str.upper()
                     
-                    # --- VALIDACIÓN DE SKUs CONTRA CATÁLOGO ---
-                    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                        skus_validos = set(st.session_state.BD_Articulos['SKU'].astype(str).str.strip().str.upper())
-                        skus_archivo = set(df_ex['Producto/SKU'])
-                        skus_no_validos = skus_archivo - skus_validos
-                        if skus_no_validos:
-                            st.error(f"❌ Error de Validación: Los siguientes SKUs no están registrados en el Catálogo de Artículos: {sorted(list(skus_no_validos))}. Registre los artículos primero para poder cargarlos a una tarima.")
-                            st.stop()
+                    # --- VALIDACIÓN DE SKUs CONTRA AMBAS BASES DE DATOS ---
+                    skus_art = set(st.session_state.BD_Articulos['SKU'].astype(str).str.strip().str.upper()) if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty else set()
+                    skus_aut = set(st.session_state.BD_SKUs_Autorizados['SKU'].astype(str).str.strip().str.upper()) if "BD_SKUs_Autorizados" in st.session_state and not st.session_state.BD_SKUs_Autorizados.empty else set()
+                    skus_validos = skus_art | skus_aut
+                    
+                    skus_archivo = set(df_ex['Producto/SKU'].astype(str).str.strip().str.upper())
+                    skus_no_validos = skus_archivo - skus_validos
+                    if skus_no_validos:
+                        st.error(f"❌ Error de Validación: Los siguientes SKUs no están registrados en el Catálogo de Artículos ni en la Lista de SKUs Autorizados: {sorted(list(skus_no_validos))}. Por favor, regístrelos primero para poder cargarlos.")
+                        st.stop()
                             
                     if not st.session_state.BD_Tarimas.empty: st.session_state.BD_Tarimas["Es_Nueva"] = False
                     for t_orig in df_ex['Tarima'].unique():
@@ -3401,20 +3418,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                                 else:
                                     t_list = []
                                 for t in t_list:
-                                    tarimas_afectadas.append(str(t).strip())
-                        else:
-                            ids_rem_eliminar = []
-                            tarimas_afectadas = []
-    
-                        if st.button("🗑️ Eliminar Remisiones Seleccionadas") and ids_rem_eliminar:
-                            st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(tarimas_afectadas), 'Estatus'] = 'Disponible'
-                            st.session_state.BD_Datos_Generales_Remision = st.session_state.BD_Datos_Generales_Remision[~st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].isin(ids_rem_eliminar)]
-                            subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-                            subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
-                            st.success("✅ Remisiones eliminadas y bultos reactivados."); st.rerun()
-                else: st.write("No hay remisiones registradas.")
-                
-                st.write("---")
+                                                 st.write("---")
                 st.markdown("### 🔄 3. Sincronización y Reparación de Estatus de Tarimas")
                 st.info("Utilice esta herramienta para buscar tarimas marcadas como 'Remesadas' pero que no pertenecen a ninguna remisión activa (por ejemplo, remisiones borradas manualmente), y regresarlas al estatus de 'Disponible'.")
                 if st.button("🔄 Sincronizar y Reparar Estatus de Tarimas"):
@@ -3425,192 +3429,152 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     else:
                         st.info("ℹ️ No se detectaron tarimas con estatus incorrecto. Todo está sincronizado correctamente.")
    
-    # --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA DEL CATÁLOGO DE ARTÍCULOS ---
-# --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA DEL CATÁLOGO DE ARTÍCULOS ---
-# --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA DEL CATÁLOGO DE ARTÍCULOS ---
-# --- SUB-MÓDULO 4: ADMINISTRACIÓN MASIVA Y EDICIÓN DEL CATÁLOGO DE ARTÍCULOS ---
     with tab4:
         st.subheader("📦 Administración y Sincronización del Catálogo de Artículos")
         st.markdown("Utilice este panel para actualizar de forma masiva mediante archivos o editar directamente registros específicos en caliente:")
-    
-        # Forzamos la presencia local de librerías críticas
-        import io
-        import pandas as pd
-        from openpyxl.worksheet.datavalidation import DataValidation
-    
-        # =============================================================================
-        # BLOQUE A: CARGA MASIVA Y PLANTILLAS
-        # =============================================================================
-        with st.expander("📥 Carga Masiva mediante Excel (Subir / Descargar Plantilla)", expanded=False):
-            c_art1, c_art2 = st.columns(2)
+        
+        # Sub-pestañas para separar bases de datos
+        sub_tab1, sub_tab2 = st.tabs(["📦 Catálogo Maestro Detallado", "📋 Lista de SKUs Autorizados"])
+        
+        with sub_tab1:
+            st.markdown("#### 📦 Catálogo Maestro de Artículos (Detallado)")
+            st.info("💡 **Guía de uso:** Este es el catálogo detallado que contiene Nombre, Calibre, Dimensiones y Acabados de los artículos. Requiere la plantilla estricta de 5 columnas.")
             
-            with c_art1:
-                st.write("##### Obtener Plantilla Estructurada")
-                columnas_oficiales = ["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
-                df_plantilla_art = pd.DataFrame(columns=columnas_oficiales)
-    
-                buf_p_art = io.BytesIO()
-                with pd.ExcelWriter(buf_p_art, engine='openpyxl') as p_writer:
-                    df_plantilla_art.to_excel(p_writer, index=False, sheet_name='Datos_Sistema')
-                    worksheet = p_writer.sheets['Datos_Sistema']
-                    worksheet.column_dimensions['A'].width = 20
-                    worksheet.column_dimensions['B'].width = 25
-                    worksheet.column_dimensions['C'].width = 20
-                    worksheet.column_dimensions['D'].width = 25
-                    worksheet.column_dimensions['E'].width = 20
-    
-                    opciones_calibres = '"10GA,12GA,14GA,16GA,10GACR,12GACR,14GACR,16GACR","125AL","250AL","188AL"'
-                    dv_calibre = DataValidation(type="list", formula1=opciones_calibres, allow_blank=True)
-                    worksheet.add_data_validation(dv_calibre)
-                    dv_calibre.add("C2:C2000")
-    
-                    opciones_acabados = '"Decapado,Ansi 61,Galvanizado,Otro"'
-                    dv_acabado = DataValidation(type="list", formula1=opciones_acabados, allow_blank=True)
-                    worksheet.add_data_validation(dv_acabado)
-                    dv_acabado.add("E2:E2000")
-    
-                buf_p_art.seek(0)
-                st.download_button(
-                    label="📊 Descargar Plantilla Base Artículos (.xlsx)",
-                    data=buf_p_art.getvalue(),
-                    file_name="Plantilla_Maestra_Articulos.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="btn_download_plantilla_maestra_articulos_sgc_v2"
-                )
-
-                st.write("---")
-                st.write("##### Artículos en Tarimas Sin Registro en Catálogo")
-
-                skus_en_tarimas = set()
-                if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
-                    skus_en_tarimas = set(st.session_state.BD_Detalle_Tarimas['SKU'].astype(str).str.strip().dropna().unique())
-
-                skus_en_articulos = set()
-                if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                    skus_en_articulos = set(st.session_state.BD_Articulos['SKU'].astype(str).str.strip().dropna().unique())
-
-                skus_sin_registro = sorted(list(skus_en_tarimas - skus_en_articulos))
-                # Excluir valores vacíos o de selección
-                skus_sin_registro = [s for s in skus_sin_registro if s and s.upper() not in ["TODOS", "SELECCIONE UN SKU..."]]
-
-                if len(skus_sin_registro) > 0:
-                    st.info(f"🔍 Se encontraron **{len(skus_sin_registro)}** artículos en tarimas que no están registrados en el Catálogo.")
-                else:
-                    st.success("🎉 ¡Todos los artículos en tarimas están registrados en el Catálogo!")
-
-                df_sin_registro = pd.DataFrame(columns=columnas_oficiales)
-                df_sin_registro["SKU"] = skus_sin_registro
-
-                buf_sin_reg = io.BytesIO()
-                with pd.ExcelWriter(buf_sin_reg, engine='openpyxl') as p_writer:
-                    df_sin_registro.to_excel(p_writer, index=False, sheet_name='Datos_Sistema')
-                    worksheet = p_writer.sheets['Datos_Sistema']
-                    worksheet.column_dimensions['A'].width = 20
-                    worksheet.column_dimensions['B'].width = 25
-                    worksheet.column_dimensions['C'].width = 20
-                    worksheet.column_dimensions['D'].width = 25
-                    worksheet.column_dimensions['E'].width = 20
-
-                    opciones_calibres = '"10GA,12GA,14GA,16GA,10GACR,12GACR,14GACR,16GACR","125AL","250AL","188AL"'
-                    dv_calibre = DataValidation(type="list", formula1=opciones_calibres, allow_blank=True)
-                    worksheet.add_data_validation(dv_calibre)
-                    dv_calibre.add("C2:C2000")
-
-                    opciones_acabados = '"Decapado,Ansi 61,Galvanizado,Otro"'
-                    dv_acabado = DataValidation(type="list", formula1=opciones_acabados, allow_blank=True)
-                    worksheet.add_data_validation(dv_acabado)
-                    dv_acabado.add("E2:E2000")
-
-                buf_sin_reg.seek(0)
-
-                st.download_button(
-                    label="📥 Articulos Sin Registro",
-                    data=buf_sin_reg.getvalue(),
-                    file_name="Plantilla_Articulos_Sin_Registro.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="btn_download_articulos_sin_registro",
-                    disabled=len(skus_sin_registro) == 0,
-                    use_container_width=True
-                )
-    
-            with c_art2:
-                st.write("##### Cargar / Actualizar Catálogo (Completo o Nuevos SKUs)")
-                st.info("💡 Nota: Puedes subir únicamente tus nuevos SKUs cada mes. El sistema los agregará de forma inteligente sin borrar los anteriores.")
-                arch_articulos = st.file_uploader("Suba la Plantilla de Artículos Rellenada:", type=["xlsx"], key="uploader_articulos_masivo_f")
+            with st.expander("📥 Carga Masiva de Catálogo Maestro mediante Excel", expanded=False):
+                c_art1, c_art2 = st.columns(2)
+                
+                with c_art1:
+                    st.write("##### Obtener Plantilla Estructurada")
+                    columnas_oficiales = ["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
+                    df_plantilla_art = pd.DataFrame(columns=columnas_oficiales)
         
-                if arch_articulos:
-                    if st.button("🔄 Procesar e Integrar Catálogo en GitHub", use_container_width=True):
-                        try:
-                            df_art_excel = pd.read_excel(arch_articulos)
-                            
-                            # Limpieza y normalización de nombres de columnas
-                            df_art_excel.columns = [str(c).strip() for c in df_art_excel.columns]
-                            
-                            # Buscar si existe una columna SKU
-                            sku_col = None
-                            for col in df_art_excel.columns:
-                                if col.upper() == "SKU":
-                                    sku_col = col
-                                    break
-                                    
-                            if sku_col is None:
-                                st.error("❌ Error: El archivo de Excel debe contener al menos una columna llamada 'SKU'.")
-                            else:
-                                # Normalizar columna SKU
-                                if sku_col != "SKU":
-                                    df_art_excel = df_art_excel.rename(columns={sku_col: "SKU"})
-                                    
-                                # Rellenar las demás columnas oficiales si no vienen en el archivo
-                                for col in ["Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]:
+                    buf_p_art = io.BytesIO()
+                    with pd.ExcelWriter(buf_p_art, engine='openpyxl') as p_writer:
+                        df_plantilla_art.to_excel(p_writer, index=False, sheet_name='Datos_Sistema')
+                        worksheet = p_writer.sheets['Datos_Sistema']
+                        worksheet.column_dimensions['A'].width = 20
+                        worksheet.column_dimensions['B'].width = 25
+                        worksheet.column_dimensions['C'].width = 20
+                        worksheet.column_dimensions['D'].width = 25
+                        worksheet.column_dimensions['E'].width = 20
+        
+                        opciones_calibres = '"10GA,12GA,14GA,16GA,10GACR,12GACR,14GACR,16GACR","125AL","250AL","188AL"'
+                        dv_calibre = DataValidation(type="list", formula1=opciones_calibres, allow_blank=True)
+                        worksheet.add_data_validation(dv_calibre)
+                        dv_calibre.add("C2:C2000")
+        
+                        opciones_acabados = '"Decapado,Ansi 61,Galvanizado,Otro"'
+                        dv_acabado = DataValidation(type="list", formula1=opciones_acabados, allow_blank=True)
+                        worksheet.add_data_validation(dv_acabado)
+                        dv_acabado.add("E2:E2000")
+        
+                    buf_p_art.seek(0)
+                    st.download_button(
+                        label="📊 Descargar Plantilla Base Artículos (.xlsx)",
+                        data=buf_p_art.getvalue(),
+                        file_name="Plantilla_Maestra_Articulos.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="btn_download_plantilla_maestra_articulos_sgc_v2"
+                    )
+                    
+                    st.write("---")
+                    st.write("##### Artículos en Tarimas Sin Registro en Catálogo")
+                    
+                    skus_en_tarimas = set()
+                    if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                        skus_en_tarimas = set(st.session_state.BD_Detalle_Tarimas['SKU'].astype(str).str.strip().dropna().unique())
+                        
+                    # Los SKUs válidos son la unión de Artículos y SKUs Autorizados
+                    set_skus_art = set(st.session_state.BD_Articulos['SKU'].astype(str).str.strip().unique()) if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty else set()
+                    set_skus_aut = set(st.session_state.BD_SKUs_Autorizados['SKU'].astype(str).str.strip().unique()) if "BD_SKUs_Autorizados" in st.session_state and not st.session_state.BD_SKUs_Autorizados.empty else set()
+                    skus_validos_sistema = set_skus_art | set_skus_aut
+                    
+                    skus_sin_registro = sorted(list(skus_en_tarimas - skus_validos_sistema))
+                    skus_sin_registro = [s for s in skus_sin_registro if s and s.upper() not in ["TODOS", "SELECCIONE UN SKU..."]]
+                    
+                    if len(skus_sin_registro) > 0:
+                        st.info(f"🔍 Se encontraron **{len(skus_sin_registro)}** artículos en tarimas que no están registrados en ninguna base de datos.")
+                    else:
+                        st.success("🎉 ¡Todos los artículos en tarimas están registrados en el sistema!")
+                        
+                    df_sin_registro = pd.DataFrame(columns=columnas_oficiales)
+                    df_sin_registro["SKU"] = skus_sin_registro
+                    
+                    buf_sin_reg = io.BytesIO()
+                    with pd.ExcelWriter(buf_sin_reg, engine='openpyxl') as p_writer:
+                        df_sin_registro.to_excel(p_writer, index=False, sheet_name='Datos_Sistema')
+                        worksheet = p_writer.sheets['Datos_Sistema']
+                        worksheet.column_dimensions['A'].width = 20
+                        worksheet.column_dimensions['B'].width = 25
+                        worksheet.column_dimensions['C'].width = 20
+                        worksheet.column_dimensions['D'].width = 25
+                        worksheet.column_dimensions['E'].width = 20
+                        
+                        dv_calibre_sin = DataValidation(type="list", formula1=opciones_calibres, allow_blank=True)
+                        worksheet.add_data_validation(dv_calibre_sin)
+                        dv_calibre_sin.add("C2:C2000")
+                        
+                        dv_acabado_sin = DataValidation(type="list", formula1=opciones_acabados, allow_blank=True)
+                        worksheet.add_data_validation(dv_acabado_sin)
+                        dv_acabado_sin.add("E2:E2000")
+                        
+                    buf_sin_reg.seek(0)
+                    st.download_button(
+                        label="📥 Artículos Sin Registro",
+                        data=buf_sin_reg.getvalue(),
+                        file_name="Plantilla_Articulos_Sin_Registro.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="btn_download_articulos_sin_registro",
+                        disabled=len(skus_sin_registro) == 0,
+                        use_container_width=True
+                    )
+                    
+                with c_art2:
+                    st.write("##### Cargar / Sobrescribir Catálogo Maestro")
+                    arch_articulos = st.file_uploader("Suba la Plantilla de Artículos Rellenada (Estricta 5 columnas):", type=["xlsx"], key="uploader_articulos_masivo_f")
+                    
+                    if arch_articulos:
+                        if st.button("🔄 Procesar e Integrar Catálogo Maestro", use_container_width=True):
+                            try:
+                                df_art_excel = pd.read_excel(arch_articulos)
+                                columnas_requeridas = ["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
+                                
+                                columnas_correctas = True
+                                for col in columnas_requeridas:
                                     if col not in df_art_excel.columns:
-                                        df_art_excel[col] = "N/A"
+                                        columnas_correctas = False
                                         
-                                # Filtrar y conservar únicamente las columnas oficiales estructuradas
-                                df_art_excel = df_art_excel[["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]]
-                                df_art_excel = df_art_excel.dropna(subset=["SKU"])
-                                df_art_excel["SKU"] = df_art_excel["SKU"].astype(str).str.strip().str.upper()
-        
-                                # Integración inteligente: Conserva anteriores y suma/actualiza los nuevos
-                                if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                                    df_anterior = st.session_state.BD_Articulos.copy()
-                                    df_anterior["SKU"] = df_anterior["SKU"].astype(str).str.strip().str.upper()
-                                    
-                                    # Eliminamos del catálogo anterior los SKUs que vienen en el archivo nuevo para actualizarlos
-                                    df_anterior = df_anterior[~df_anterior["SKU"].isin(df_art_excel["SKU"])]
-                                    
-                                    # Unimos los registros viejos con los nuevos
-                                    st.session_state.BD_Articulos = pd.concat([df_anterior, df_art_excel], ignore_index=True)
+                                if not columnas_correctas:
+                                    st.error("❌ Error: Columnas incompatibles. Use la estructura oficial de 5 columnas.")
                                 else:
-                                    st.session_state.BD_Articulos = df_art_excel
-        
-                                exito_subida = subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
-        
-                                if exito_subida:
-                                    st.success("✅ ¡Catálogo actualizado e integrado en GitHub exitosamente!")
-                                    st.rerun()
-                                else:
-                                    st.error("❌ Error al subir el archivo al repositorio de GitHub.")
-                        except Exception as e:
-                            st.error(f"⚠️ Error crítico: {e}")
-        
-            st.write("---")
-        
-            # =============================================================================
-            # BLOQUE B: EDITOR EN CALIENTE TIPO EXCEL CON ELIMINACIÓN HABILITADA
-            # =============================================================================
-            st.write("##### ✏️ Edición Directa, Alta y Baja del Catálogo Maestro")
-            st.info("💡 **Guía de uso:**\n"
-                    "* **Editar:** Haga doble clic sobre cualquier celda.\n"
-                    "* **Eliminar:** Seleccione la fila desde el extremo izquierdo y presione la tecla **Supr/Delete** en su teclado.\n"
-                    "* **Nota:** El SKU actúa como llave relacional y está bloqueado para edición, pero sí puede eliminar la fila completa si ya no se usa.")
-        
+                                    df_art_excel = df_art_excel.dropna(subset=["SKU"])
+                                    df_art_excel["SKU"] = df_art_excel["SKU"].astype(str).str.strip().str.upper()
+                                    
+                                    # Conserva anteriores y actualiza los nuevos
+                                    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                                        df_anterior = st.session_state.BD_Articulos.copy()
+                                        df_anterior["SKU"] = df_anterior["SKU"].astype(str).str.strip().str.upper()
+                                        df_anterior = df_anterior[~df_anterior["SKU"].isin(df_art_excel["SKU"])]
+                                        st.session_state.BD_Articulos = pd.concat([df_anterior, df_art_excel], ignore_index=True)
+                                    else:
+                                        st.session_state.BD_Articulos = df_art_excel
+                                        
+                                    if subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos):
+                                        st.success("✅ ¡Catálogo maestro actualizado en GitHub!")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Error al guardar en GitHub.")
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                                
+            st.write("##### ✏️ Edición Directa, Alta y Baja del Catálogo Maestro Detallado")
             if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
                 df_art_editable = st.data_editor(
                     st.session_state.BD_Articulos,
                     use_container_width=True,
                     disabled=["SKU"],
                     hide_index=True,
-                    num_rows="dynamic",  # Permite añadir (+) y eliminar filas nativas
+                    num_rows="dynamic",
                     key="editor_mantenimiento_articulos_directo_v3",
                     column_config={
                         "SKU": st.column_config.TextColumn("SKU (Bloqueado/Llave)"),
@@ -3620,26 +3584,99 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                         "Acabado_Superficial": st.column_config.SelectboxColumn("Acabado Superficial", options=["Decapado", "Ansi 61", "Galvanizado", "Otro"])
                     }
                 )
-        
-                # Botón de guardado y persistencia en GitHub
-                if st.button("💾 Guardar Cambios y Aplicar Bajas en GitHub", use_container_width=True):
-                    # Limpieza preventiva de datos antes de subir
+                if st.button("💾 Guardar Cambios del Catálogo Maestro en GitHub", use_container_width=True):
                     df_art_final = df_art_editable.dropna(subset=["SKU"])
                     df_art_final["SKU"] = df_art_final["SKU"].astype(str).str.strip().str.upper()
-        
-                    # Actualizar el estado de la sesión local
                     st.session_state.BD_Articulos = df_art_final
-        
-                    # Sincronizar y sobreescribir en la nube
-                    exito_guardado = subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
-        
-                    if exito_guardado:
-                        st.success("💥 ¡Catálogo de artículos actualizado! Las modificaciones y bajas se sincronizaron con éxito.")
+                    if subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos):
+                        st.success("💥 Modificaciones de catálogo maestro sincronizadas.")
                         st.rerun()
                     else:
-                        st.error("❌ Error de comunicación: No se pudieron plasmar los cambios en el repositorio.")
+                        st.error("❌ Error de comunicación con GitHub.")
             else:
-                st.warning("⚠️ No existen registros activos en el catálogo de artículos para desplegar el editor.")
+                st.warning("⚠️ No existen registros activos en el catálogo detallado.")
+                
+        with sub_tab2:
+            st.markdown("#### 📋 Lista de SKUs Autorizados (Nombres de SKU)")
+            st.info("💡 **Guía de uso:** Esta es una base de datos simple de una sola columna. Úsela para subir listas masivas de SKUs autorizados (como su lista mensual) sin necesidad de llenar descripciones o calibre. No se mezclará con el catálogo detallado.")
+            
+            with st.expander("📥 Carga Masiva de SKUs Autorizados mediante Excel", expanded=False):
+                c_aut1, c_aut2 = st.columns(2)
+                
+                with c_aut1:
+                    st.write("##### Obtener Plantilla Simple de SKUs")
+                    df_plantilla_aut = pd.DataFrame(columns=["SKU"])
+                    buf_p_aut = io.BytesIO()
+                    df_plantilla_aut.to_excel(buf_p_aut, index=False, sheet_name="SKUs")
+                    buf_p_aut.seek(0)
+                    st.download_button(
+                        label="📥 Descargar Plantilla Simple SKUs (.xlsx)",
+                        data=buf_p_aut.getvalue(),
+                        file_name="Plantilla_Simple_SKUs.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="btn_download_plantilla_simple_skus"
+                    )
+                    
+                with c_aut2:
+                    st.write("##### Subir / Actualizar Lista de SKUs")
+                    arch_skus_aut = st.file_uploader("Suba el Excel con los SKUs autorizados (Solo columna SKU):", type=["xlsx"], key="uploader_skus_autorizados")
+                    
+                    if arch_skus_aut:
+                        if st.button("🔄 Procesar e Integrar Lista de SKUs", use_container_width=True):
+                            try:
+                                df_excel_aut = pd.read_excel(arch_skus_aut)
+                                df_excel_aut.columns = [str(c).strip() for c in df_excel_aut.columns]
+                                
+                                sku_col = None
+                                for col in df_excel_aut.columns:
+                                    if col.upper() == "SKU":
+                                        sku_col = col
+                                        break
+                                        
+                                if sku_col is None:
+                                    st.error("❌ Error: El archivo debe contener una columna llamada 'SKU'.")
+                                else:
+                                    df_excel_aut = df_excel_aut[[sku_col]].rename(columns={sku_col: "SKU"}).dropna(subset=["SKU"])
+                                    df_excel_aut["SKU"] = df_excel_aut["SKU"].astype(str).str.strip().str.upper()
+                                    
+                                    # Integración inteligente: conserva anteriores y suma nuevos
+                                    if "BD_SKUs_Autorizados" in st.session_state and not st.session_state.BD_SKUs_Autorizados.empty:
+                                        df_prev = st.session_state.BD_SKUs_Autorizados.copy()
+                                        df_prev["SKU"] = df_prev["SKU"].astype(str).str.strip().str.upper()
+                                        df_prev = df_prev[~df_prev["SKU"].isin(df_excel_aut["SKU"])]
+                                        st.session_state.BD_SKUs_Autorizados = pd.concat([df_prev, df_excel_aut], ignore_index=True)
+                                    else:
+                                        st.session_state.BD_SKUs_Autorizados = df_excel_aut
+                                        
+                                    if subir_excel_a_github("BD_SKUs_Autorizados.xlsx", st.session_state.BD_SKUs_Autorizados):
+                                        st.success("✅ ¡Lista de SKUs Autorizados integrada con éxito en GitHub!")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Error al guardar en GitHub.")
+                            except Exception as e:
+                                st.error(f"Error al procesar: {e}")
+                                
+            st.write("##### ✏️ Edición y Bajas de la Lista de SKUs Autorizados")
+            if "BD_SKUs_Autorizados" in st.session_state and not st.session_state.BD_SKUs_Autorizados.empty:
+                df_aut_editable = st.data_editor(
+                    st.session_state.BD_SKUs_Autorizados,
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="dynamic",
+                    key="editor_skus_autorizados_directo",
+                    column_config={"SKU": st.column_config.TextColumn("SKU Autorizado")}
+                )
+                if st.button("💾 Guardar Cambios de SKUs Autorizados en GitHub", use_container_width=True):
+                    df_aut_final = df_aut_editable.dropna(subset=["SKU"])
+                    df_aut_final["SKU"] = df_aut_final["SKU"].astype(str).str.strip().str.upper()
+                    st.session_state.BD_SKUs_Autorizados = df_aut_final
+                    if subir_excel_a_github("BD_SKUs_Autorizados.xlsx", st.session_state.BD_SKUs_Autorizados):
+                        st.success("✅ Cambios en SKUs Autorizados guardados exitosamente.")
+                        st.rerun()
+                    else:
+                        st.error("❌ Error al guardar modificaciones en GitHub.")
+            else:
+                st.warning("⚠️ No existen registros activos en la lista de SKUs autorizados.")
     # =============================================================================
     # PESTAÑA 5: CONFIGURADOR DEL FOLIO CONSECUTIVO TPM
     # =============================================================================
@@ -3858,11 +3895,12 @@ elif opcion_menu == "🕰️ Carga Histórica":
                     
         # Validar si los SKUs existen
         skus_no_encontrados = []
-        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-            skus_bd = st.session_state.BD_Articulos['SKU'].astype(str).str.strip().tolist()
-            for s in skus_excel:
-                if str(s).strip() not in skus_bd:
-                    skus_no_encontrados.append(str(s).strip())
+        skus_art = set(st.session_state.BD_Articulos['SKU'].astype(str).str.strip().tolist()) if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty else set()
+        skus_aut = set(st.session_state.BD_SKUs_Autorizados['SKU'].astype(str).str.strip().tolist()) if "BD_SKUs_Autorizados" in st.session_state and not st.session_state.BD_SKUs_Autorizados.empty else set()
+        skus_bd = skus_art | skus_aut
+        for s in skus_excel:
+            if str(s).strip().upper() not in skus_bd:
+                skus_no_encontrados.append(str(s).strip())
                     
         col_res1, col_res2 = st.columns(2)
         with col_res1:
