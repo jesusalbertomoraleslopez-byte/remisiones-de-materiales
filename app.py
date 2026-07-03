@@ -1266,6 +1266,116 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
     return buffer
 
 
+def generar_excel_remision(datos_remision, df_detalles_remision):
+    import io
+    import pandas as pd
+    from openpyxl.styles import Font, PatternFill, Alignment
+    
+    buffer = io.BytesIO()
+    writer = pd.ExcelWriter(buffer, engine='openpyxl')
+    
+    # 1. Preparar metadatos generales
+    df_meta = pd.DataFrame([
+        {"CAMPO": "FOLIO REMISIÓN", "VALOR": str(datos_remision['Folio_Remision'])},
+        {"CAMPO": "FECHA EMISIÓN", "VALOR": str(datos_remision['Fecha_Hora_Salida'])},
+        {"CAMPO": "EMISOR / ALMACÉN", "VALOR": str(datos_remision['Nombre_Emisor'])},
+        {"CAMPO": "ORIGEN", "VALOR": str(datos_remision['Direccion_Emisor'])},
+        {"CAMPO": "RECEPTOR / CLIENTE", "VALOR": str(datos_remision['Nombre_Receptor'])},
+        {"CAMPO": "DESTINO PLANTA", "VALOR": str(datos_remision['Direccion_Receptor'])}
+    ])
+    
+    df_meta.to_excel(writer, index=False, sheet_name='Datos Generales', startrow=0)
+    
+    # 2. Preparar tabla de materiales
+    df_mats = df_detalles_remision.copy()
+    
+    # Enriquecer con Nombre del Catálogo
+    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+        df_art = st.session_state.BD_Articulos[['SKU', 'Nombre']].copy()
+        df_art['SKU'] = df_art['SKU'].astype(str).str.strip()
+        df_mats['SKU'] = df_mats['SKU'].astype(str).str.strip()
+        df_mats = pd.merge(df_mats, df_art, on='SKU', how='left')
+        df_mats['Nombre'] = df_mats['Nombre'].fillna("Articulo No Registrado")
+    else:
+        df_mats['Nombre'] = "Articulo No Registrado"
+        
+    df_export = df_mats[['ID_Tarima', 'PO', 'Proyecto', 'SKU', 'Nombre', 'Cantidad']].copy()
+    df_export.columns = ["ID TARIMA", "ORDEN COMPRA (PO)", "PROYECTO", "SKU / PRODUCTO", "DESCRIPCION", "CANTIDAD (PZS)"]
+    
+    # Agregar fila de total
+    total_row = {
+        "ID TARIMA": "TOTALES",
+        "ORDEN COMPRA (PO)": "",
+        "PROYECTO": "",
+        "SKU / PRODUCTO": "",
+        "DESCRIPCION": "",
+        "CANTIDAD (PZS)": df_export["CANTIDAD (PZS)"].sum()
+    }
+    df_export = pd.concat([df_export, pd.DataFrame([total_row])], ignore_index=True)
+    df_export.to_excel(writer, index=False, sheet_name='Detalle Materiales', startrow=0)
+    
+    # 3. Aplicar estilos openpyxl
+    workbook = writer.book
+    
+    # Formatear Datos Generales
+    ws_meta = workbook['Datos Generales']
+    fill_meta_header = PatternFill(start_color="757575", end_color="757575", fill_type="solid")
+    font_white_bold = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    font_bold = Font(name="Calibri", size=11, bold=True)
+    font_normal = Font(name="Calibri", size=11)
+    
+    for cell in ws_meta[1]:
+        cell.fill = fill_meta_header
+        cell.font = font_white_bold
+        cell.alignment = Alignment(horizontal="center")
+    for row in ws_meta.iter_rows(min_row=2):
+        row[0].font = font_bold
+        row[0].alignment = Alignment(horizontal="left")
+        row[1].font = font_normal
+        row[1].alignment = Alignment(horizontal="left")
+    ws_meta.column_dimensions['A'].width = 25
+    ws_meta.column_dimensions['B'].width = 50
+    
+    # Formatear Detalle Materiales
+    ws_mats = workbook['Detalle Materiales']
+    fill_header = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
+    center_align = Alignment(horizontal="center", vertical="center")
+    
+    for cell in ws_mats[1]:
+        cell.fill = fill_header
+        cell.font = font_white_bold
+        cell.alignment = center_align
+        
+    for row in ws_mats.iter_rows(min_row=2):
+        for cell in row:
+            cell.font = font_normal
+            cell.alignment = center_align
+            
+    # Formatear la fila de Totales
+    last_row_idx = ws_mats.max_row
+    for cell in ws_mats[last_row_idx]:
+        cell.font = font_bold
+        
+    # Autoajuste de columnas
+    for col in ws_mats.columns:
+        max_len = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_len:
+                    max_len = len(str(cell.value))
+            except:
+                pass
+        ws_mats.column_dimensions[col_letter].width = min((max_len + 3), 60)
+        
+    ws_mats.auto_filter.ref = ws_mats.dimensions
+    ws_mats.freeze_panes = "A2"
+    
+    writer.close()
+    buffer.seek(0)
+    return buffer
+
+
 def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
     """Genera las hojas de desglose técnico complementario para el operador receptor sin empalmes de texto."""
     buffer = io.BytesIO()
@@ -2542,17 +2652,22 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                 c1, c2 = st.columns(2)
                 with c1: 
                     st.download_button(
-                        label="📄 Descargar Reporte Oficial", 
+                        label="📄 Descargar Reporte Oficial (PDF)", 
                         data=generar_pdf_remision_general(row_dict, df_det), 
                         file_name=f"Remision_{r_sel}.pdf", 
                         key=f"btn_dl_rem_pdf_{r_sel}",
-                        mime="application/pdf"
+                        mime="application/pdf",
+                        use_container_width=True
                     )
                 with c2: 
-                    if not df_det.empty:
-                        pass
-                    else:
-                        st.info("ℹ️ No hay desglose de piezas registrado para el anexo de este folio.")
+                    st.download_button(
+                        label="📥 Descargar Reporte Oficial (Excel)", 
+                        data=generar_excel_remision(row_dict, df_det).getvalue(), 
+                        file_name=f"Remision_{r_sel}.xlsx", 
+                        key=f"btn_dl_rem_xlsx_{r_sel}",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
             else:
                 st.info("💡 Seleccione una fila haciendo clic en el extremo izquierdo de la remisión deseada para descargar su reporte.")
 
