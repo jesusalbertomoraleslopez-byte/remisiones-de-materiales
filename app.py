@@ -2055,6 +2055,16 @@ elif opcion_menu == "📦 Módulo Tarimas":
             dv.promptTitle = 'SKU Autorizado'
             worksheet.add_data_validation(dv)
             dv.add("B2:B2000")
+            
+            # Formato Condicional: Pone la celda en rojo si el SKU no coincide con los autorizados (burlado por copiado/pegado)
+            from openpyxl.formatting.rule import FormulaRule
+            red_fill = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
+            red_font = Font(name="Calibri", size=11, color='9C0006', bold=True)
+            rule = FormulaRule(formula=[f'AND(B2<>"", ISERROR(MATCH(B2, SKUs_Validos!$A$2:$A${max_r}, 0)))'], fill=red_fill, font=red_font)
+            worksheet.conditional_formatting.add('B2:B2000', rule)
+            
+            # Asegurar que se guarde el archivo en el buffer
+            pass
 
             
     buf_p.seek(0)
