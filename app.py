@@ -3534,7 +3534,8 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 )
     
             with c_art2:
-                st.write("##### Cargar Catálogo Completo")
+                st.write("##### Cargar / Actualizar Catálogo (Completo o Nuevos SKUs)")
+                st.info("💡 Nota: Puedes subir únicamente tus nuevos SKUs cada mes. El sistema los agregará de forma inteligente sin borrar los anteriores.")
                 arch_articulos = st.file_uploader("Suba la Plantilla de Artículos Rellenada:", type=["xlsx"], key="uploader_articulos_masivo_f")
         
                 if arch_articulos:
