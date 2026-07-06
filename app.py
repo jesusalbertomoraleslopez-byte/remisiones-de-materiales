@@ -743,6 +743,13 @@ def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
     for filename, file_bytes in adjuntos_dict.items():
         if not file_bytes:
             continue
+        
+        # Convertir a bytes si es un objeto similar a BytesIO o archivo
+        if hasattr(file_bytes, 'getvalue'):
+            file_bytes = file_bytes.getvalue()
+        elif hasattr(file_bytes, 'read'):
+            file_bytes = file_bytes.read()
+            
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(file_bytes)
         encoders.encode_base64(part)
