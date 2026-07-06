@@ -815,6 +815,123 @@ def generar_cuerpo_correo_html(df_det, receptor, folio_remision):
     """
     return html
 
+                        def generar_pdf_etiqueta_tarima_individual(t_imp):
+buf = io.BytesIO()
+doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
+story_l, styles = [], getSampleStyleSheet()
+
+style_tarima_titulo = ParagraphStyle('T_Giga_Ind', parent=styles['Heading1'], fontName="Helvetica-Bold", fontSize=140, alignment=1, leading=150, textColor=colors.HexColor("#212121"))
+style_sub_titulo = ParagraphStyle('S_Giga_Ind', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=26, alignment=1, textColor=colors.HexColor("#D32F2F"))
+style_normal_bold = ParagraphStyle('N_Bold_Ind', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=11, leading=14)
+style_normal_text = ParagraphStyle('N_Text_Ind', parent=styles['Normal'], fontSize=11, leading=14)
+style_blanco_bold = ParagraphStyle('B_Bold_Ind', parent=styles['Normal'], fontName="Helvetica-Bold", textColor=colors.white, alignment=1, fontSize=10)
+
+det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'] == t_imp]
+t_info = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == t_imp]
+
+op_nom = t_info.iloc[0]['Creado_Por'] if not t_info.empty else "N/A"
+fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
+
+# HOJA 1: CARÁTULA DE IDENTIFICACIÓN
+story_l.append(Spacer(1, 1.2 * inch))
+story_l.append(Paragraph("TARIMA", style_sub_titulo))
+story_l.append(Spacer(1, 0.2 * inch))
+
+num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
+story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
+story_l.append(Spacer(1, 1.5 * inch))
+
+tabla_base = Table([
+    [Paragraph("CÓDIGO DE IDENTIFICACIÓN:", style_normal_bold), Paragraph(str(t_imp), style_normal_text)],
+    [Paragraph("OPERADOR DE PLANTA:", style_normal_bold), Paragraph(str(op_nom), style_normal_text)],
+    [Paragraph("FECHA DE EMISIÓN:", style_normal_bold), Paragraph(str(fe_cre), style_normal_text)]
+], colWidths=[2.5 * inch, 5.0 * inch])
+tabla_base.setStyle(TableStyle([
+    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor("#E0E0E0")),
+    ('BOTTOMPADDING', (0,0), (-1,-1), 6)
+]))
+story_l.append(tabla_base)
+story_l.append(PageBreak())
+
+# HOJA 2: DETALLE DE MATERIALES ASOCIADOS
+story_l.append(Spacer(1, 0.1 * inch))
+story_l.append(Paragraph(f"<b>DETALLE DE MATERIALES ASOCIADOS - CONTROL #{t_imp}</b>", styles['Heading2']))
+story_l.append(Spacer(1, 0.2 * inch))
+
+tabla_detalles = [[
+    Paragraph("ORDEN (PO)", style_blanco_bold),
+    Paragraph("SKU / PRODUCTO", style_blanco_bold),
+    Paragraph("DESCRIPCIÓN COMERCIAL", style_blanco_bold),
+    Paragraph("CANTIDAD", style_blanco_bold)
+]]
+
+for _, item in det.iterrows():
+    art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == item['SKU']]
+    art_nom = art.iloc[0]['Nombre'] if not art.empty else "Articulo No Registrado en BD Remisiones"
+    
+    sku_partida = item['SKU']
+    # Buscar si existe una imagen cargada para este SKU
+    import glob
+    img_encontrada = None
+    matching_imgs = glob.glob(f"imagenes_articulos/{sku_partida}(*.*")
+    if matching_imgs:
+        img_encontrada = matching_imgs[0]
+    else:
+        if "github_token" in st.secrets and st.secrets["github_token"]:
+            try:
+                GITHUB_TOKEN = st.secrets["github_token"]
+                url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+                headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+                res_list = requests.get(url_list, headers=headers)
+                if res_list.status_code == 200:
+                    items_git = res_list.json()
+                    for it in items_git:
+                        if it["name"].startswith(f"{sku_partida}("):
+                            github_file_path = f"imagenes_articulos/{it['name']}"
+                            if descargar_imagen_desde_github(github_file_path):
+                                img_encontrada = github_file_path
+                                break
+            except Exception:
+                pass
+
+    desc_paragraph = Paragraph(str(art_nom), style_normal_text)
+    if img_encontrada and os.path.exists(img_encontrada):
+        from reportlab.platypus import Image as RLImage
+        img_flowable = RLImage(img_encontrada, width=75, height=75, hAlign='LEFT')
+        sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[80, 3.5 * inch - 80])
+        sub_t.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 0)
+        ]))
+        desc_comercial_flowables = sub_t
+    else:
+        desc_comercial_flowables = desc_paragraph
+
+    tabla_detalles.append([
+        Paragraph(str(item['PO']), style_normal_text),
+        Paragraph(str(item['SKU']), style_normal_text),
+        desc_comercial_flowables,
+        Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
+    ])
+    
+t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
+t_grid.setStyle(TableStyle([
+    ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")),
+    ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")),
+    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ('TOPPADDING', (0,0), (-1,-1), 6),
+    ('BOTTOMPADDING', (0,0), (-1,-1), 6)
+]))
+story_l.append(t_grid)
+
+doc.build(story_l, onFirstPage=draw_sigrama_decorations, onLaterPages=draw_sigrama_decorations)
+buf.seek(0)
+return buf
+
 # =============================================================================
 # 3. CAPA DE INICIALIZACIÓN GLOBAL SECTORIZADA (BLINDAJE DE SEGURIDAD)
 # =============================================================================
@@ -2471,7 +2588,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             pdf_bytes_listos = pdf_datos_compilados
                             
                         # 4. Generamos el PDF de etiqueta unificada de 2 hojas para esta tarima
-                        pdf_etiqueta_bytes = generar_pdf_etiqueta_tarima_individual(id_tarima_limpio).getvalue()
+                        pdf_etiqueta_bytes = generar_pdf_etiqueta(id_tarima_limpio).getvalue()
         
                         col_btns1, col_btns2 = st.columns(2)
                         with col_btns1:
@@ -2896,9 +3013,7 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                 for idx_tarima in tarimas_lista:
                     t_row_match = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == idx_tarima]
                     if not t_row_match.empty:
-                        t_row = t_row_match.iloc[0].to_dict()
-                        t_det = df_det[df_det['ID_Tarima'] == idx_tarima]
-                        pdf_etiqueta = generar_pdf_etiqueta(t_row, t_det)
+                        pdf_etiqueta = generar_pdf_etiqueta(idx_tarima).getvalue()
                         adjuntos_dict[f"Etiqueta_{idx_tarima}.pdf"] = pdf_etiqueta
                         
                 # Construir el archivo .eml al vuelo
