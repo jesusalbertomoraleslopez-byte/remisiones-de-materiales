@@ -826,8 +826,46 @@ if "BD_Receptores" not in st.session_state:
     else:
         st.session_state.BD_Receptores = pd.DataFrame([
             {"ID_Receptor": "REC-01", "Nombre_Receptor": "Galvatec Industrias", "Direccion": "Prol. Valle Guadiana 919, Parque Industrial II, 35078 Gómez Palacio, Dgo.", "Estatus": "Activo"},
-            {"ID_Receptor": "REC-02", "Nombre_Receptor": "COVISA", "Direccion": "Calle Inde 714, 35079 Gómez Palacio, Durango", "Estatus": "Activo"}
+            {"ID_Receptor": "REC-02", "Nombre_Receptor": "EQM", "Direccion": "Calle Inde 714, 35079 Gómez Palacio, Durango", "Estatus": "Activo"}
         ])
+
+# --- Migración automática: Renombrar COVISA → EQM en todas las bases de datos ---
+if "migracion_covisa_eqm_completada" not in st.session_state:
+    cambios_realizados = False
+    
+    # 1. BD_Receptores
+    if "BD_Receptores" in st.session_state and not st.session_state.BD_Receptores.empty:
+        for col in st.session_state.BD_Receptores.columns:
+            if st.session_state.BD_Receptores[col].dtype == object:
+                mask = st.session_state.BD_Receptores[col].astype(str).str.contains("COVISA", case=False, na=False)
+                if mask.any():
+                    st.session_state.BD_Receptores[col] = st.session_state.BD_Receptores[col].astype(str).str.replace("COVISA", "EQM", case=False)
+                    cambios_realizados = True
+    
+    # 2. BD_Datos_Generales_Remision
+    if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
+        for col in st.session_state.BD_Datos_Generales_Remision.columns:
+            if st.session_state.BD_Datos_Generales_Remision[col].dtype == object:
+                mask = st.session_state.BD_Datos_Generales_Remision[col].astype(str).str.contains("COVISA", case=False, na=False)
+                if mask.any():
+                    st.session_state.BD_Datos_Generales_Remision[col] = st.session_state.BD_Datos_Generales_Remision[col].astype(str).str.replace("COVISA", "EQM", case=False)
+                    cambios_realizados = True
+    
+    # 3. BD_Tarimas
+    if "BD_Tarimas" in st.session_state and not st.session_state.BD_Tarimas.empty:
+        for col in st.session_state.BD_Tarimas.columns:
+            if st.session_state.BD_Tarimas[col].dtype == object:
+                mask = st.session_state.BD_Tarimas[col].astype(str).str.contains("COVISA", case=False, na=False)
+                if mask.any():
+                    st.session_state.BD_Tarimas[col] = st.session_state.BD_Tarimas[col].astype(str).str.replace("COVISA", "EQM", case=False)
+                    cambios_realizados = True
+    
+    if cambios_realizados:
+        subir_excel_a_github("BD_Receptores.xlsx", st.session_state.BD_Receptores)
+        subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
+        subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+    
+    st.session_state.migracion_covisa_eqm_completada = True
 
 # --- Función Auxiliar y Consecutivo Dinámico de Tarimas (TPM) ---
 def obtener_siguiente_consecutivo_tpm():
