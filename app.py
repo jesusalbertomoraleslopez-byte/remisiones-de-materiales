@@ -13,7 +13,11 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from openpyxl.worksheet.datavalidation import DataValidation
-
+import json
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 # 1. CONFIGURACIÓN E INTERFAZ BASE RESPONSIVA
 st.set_page_config(
     page_title="Remisiones de Materiales",
@@ -690,6 +694,126 @@ def eliminar_imagen_de_github(file_path):
         st.warning(f"⚠️ No se pudo eliminar la imagen {file_path} de GitHub: {e}")
     return False
 
+
+
+def obtener_emails_config():
+    cfg_path = "config_emails.json"
+    default_cfg = {"dest_to": "logistica@sigrama.com.mx; almacen@sigrama.com.mx", "dest_cc": "calidad@sigrama.com.mx; produccion@sigrama.com.mx"}
+    if os.path.exists(cfg_path):
+        try:
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return default_cfg
+    else:
+        try:
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                json.dump(default_cfg, f, indent=4)
+        except Exception:
+            pass
+        return default_cfg
+
+def guardar_emails_config(to_str, cc_str):
+    cfg_path = "config_emails.json"
+    cfg = {"dest_to": to_str.strip(), "dest_cc": cc_str.strip()}
+    try:
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=4)
+        return True
+    except Exception as e:
+        st.error(f"Error al guardar configuración de correos: {e}")
+        return False
+
+def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
+    """
+    Genera un archivo EML en memoria como borrador de Outlook.
+    adjuntos_dict: dict { 'nombre_archivo.pdf': bytes_del_archivo }
+    """
+    msg = MIMEMultipart('mixed')
+    msg['Subject'] = subject
+    msg['To'] = dest_to
+    msg['Cc'] = dest_cc
+    msg['X-Unsent'] = '1'  # Clave para que Outlook lo abra como borrador editable
+    
+    # Cuerpo HTML
+    body_part = MIMEText(body_html, 'html', 'utf-8')
+    msg.attach(body_part)
+    
+    # Adjuntos
+    for filename, file_bytes in adjuntos_dict.items():
+        if not file_bytes:
+            continue
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(file_bytes)
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+        msg.attach(part)
+        
+    return msg.as_bytes()
+
+def generar_cuerpo_correo_html(df_det, receptor, folio_remision):
+    # Generar tabla HTML de piezas
+    filas_html = ""
+    for _, row in df_det.iterrows():
+        sku = row.get("SKU", "N/A")
+        desc = row.get("Descripcion", "N/A")
+        cant = row.get("Cantidad", 0)
+        po = row.get("PO", "N/A")
+        id_tarima = row.get("ID_Tarima", "N/A")
+        
+        # Intentar obtener la URL de la imagen de GitHub o dejar texto
+        img_tag = "N/A"
+        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+            match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku]
+            if not match.empty:
+                github_items = listar_imagenes_en_github()
+                for git_item in github_items:
+                    if git_item["name"].startswith(f"{sku}("):
+                        # URL raw de github
+                        img_url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/imagenes_articulos/{git_item['name']}"
+                        img_tag = f'<img src="{img_url}" width="60" style="border-radius:4px; border: 1px solid #ccc;">'
+                        break
+
+        filas_html += f"""
+        <tr>
+            <td style="padding: 8px; border: 1px solid #ddd;">{sku}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">{desc}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{cant}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{id_tarima}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">{po}</td>
+            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{img_tag}</td>
+        </tr>
+        """
+
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <p>Buen día a todos,</p>
+        <p>El presente correo tiene el propósito de notificar la salida de producto terminado desde la Planta de Metales hacia <b>{receptor}</b> (Remisión: <b>{folio_remision}</b>).</p>
+        <p>En los archivos adjuntos encontrarán la Remisión Oficial y las Etiquetas de las Tarimas para su conocimiento y trazabilidad. A continuación, el detalle de las piezas enviadas:</p>
+        
+        <table style="border-collapse: collapse; width: 100%; max-width: 800px; margin-top: 15px; margin-bottom: 20px;">
+            <thead>
+                <tr style="background-color: #EC2024; color: white;">
+                    <th style="padding: 10px; border: 1px solid #ddd;">Número de Parte (SKU)</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">Descripción</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">Cantidad</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">Tarima</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">Orden de Compra (PO)</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">Imagen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {filas_html}
+            </tbody>
+        </table>
+        
+        <p>Quedo a su entera disposición en caso de dudas o comentarios.</p>
+        <p>Saludos cordiales.</p>
+    </body>
+    </html>
+    """
+    return html
 
 # =============================================================================
 # 3. CAPA DE INICIALIZACIÓN GLOBAL SECTORIZADA (BLINDAJE DE SEGURIDAD)
@@ -2753,6 +2877,43 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
+                    
+                # --- ENVÍO POR CORREO (BORRADOR EML) ---
+                st.markdown("### 📧 Generar Borrador de Correo (.eml)")
+                cfg_emails = obtener_emails_config()
+                
+                col_eml1, col_eml2 = st.columns(2)
+                with col_eml1:
+                    eml_to = st.text_input("Para:", value=cfg_emails.get("dest_to", ""), key=f"eml_to_{r_sel}")
+                with col_eml2:
+                    eml_cc = st.text_input("CC:", value=cfg_emails.get("dest_cc", ""), key=f"eml_cc_{r_sel}")
+                
+                # Preparar adjuntos
+                adjuntos_dict = {}
+                adjuntos_dict[f"Remision_{r_sel}.pdf"] = generar_pdf_remision_general(row_dict, df_det)
+                
+                # Adjuntar etiquetas de cada tarima involucrada
+                for idx_tarima in tarimas_lista:
+                    t_row_match = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == idx_tarima]
+                    if not t_row_match.empty:
+                        t_row = t_row_match.iloc[0].to_dict()
+                        t_det = df_det[df_det['ID_Tarima'] == idx_tarima]
+                        pdf_etiqueta = generar_pdf_etiqueta(t_row, t_det)
+                        adjuntos_dict[f"Etiqueta_{idx_tarima}.pdf"] = pdf_etiqueta
+                        
+                # Construir el archivo .eml al vuelo
+                eml_subject = f"Envío de Remisión {r_sel} - Industria Sigrama"
+                eml_body = generar_cuerpo_correo_html(df_det, row_dict.get('Nombre_Receptor', 'N/A'), r_sel)
+                eml_bytes = generar_archivo_eml(eml_to, eml_cc, eml_subject, eml_body, adjuntos_dict)
+                
+                st.download_button(
+                    label="📩 Descargar Borrador de Correo con Adjuntos (.eml)",
+                    data=eml_bytes,
+                    file_name=f"Correo_Remision_{r_sel}.eml",
+                    mime="message/rfc822",
+                    use_container_width=True,
+                    key=f"btn_dl_eml_{r_sel}"
+                )
             else:
                 st.info("💡 Seleccione una fila haciendo clic en el extremo izquierdo de la remisión deseada para descargar su reporte.")
 
@@ -3487,7 +3648,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             {"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}
         ])
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📝 Ajustar Cantidades", "👥 Catálogo de Líderes", "⚠️ Purga de Datos", "📦 Catálogo de Artículos", "🔢 Contador de Tarimas", "🖼️ Carpeta de Imágenes", "🏢 Catálogo de Receptores"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["📝 Ajustar Cantidades", "👥 Catálogo de Líderes", "⚠️ Purga de Datos", "📦 Catálogo de Artículos", "🔢 Contador de Tarimas", "🖼️ Carpeta de Imágenes", "🏢 Catálogo de Receptores", "📧 Listas de Correo"])
 
 
 
@@ -4062,6 +4223,20 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
             st.session_state.BD_Receptores = df_r_edit
             subir_excel_a_github("BD_Receptores.xlsx", st.session_state.BD_Receptores)
             st.success("Catálogo de receptores actualizado en GitHub.")
+
+    with tab8:
+        st.subheader("📧 Configuración de Listas de Distribución de Correo")
+        st.markdown("Defina los correos electrónicos por defecto para el envío de notificaciones de salida de material. Puede incluir múltiples direcciones separándolas por punto y coma (`;`).")
+        
+        cfg_actual = obtener_emails_config()
+        
+        cfg_to = st.text_area("Destinatarios Principales (Para):", value=cfg_actual.get("dest_to", ""), help="Ejemplo: logistica@sigrama.com.mx; almacen@sigrama.com.mx")
+        cfg_cc = st.text_area("Con Copia (CC):", value=cfg_actual.get("dest_cc", ""), help="Ejemplo: calidad@sigrama.com.mx")
+        
+        if st.button("💾 Guardar Listas de Distribución", use_container_width=True):
+            if guardar_emails_config(cfg_to, cfg_cc):
+                st.success("Configuración de correos guardada exitosamente.")
+                st.rerun()
 
 # =============================================================================================
 # 15. CARGA MASIVA HISTÓRICA
