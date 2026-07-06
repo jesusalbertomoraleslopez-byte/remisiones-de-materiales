@@ -833,37 +833,28 @@ if "BD_Receptores" not in st.session_state:
 if "migracion_covisa_eqm_completada" not in st.session_state:
     cambios_realizados = False
     
-    # 1. BD_Receptores
-    if "BD_Receptores" in st.session_state and not st.session_state.BD_Receptores.empty:
-        for col in st.session_state.BD_Receptores.columns:
-            if st.session_state.BD_Receptores[col].dtype == object:
-                mask = st.session_state.BD_Receptores[col].astype(str).str.contains("COVISA", case=False, na=False)
-                if mask.any():
-                    st.session_state.BD_Receptores[col] = st.session_state.BD_Receptores[col].astype(str).str.replace("COVISA", "EQM", case=False)
-                    cambios_realizados = True
+    bds_a_migrar = {
+        "BD_Receptores": "BD_Receptores.xlsx",
+        "BD_Datos_Generales_Remision": "BD_Datos_Generales_Remision.xlsx",
+        "BD_Tarimas": "BD_Tarimas.xlsx"
+    }
     
-    # 2. BD_Datos_Generales_Remision
-    if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
-        for col in st.session_state.BD_Datos_Generales_Remision.columns:
-            if st.session_state.BD_Datos_Generales_Remision[col].dtype == object:
-                mask = st.session_state.BD_Datos_Generales_Remision[col].astype(str).str.contains("COVISA", case=False, na=False)
-                if mask.any():
-                    st.session_state.BD_Datos_Generales_Remision[col] = st.session_state.BD_Datos_Generales_Remision[col].astype(str).str.replace("COVISA", "EQM", case=False)
-                    cambios_realizados = True
-    
-    # 3. BD_Tarimas
-    if "BD_Tarimas" in st.session_state and not st.session_state.BD_Tarimas.empty:
-        for col in st.session_state.BD_Tarimas.columns:
-            if st.session_state.BD_Tarimas[col].dtype == object:
-                mask = st.session_state.BD_Tarimas[col].astype(str).str.contains("COVISA", case=False, na=False)
-                if mask.any():
-                    st.session_state.BD_Tarimas[col] = st.session_state.BD_Tarimas[col].astype(str).str.replace("COVISA", "EQM", case=False)
-                    cambios_realizados = True
+    for bd_key, bd_file in bds_a_migrar.items():
+        if bd_key in st.session_state and not st.session_state[bd_key].empty:
+            df = st.session_state[bd_key]
+            for col in df.columns:
+                if df[col].dtype == object:
+                    # Usar .apply() para máxima compatibilidad
+                    original = df[col].copy()
+                    df[col] = df[col].apply(lambda x: str(x).replace("COVISA", "EQM").replace("Covisa", "EQM").replace("covisa", "EQM") if pd.notna(x) else x)
+                    if not original.equals(df[col]):
+                        cambios_realizados = True
+            st.session_state[bd_key] = df
     
     if cambios_realizados:
-        subir_excel_a_github("BD_Receptores.xlsx", st.session_state.BD_Receptores)
-        subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-        subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+        for bd_key, bd_file in bds_a_migrar.items():
+            if bd_key in st.session_state:
+                subir_excel_a_github(bd_file, st.session_state[bd_key])
     
     st.session_state.migracion_covisa_eqm_completada = True
 
