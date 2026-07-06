@@ -758,7 +758,7 @@ def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
         
     return msg.as_bytes()
 
-def generar_cuerpo_correo_html(df_det, receptor, folio_remision):
+def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
     # Obtener listado de imágenes desde GitHub una sola vez para no saturar la API
     github_items = []
     if "github_token" in st.secrets and st.secrets["github_token"]:
@@ -774,12 +774,13 @@ def generar_cuerpo_correo_html(df_det, receptor, folio_remision):
 
     # Generar tabla HTML de piezas
     filas_html = ""
-    for _, row in df_det.iterrows():
-        sku = row.get("SKU", "N/A")
-        desc = row.get("Descripcion", "N/A")
-        cant = row.get("Cantidad", 0)
-        po = row.get("PO", "N/A")
-        id_tarima = row.get("ID_Tarima", "N/A")
+    for idx_row, row in enumerate(df_det.iterrows()):
+        _, row_data = row
+        sku = row_data.get("SKU", "N/A")
+        desc = row_data.get("Descripcion", "N/A")
+        cant = row_data.get("Cantidad", 0)
+        po = row_data.get("PO", "N/A")
+        id_tarima = row_data.get("ID_Tarima", "N/A")
         
         # Intentar obtener la URL de la imagen de GitHub o dejar texto
         img_tag = "N/A"
@@ -793,33 +794,60 @@ def generar_cuerpo_correo_html(df_det, receptor, folio_remision):
                         img_tag = f'<img src="{img_url}" width="60" style="border-radius:4px; border: 1px solid #ccc;">'
                         break
 
+        bg_color = "#ffffff" if idx_row % 2 == 0 else "#f9f9f9"
         filas_html += f"""
-        <tr>
-            <td style="padding: 8px; border: 1px solid #ddd;">{sku}</td>
-            <td style="padding: 8px; border: 1px solid #ddd;">{desc}</td>
-            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{cant}</td>
-            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{id_tarima}</td>
-            <td style="padding: 8px; border: 1px solid #ddd;">{po}</td>
-            <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{img_tag}</td>
+        <tr style="background-color: {bg_color};">
+            <td style="padding: 10px; border: 1px solid #ddd; font-size: 13px;">{sku}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; font-size: 13px;">{desc}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 13px; font-weight: bold;">{int(cant) if isinstance(cant, (int, float)) else cant}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 13px;">{id_tarima}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; font-size: 13px;">{po}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">{img_tag}</td>
         </tr>
         """
 
+    headers_text = ""
+    for r in list_selected_remisiones:
+        f = r.get('Folio_Remision', 'N/A')
+        rec = r.get('Nombre_Receptor', 'N/A')
+        dir_rec = r.get('Direccion_Receptor', 'N/A')
+        fec = r.get('Fecha_Hora_Salida', 'N/A')
+        headers_text += f"<li><b>Planta de Metales / {rec}</b> ({dir_rec}) &mdash; Fecha de Salida: {fec} (Remisión: <b>{f}</b>)</li>"
+
     html = f"""
     <html>
-    <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-        <p>Buen día a todos,</p>
-        <p>El presente correo tiene el propósito de notificar la salida de producto terminado desde la Planta de Metales hacia <b>{receptor}</b> (Remisión: <b>{folio_remision}</b>).</p>
-        <p>En los archivos adjuntos encontrarán la Remisión Oficial y las Etiquetas de las Tarimas para su conocimiento y trazabilidad. A continuación, el detalle de las piezas enviadas:</p>
+    <head>
+        <link href="https://fonts.googleapis.com/css2?family=Questrial&display=swap" rel="stylesheet">
+    </head>
+    <body style="font-family: 'Questrial', 'Segoe UI', Arial, sans-serif; color: #000000; line-height: 1.6; padding: 20px; background-color: #ffffff;">
+        <!-- Encabezado con Logotipo Corporativo -->
+        <div style="padding-bottom: 15px; border-bottom: 4px solid #EC2024; margin-bottom: 20px;">
+            <img src="https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/logo_sigrama.png" alt="Industria Sigrama" style="max-height: 55px; display: block;">
+        </div>
+
+        <p style="font-size: 15px; margin-bottom: 15px;">Buen día a todos,</p>
+        <p style="font-size: 14px; margin-bottom: 15px;">El presente correo es para informar sobre la salida de producto terminado de planta metales con archivo adjunto. En este viene la cantidad, número de parte, número de tarima y orden de compra para tener la información todos.</p>
         
-        <table style="border-collapse: collapse; width: 100%; max-width: 800px; margin-top: 15px; margin-bottom: 20px;">
+        <!-- Caja Informativa Formato Diagonal Corporativo -->
+        <div style="border-left: 4px solid #EC2024; background-color: #F8F9FA; padding: 15px; margin: 20px 0; border-radius: 0 4px 4px 0;">
+            <h4 style="margin: 0 0 10px 0; color: #EC2024; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">Detalles de Envío (Salida de Material)</h4>
+            <ul style="margin: 0; padding-left: 20px; font-size: 13.5px; color: #333333; line-height: 1.5;">
+                {headers_text}
+            </ul>
+        </div>
+
+        <p style="font-size: 14px; margin-bottom: 15px;">A continuación, se detalla la lista de las piezas, cantidades e información asociada:</p>
+        
+        <!-- Tabla de Piezas Corporativa -->
+        <table style="border-collapse: collapse; width: 100%; max-width: 900px; margin-top: 15px; margin-bottom: 25px; border: 1px solid #ddd; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
             <thead>
-                <tr style="background-color: #EC2024; color: white;">
-                    <th style="padding: 10px; border: 1px solid #ddd;">Número de Parte (SKU)</th>
-                    <th style="padding: 10px; border: 1px solid #ddd;">Descripción</th>
-                    <th style="padding: 10px; border: 1px solid #ddd;">Cantidad</th>
-                    <th style="padding: 10px; border: 1px solid #ddd;">Tarima</th>
-                    <th style="padding: 10px; border: 1px solid #ddd;">Orden de Compra (PO)</th>
-                    <th style="padding: 10px; border: 1px solid #ddd;">Imagen</th>
+                <tr style="background-color: #EC2024; color: #ffffff;">
+                    <th style="padding: 12px 10px; border: 1px solid #ddd; text-align: left; font-size: 13.5px; font-weight: bold;">Número de Parte (SKU)</th>
+                    <th style="padding: 12px 10px; border: 1px solid #ddd; text-align: left; font-size: 13.5px; font-weight: bold;">Descripción</th>
+                    <th style="padding: 12px 10px; border: 1px solid #ddd; text-align: center; font-size: 13.5px; font-weight: bold;">Cantidad</th>
+                    <th style="padding: 12px 10px; border: 1px solid #ddd; text-align: center; font-size: 13.5px; font-weight: bold;">Tarima</th>
+                    <th style="padding: 12px 10px; border: 1px solid #ddd; text-align: left; font-size: 13.5px; font-weight: bold;">Orden (PO)</th>
+                    <th style="padding: 12px 10px; border: 1px solid #ddd; text-align: center; font-size: 13.5px; font-weight: bold;">Imagen</th>
                 </tr>
             </thead>
             <tbody>
@@ -827,8 +855,22 @@ def generar_cuerpo_correo_html(df_det, receptor, folio_remision):
             </tbody>
         </table>
         
-        <p>Quedo a su entera disposición en caso de dudas o comentarios.</p>
-        <p>Saludos cordiales.</p>
+        <p style="font-size: 14px; margin-bottom: 5px;">Gracias y quedo al pendiente de sus comentarios.</p>
+        
+        <!-- Firma Corporativa -->
+        <div style="margin-top: 40px; border-top: 1px solid #E0E0E0; padding-top: 20px;">
+            <p style="font-style: italic; font-weight: bold; color: #EC2024; margin: 0 0 8px 0; font-size: 15px;">Ingeniería que da resultados!!</p>
+            <p style="margin: 0; font-size: 13px; color: #000000; font-weight: bold;">Industria Sigrama S.A. de C.V.</p>
+            <p style="margin: 3px 0; font-size: 12px; color: #555555;">Automatización y Control de Procesos</p>
+            <p style="margin: 3px 0; font-size: 11px; color: #777777;">C. Juan Escutia No. 50, Col. Abastos, C.P. 27020, Torreón, Coah. | Tel: (871) 722 3132</p>
+            <p style="margin: 3px 0; font-size: 11px; color: #777777;"><a href="https://www.sigrama.com.mx" style="color: #EC2024; text-decoration: none; font-weight: bold;">www.sigrama.com.mx</a></p>
+        </div>
+
+        <!-- Aviso de Privacidad Obligatorio -->
+        <div style="margin-top: 25px; font-size: 9px; color: #888888; line-height: 1.35; font-style: italic; border-top: 1px dashed #DDDDDD; padding-top: 12px; text-align: justify;">
+            <b>Aviso de confidencialidad:</b> Este correo electrónico y/o el material adjunto es para uso exclusivo de la persona o entidad a la que expresamente se le ha enviado, y puede contener información confidencial o material privilegiado. Si usted no es el destinatario legítimo del mismo, por favor repórtelo inmediatamente al remitente del correo y bórrelo. Cualquier revisión, retransmisión, difusión o cualquier otro uso de este correo, por personas o entidades distintas a las del destinatario legítimo, queda expresamente prohibido. Este correo electrónico no pretende ni debe ser considerado como constitutivo de ninguna relación legal, contractual o de otra índole similar.<br/><br/>
+            Así mismo, los Datos Personales que usted proporcione a través de este medio, están debidamente tratados y protegidos conforme a la "Ley Federal de Protección de Datos Personales en Posesión de los Particulares" para más información lo invitamos a conocer nuestra "Política de Privacidad" disponible en <a href="https://www.sigrama.com.mx" style="color: #888888; text-decoration: underline;">https://www.sigrama.com.mx</a>.
+        </div>
     </body>
     </html>
     """
@@ -2959,7 +3001,7 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                 use_container_width=True,
                 hide_index=True,
                 on_select="rerun",
-                selection_mode="single-row",
+                selection_mode="multi-row",
                 key="tabla_descarga_remisiones_final",
                 column_config={
                     "Folio_Remision": st.column_config.TextColumn("Folio de Remisión"),
@@ -2972,84 +3014,139 @@ elif opcion_menu == "🚚 Módulo Remisiones":
             
             filas_seleccionadas = sel_grid.get("selection", {}).get("rows", [])
             if filas_seleccionadas:
-                idx_seleccionado = filas_seleccionadas[0]
-                row_dict = df_mostrar.iloc[idx_seleccionado].to_dict()
-                r_sel = row_dict['Folio_Remision']
+                selected_rows = [df_mostrar.iloc[idx].to_dict() for idx in filas_seleccionadas]
                 
-                # Convertimos las tarimas asociadas de texto a lista real de Python
+                # Convertimos las tarimas asociadas de texto a lista real de Python consolidada
                 import ast
-                tarimas_lista = row_dict['Tarimas_Asociadas']
-                if isinstance(tarimas_lista, str):
-                    try:
-                        tarimas_lista = ast.literal_eval(tarimas_lista)
-                    except Exception:
-                        tarimas_lista = [tarimas_lista]
+                import zipfile
+                import io
                 
-                # Filtramos el desglose granular de las piezas
+                tarimas_lista = []
+                folios_lista = []
+                receptores_set = set()
+                
+                for row_dict in selected_rows:
+                    folios_lista.append(row_dict['Folio_Remision'])
+                    receptores_set.add(row_dict.get('Nombre_Receptor', 'N/A'))
+                    
+                    t_asoc = row_dict['Tarimas_Asociadas']
+                    if isinstance(t_asoc, str):
+                        try:
+                            t_asoc_list = ast.literal_eval(t_asoc)
+                        except Exception:
+                            t_asoc_list = [t_asoc]
+                    else:
+                        t_asoc_list = t_asoc if isinstance(t_asoc, list) else []
+                    
+                    for t in t_asoc_list:
+                        if t not in tarimas_lista:
+                            tarimas_lista.append(t)
+                
+                # Consolidar detalles
                 df_det = st.session_state.BD_Detalle_Tarimas[
                     st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(tarimas_lista)
                 ]
                 
                 st.write("")
-                st.success(f"📌 Folio seleccionado: **{r_sel}**")
+                folios_str = ", ".join(folios_lista)
+                st.success(f"📌 Folio(s) seleccionado(s): **{folios_str}**")
                 
-                # --- RENDERIZADO DE BOTONES EXCLUSIVO ---
-                c1, c2 = st.columns(2)
-                with c1: 
-                    st.download_button(
-                        label="📄 Descargar Reporte Oficial (PDF)", 
-                        data=generar_pdf_remision_general(row_dict, df_det), 
-                        file_name=f"Remision_{r_sel}.pdf", 
-                        key=f"btn_dl_rem_pdf_{r_sel}",
-                        mime="application/pdf",
-                        use_container_width=True
-                    )
-                with c2: 
-                    st.download_button(
-                        label="📥 Descargar Reporte Oficial (Excel)", 
-                        data=generar_excel_remision(row_dict, df_det).getvalue(), 
-                        file_name=f"Remision_{r_sel}.xlsx", 
-                        key=f"btn_dl_rem_xlsx_{r_sel}",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
-                    
+                # Renderizar botones de PDF/Excel individual únicamente si se seleccionó SOLO 1 fila
+                if len(selected_rows) == 1:
+                    row_dict = selected_rows[0]
+                    r_sel = row_dict['Folio_Remision']
+                    c1, c2 = st.columns(2)
+                    with c1: 
+                        st.download_button(
+                            label="📄 Descargar Reporte Oficial (PDF)", 
+                            data=generar_pdf_remision_general(row_dict, df_det), 
+                            file_name=f"Remision_{r_sel}.pdf", 
+                            key=f"btn_dl_rem_pdf_{r_sel}",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    with c2: 
+                        st.download_button(
+                            label="📥 Descargar Reporte Oficial (Excel)", 
+                            data=generar_excel_remision(row_dict, df_det).getvalue(), 
+                            file_name=f"Remision_{r_sel}.xlsx", 
+                            key=f"btn_dl_rem_xlsx_{r_sel}",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+                else:
+                    st.info("💡 Selección múltiple activada. La descarga individual de reportes (PDF/Excel) no está disponible en este modo; use la descarga del correo (.eml) para adjuntos consolidados.")
+                
                 # --- ENVÍO POR CORREO (BORRADOR EML) ---
                 st.markdown("### 📧 Generar Borrador de Correo (.eml)")
                 cfg_emails = obtener_emails_config()
                 
                 col_eml1, col_eml2 = st.columns(2)
+                # Usar una key única combinada con los folios seleccionados para evitar colisiones
+                key_suffix = f"{len(selected_rows)}_{folios_lista[0]}"
                 with col_eml1:
-                    eml_to = st.text_input("Para:", value=cfg_emails.get("dest_to", ""), key=f"eml_to_{r_sel}")
+                    eml_to = st.text_input("Para:", value=cfg_emails.get("dest_to", ""), key=f"eml_to_{key_suffix}")
                 with col_eml2:
-                    eml_cc = st.text_input("CC:", value=cfg_emails.get("dest_cc", ""), key=f"eml_cc_{r_sel}")
+                    eml_cc = st.text_input("CC:", value=cfg_emails.get("dest_cc", ""), key=f"eml_cc_{key_suffix}")
                 
                 # Preparar adjuntos
                 adjuntos_dict = {}
-                adjuntos_dict[f"Remision_{r_sel}.pdf"] = generar_pdf_remision_general(row_dict, df_det)
                 
-                # Adjuntar etiquetas de cada tarima involucrada
+                # 1. Remisiones por separado en PDF
+                for row_dict in selected_rows:
+                    f_rem = row_dict['Folio_Remision']
+                    # Filtrar desglose específico para esta remisión para que su reporte oficial sea el correcto
+                    t_rem_asoc = row_dict['Tarimas_Asociadas']
+                    if isinstance(t_rem_asoc, str):
+                        try:
+                            t_rem_asoc_list = ast.literal_eval(t_rem_asoc)
+                        except Exception:
+                            t_rem_asoc_list = [t_rem_asoc]
+                    else:
+                        t_rem_asoc_list = t_rem_asoc if isinstance(t_rem_asoc, list) else []
+                        
+                    df_det_rem = st.session_state.BD_Detalle_Tarimas[
+                        st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(t_rem_asoc_list)
+                    ]
+                    adjuntos_dict[f"Remision_{f_rem}.pdf"] = generar_pdf_remision_general(row_dict, df_det_rem)
+                
+                # 2. Las etiquetas se agrupan en un archivo ZIP
+                label_pdfs = {}
                 for idx_tarima in tarimas_lista:
                     t_row_match = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == idx_tarima]
                     if not t_row_match.empty:
+                        # Generamos el PDF de la etiqueta en memoria
                         pdf_etiqueta = generar_pdf_etiqueta(idx_tarima).getvalue()
-                        adjuntos_dict[f"Etiqueta_{idx_tarima}.pdf"] = pdf_etiqueta
-                        
+                        label_pdfs[f"Etiqueta_{idx_tarima}.pdf"] = pdf_etiqueta
+                
+                # Comprimir todas las etiquetas en un ZIP en memoria
+                if label_pdfs:
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                        for filename, file_bytes in label_pdfs.items():
+                            zip_file.writestr(filename, file_bytes)
+                    zip_buffer.seek(0)
+                    adjuntos_dict["Etiquetas_Tarimas.zip"] = zip_buffer
+                
                 # Construir el archivo .eml al vuelo
-                eml_subject = f"Envío de Remisión {r_sel} - Industria Sigrama"
-                eml_body = generar_cuerpo_correo_html(df_det, row_dict.get('Nombre_Receptor', 'N/A'), r_sel)
+                if len(selected_rows) == 1:
+                    eml_subject = f"Envío de Remisión {folios_lista[0]} - Industria Sigrama"
+                else:
+                    eml_subject = f"Envío de Remisiones {folios_str} - Industria Sigrama"
+                
+                eml_body = generar_cuerpo_correo_html(selected_rows, df_det)
                 eml_bytes = generar_archivo_eml(eml_to, eml_cc, eml_subject, eml_body, adjuntos_dict)
                 
                 st.download_button(
                     label="📩 Descargar Borrador de Correo con Adjuntos (.eml)",
                     data=eml_bytes,
-                    file_name=f"Correo_Remision_{r_sel}.eml",
+                    file_name=f"Correo_Remisiones_{key_suffix}.eml",
                     mime="message/rfc822",
                     use_container_width=True,
-                    key=f"btn_dl_eml_{r_sel}"
+                    key=f"btn_dl_eml_{key_suffix}"
                 )
             else:
-                st.info("💡 Seleccione una fila haciendo clic en el extremo izquierdo de la remisión deseada para descargar su reporte.")
+                st.info("💡 Seleccione una o varias filas marcando las casillas del extremo izquierdo de las remisiones para descargar el reporte o generar el correo borrador.")
 
 
 
