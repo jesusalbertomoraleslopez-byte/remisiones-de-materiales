@@ -752,6 +752,19 @@ def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
     return msg.as_bytes()
 
 def generar_cuerpo_correo_html(df_det, receptor, folio_remision):
+    # Obtener listado de imágenes desde GitHub una sola vez para no saturar la API
+    github_items = []
+    if "github_token" in st.secrets and st.secrets["github_token"]:
+        try:
+            GITHUB_TOKEN = st.secrets["github_token"]
+            url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+            res_list = requests.get(url_list, headers=headers)
+            if res_list.status_code == 200:
+                github_items = res_list.json()
+        except Exception:
+            pass
+
     # Generar tabla HTML de piezas
     filas_html = ""
     for _, row in df_det.iterrows():
@@ -766,9 +779,8 @@ def generar_cuerpo_correo_html(df_det, receptor, folio_remision):
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
             match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku]
             if not match.empty:
-                github_items = listar_imagenes_en_github()
                 for git_item in github_items:
-                    if git_item["name"].startswith(f"{sku}("):
+                    if git_item.get("name", "").startswith(f"{sku}("):
                         # URL raw de github
                         img_url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/imagenes_articulos/{git_item['name']}"
                         img_tag = f'<img src="{img_url}" width="60" style="border-radius:4px; border: 1px solid #ccc;">'
