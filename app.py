@@ -830,33 +830,26 @@ if "BD_Receptores" not in st.session_state:
         ])
 
 # --- Migración automática: Renombrar COVISA → EQM en todas las bases de datos ---
-if "migracion_covisa_eqm_completada" not in st.session_state:
-    cambios_realizados = False
-    
-    bds_a_migrar = {
-        "BD_Receptores": "BD_Receptores.xlsx",
-        "BD_Datos_Generales_Remision": "BD_Datos_Generales_Remision.xlsx",
-        "BD_Tarimas": "BD_Tarimas.xlsx"
-    }
-    
-    for bd_key, bd_file in bds_a_migrar.items():
-        if bd_key in st.session_state and not st.session_state[bd_key].empty:
-            df = st.session_state[bd_key]
-            for col in df.columns:
-                if df[col].dtype == object:
-                    # Usar .apply() para máxima compatibilidad
-                    original = df[col].copy()
-                    df[col] = df[col].apply(lambda x: str(x).replace("COVISA", "EQM").replace("Covisa", "EQM").replace("covisa", "EQM") if pd.notna(x) else x)
-                    if not original.equals(df[col]):
-                        cambios_realizados = True
+# Se ejecuta en cada arranque y verifica si hay algo que corregir
+bds_a_migrar = {
+    "BD_Receptores": "BD_Receptores.xlsx",
+    "BD_Datos_Generales_Remision": "BD_Datos_Generales_Remision.xlsx",
+    "BD_Tarimas": "BD_Tarimas.xlsx"
+}
+
+for bd_key, bd_file in bds_a_migrar.items():
+    if bd_key in st.session_state and not st.session_state[bd_key].empty:
+        df = st.session_state[bd_key]
+        hubo_cambio_en_bd = False
+        for col in df.columns:
+            if df[col].dtype == object:
+                original = df[col].copy()
+                df[col] = df[col].apply(lambda x: str(x).replace("COVISA", "EQM").replace("Covisa", "EQM").replace("covisa", "EQM") if pd.notna(x) else x)
+                if not original.equals(df[col]):
+                    hubo_cambio_en_bd = True
+        if hubo_cambio_en_bd:
             st.session_state[bd_key] = df
-    
-    if cambios_realizados:
-        for bd_key, bd_file in bds_a_migrar.items():
-            if bd_key in st.session_state:
-                subir_excel_a_github(bd_file, st.session_state[bd_key])
-    
-    st.session_state.migracion_covisa_eqm_completada = True
+            subir_excel_a_github(bd_file, st.session_state[bd_key])
 
 # --- Función Auxiliar y Consecutivo Dinámico de Tarimas (TPM) ---
 def obtener_siguiente_consecutivo_tpm():
