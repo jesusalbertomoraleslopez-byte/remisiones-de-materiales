@@ -822,7 +822,7 @@ def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
     <body style="font-family: 'Questrial', 'Segoe UI', Arial, sans-serif; color: #000000; line-height: 1.6; padding: 20px; background-color: #ffffff;">
         <!-- Encabezado con Logotipo Corporativo -->
         <div style="padding-bottom: 15px; border-bottom: 4px solid #EC2024; margin-bottom: 20px;">
-            <img src="https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/logo_sigrama.png" alt="Industria Sigrama" style="width: 20%; max-width: 140px; display: block;">
+            <img src="https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/logo_sigrama.png" width="160" alt="Industria Sigrama" style="display: block; border: 0;">
         </div>
 
         <p style="font-size: 15px; margin-bottom: 15px;">Buen día a todos,</p>
