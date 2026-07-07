@@ -4913,6 +4913,7 @@ elif opcion_menu == "📉 Análisis de Faltantes":
         st.subheader("📋 Órdenes de Compra Registradas")
         if not st.session_state.BD_POs_Cabecera.empty:
             st.dataframe(st.session_state.BD_POs_Cabecera, use_container_width=True, hide_index=True)
+            st.info("💡 **Consejo de Navegación:** Para consultar el avance, dispersión de piezas y realizar el **Mapeo de Coincidencia** de estas POs con la producción real, diríjase a la pestaña **'📊 Matriz de Avance por PO'** en la parte superior.")
         else:
             st.info("💡 No hay POs registradas actualmente.")
 
