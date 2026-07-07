@@ -4934,7 +4934,12 @@ elif opcion_menu == "📉 Análisis de Faltantes":
             with mc1:
                 st.metric("Proyecto / Uso", cab_info.get("Proyecto", "N/A"))
             with mc2:
-                st.metric("Fecha Pedido", cab_info.get("Fecha_Pedido", "N/A"))
+                fecha_val = cab_info.get("Fecha_Pedido", "N/A")
+                if pd.notnull(fecha_val) and hasattr(fecha_val, 'strftime'):
+                    fecha_str = fecha_val.strftime("%Y-%m-%d")
+                else:
+                    fecha_str = str(fecha_val)
+                st.metric("Fecha Pedido", fecha_str)
             with mc3:
                 st.metric("Solicitante", cab_info.get("Solicitante", "N/A"))
             with mc4:
