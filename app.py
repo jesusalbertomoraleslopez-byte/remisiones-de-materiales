@@ -3662,16 +3662,25 @@ elif opcion_menu == "🏭 Industria 4.0":
         col_st1, col_st2, col_st3, col_st4 = st.columns(4)
         with col_st1:
             st.metric("🎨 Front-End UI", "Streamlit")
-            st.caption("Entorno web reactivo de alta velocidad, estilizado con CSS personalizado de marca.")
+            st.caption("Entorno web reactivo de alta velocidad, estilizado con CSS de marca.")
         with col_st2:
             st.metric("⚙️ Data Engine", "Python / Pandas")
-            st.caption("Procesamiento y modelado de datos tabulares complejos directamente en memoria.")
+            st.caption("Procesamiento y modelado de datos tabulares en memoria.")
         with col_st3:
             st.metric("📁 Cloud Storage", "GitHub API")
-            st.caption("Mecanismo seguro de control de versiones y almacenamiento distribuido basado en la nube.")
+            st.caption("Sincronización en la nube mediante API controlada por tokens.")
         with col_st4:
             st.metric("📄 Document Maker", "ReportLab")
-            st.caption("Motor de renderizado de precisión milimétrica para la construcción de archivos PDF.")
+            st.caption("Motor de precisión para la construcción de reportes PDF oficiales.")
+            
+        st.markdown("<br/>", unsafe_allow_html=True)
+        col_st5, col_st6 = st.columns(2)
+        with col_st5:
+            st.metric("📦 Zip Archiver", "Python ZipFile")
+            st.caption("Compresión en memoria de múltiples reportes de etiqueta para optimizar la descarga.")
+        with col_st6:
+            st.metric("📧 Email Standard", "RFC 822 / MIME")
+            st.caption("Ensamblado dinámico de correos con formato de borrador de Outlook, tablas HTML e imágenes.")
 
 elif opcion_menu == "📖 Manual de Operación":
     st.title("📖 Manual de Operación del Sistema")
@@ -3735,6 +3744,7 @@ elif opcion_menu == "📖 Manual de Operación":
             <li><b>Selección de Tarimas:</b> El dropdown muestra todas las tarimas con estatus <code>Disponible</code> (es decir, creadas pero que aún no han sido asignadas a ninguna remisión). Seleccione una o más tarimas para agruparlas.</li>
             <li><b>Datos de Despacho:</b> Especifique el líder que autoriza la salida, el almacén de origen, el nombre del receptor (cliente) y la dirección destino.</li>
             <li><b>Emisión:</b> Haga clic en <i>🚀 Confirmar Salida y Generar Nueva Remisión</i>. La aplicación generará un folio oficial correlativo (ej. <code>E0028</code>), marcará el estatus de las tarimas como <code>Remesada</code> para que no puedan volver a usarse y guardará la transacción en la nube.</li>
+            <li><b>Notificación de Salida:</b> Tras emitir la remisión, use el panel inferior para descargar el borrador de correo (.eml) que contiene la información formateada y lista para ser despachada a través de Outlook a los destinatarios configurados.</li>
         </ol>
         """, unsafe_allow_html=True)
         
@@ -3743,12 +3753,14 @@ elif opcion_menu == "📖 Manual de Operación":
         st.markdown("""
         <h4 style="color: #EC2024; font-family: 'Montserrat', sans-serif; font-weight: bold;">Centro de Consultas y Descarga Documental</h4>
         <p style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
-            La consulta y obtención de documentos certificados se centraliza en dos áreas clave:
+            La consulta y obtención de documentos certificados se centraliza en tres áreas clave:
         </p>
         <ul style="font-family: 'Questrial', sans-serif; font-size: 14px; line-height: 1.6;">
             <li><b>Dashboard e Históricos:</b> Muestra métricas agregadas del inventario (tarimas disponibles, remesadas, etc.) y gráficos interactivos de barras y líneas para analizar la cantidad de productos por proyecto en tiempo real.</li>
             <li><b>Centro de Consultas (Impresión Masiva):</b> Permite ver la lista completa de tarimas, filtrarlas por folio, estatus o fecha, y seleccionar filas específicas para generar reportes anejos en PDF con el desglose exacto de su contenido.</li>
-            <li><b>Descarga Documental de Remisiones:</b> En el Módulo Remisiones, el dropdown inferior contiene los folios únicos de salida (ordenados de más recientes a más antiguos). Seleccione el folio deseado y presione <b>📥 Descargar Remisión Oficial en PDF</b> para descargar el manifiesto formal con formato de firma e imagen de Industria SIGRAMA.</li>
+            <li><b>Descarga Documental de Remisiones y EML:</b> En la parte inferior del Módulo Remisiones, use la tabla interactiva de remisiones históricas. Puede seleccionar **una o múltiples remisiones** a la vez:
+            - Si selecciona una sola remisión, podrá descargar su PDF y Excel oficial de manera independiente.
+            - Si selecciona múltiples remisiones, podrá generar un correo consolidado (.eml) que adjuntará cada remisión por separado en PDF y agrupará todas las etiquetas de las tarimas involucradas en un archivo <code>Etiquetas_Tarimas.zip</code>. El cuerpo del correo se generará de acuerdo con los lineamientos oficiales de Industria Sigrama.</li>
         </ul>
         """, unsafe_allow_html=True)
         
