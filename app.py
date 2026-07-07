@@ -853,15 +853,15 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
         
         # Columnas de totales
         if is_summary:
-            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{row["Total Requerido"]}</td>'
-            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{row["Total Entregado"]}</td>'
-            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{row["Total Almacén"]}</td>'
-            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{row["Total Faltante"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; font-size: 22px; font-weight: bold;">{row["Total Requerido"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; font-size: 22px; font-weight: bold;">{row["Total Entregado"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; font-size: 22px; font-weight: bold;">{row["Total Almacén"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; font-size: 22px; font-weight: bold;">{row["Total Faltante"]}</td>'
         else:
-            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #000000; color: #FFFFFF; font-weight: bold;">{row["Total Requerido"]}</td>'
-            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #2E7D32; color: #FFFFFF; font-weight: bold;">{row["Total Entregado"]}</td>'
-            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #FBC02D; color: #000000; font-weight: bold;">{row["Total Almacén"]}</td>'
-            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #C62828; color: #FFFFFF; font-weight: bold;">{row["Total Faltante"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #000000; color: #FFFFFF; font-weight: bold; font-size: 22px;">{row["Total Requerido"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #2E7D32; color: #FFFFFF; font-weight: bold; font-size: 22px;">{row["Total Entregado"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #FBC02D; color: #000000; font-weight: bold; font-size: 22px;">{row["Total Almacén"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #C62828; color: #FFFFFF; font-weight: bold; font-size: 22px;">{row["Total Faltante"]}</td>'
             
         # Fechas
         for d in fechas_columnas:
@@ -5399,22 +5399,22 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                         # "Total Requerido" Fondo Negro, Letra Blanca
                         styler = styler.set_properties(
                             subset=["Total Requerido"],
-                            **{"background-color": "#000000", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center"}
+                            **{"background-color": "#000000", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center", "font-size": "22px"}
                         )
                         # "Total Entregado" Fondo Verde, Letra Blanca
                         styler = styler.set_properties(
                             subset=["Total Entregado"],
-                            **{"background-color": "#2E7D32", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center"}
+                            **{"background-color": "#2E7D32", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center", "font-size": "22px"}
                         )
                         # "Total Almacén" Fondo Amarillo, Letra Negra
                         styler = styler.set_properties(
                             subset=["Total Almacén"],
-                            **{"background-color": "#FBC02D", "color": "#000000", "font-weight": "bold", "text-align": "center"}
+                            **{"background-color": "#FBC02D", "color": "#000000", "font-weight": "bold", "text-align": "center", "font-size": "22px"}
                         )
                         # "Total Faltante" Fondo Rojo, Letra Blanca
                         styler = styler.set_properties(
                             subset=["Total Faltante"],
-                            **{"background-color": "#C62828", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center"}
+                            **{"background-color": "#C62828", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center", "font-size": "22px"}
                         )
                         return styler
                     
