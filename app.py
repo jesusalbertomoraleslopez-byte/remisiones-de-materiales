@@ -4093,7 +4093,34 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                                     t_list = []
                                 for t in t_list:
                                                  st.write("---")
-                st.markdown("### 🔄 3. Sincronización y Reparación de Estatus de Tarimas")
+                                                 
+                st.write("---")
+                st.markdown("### 📋 3. Eliminar Órdenes de Compra (POs) y Requerimientos")
+                if not st.session_state.BD_POs_Cabecera.empty:
+                    df_po_purga = st.session_state.BD_POs_Cabecera.copy()
+                    sel_pos = st.dataframe(df_po_purga, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_pos_final_f")
+                    filas_po = sel_pos.get("selection", {}).get("rows", [])
+                    if filas_po:
+                        filas_po_validas = [i for i in filas_po if i < len(df_po_purga)]
+                        if filas_po_validas:
+                            pos_a_eliminar = df_po_purga.iloc[filas_po_validas]['PO'].astype(str).str.strip().tolist()
+                            
+                            if st.button("🗑️ Eliminar POs Seleccionadas") and pos_a_eliminar:
+                                # Filtrar en cabecera
+                                st.session_state.BD_POs_Cabecera = st.session_state.BD_POs_Cabecera[~st.session_state.BD_POs_Cabecera['PO'].astype(str).str.strip().isin(pos_a_eliminar)]
+                                # Filtrar en requerimientos
+                                if "BD_Requerimientos_POs" in st.session_state and not st.session_state.BD_Requerimientos_POs.empty:
+                                    st.session_state.BD_Requerimientos_POs = st.session_state.BD_Requerimientos_POs[~st.session_state.BD_Requerimientos_POs['PO'].astype(str).str.strip().isin(pos_a_eliminar)]
+                                
+                                # Guardar a GitHub y disco
+                                subir_excel_a_github("BD_POs_Cabecera.xlsx", st.session_state.BD_POs_Cabecera)
+                                subir_excel_a_github("BD_Requerimientos_POs.xlsx", st.session_state.BD_Requerimientos_POs)
+                                
+                                st.success("✅ Órdenes de Compra y requerimientos eliminados correctamente."); st.rerun()
+                else:
+                    st.write("No hay Órdenes de Compra registradas.")
+                    
+                st.markdown("### 🔄 4. Sincronización y Reparación de Estatus de Tarimas")
                 st.info("Utilice esta herramienta para buscar tarimas marcadas como 'Remesadas' pero que no pertenecen a ninguna remisión activa (por ejemplo, remisiones borradas manualmente), y regresarlas al estatus de 'Disponible'.")
                 if st.button("🔄 Sincronizar y Reparar Estatus de Tarimas"):
                     corregidas = sincronizar_estatus_tarimas(auto_save=True)
