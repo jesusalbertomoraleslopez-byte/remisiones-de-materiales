@@ -3047,55 +3047,15 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                     st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(tarimas_lista)
                 ]
                 
-                st.write("")
                 folios_str = ", ".join(folios_lista)
-                st.success(f"📌 Folio(s) seleccionado(s): **{folios_str}**")
-                
-                # Renderizar botones de PDF/Excel individual únicamente si se seleccionó SOLO 1 fila
-                if len(selected_rows) == 1:
-                    row_dict = selected_rows[0]
-                    r_sel = row_dict['Folio_Remision']
-                    c1, c2 = st.columns(2)
-                    with c1: 
-                        st.download_button(
-                            label="📄 Descargar Reporte Oficial (PDF)", 
-                            data=generar_pdf_remision_general(row_dict, df_det), 
-                            file_name=f"Remision_{r_sel}.pdf", 
-                            key=f"btn_dl_rem_pdf_{r_sel}",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    with c2: 
-                        st.download_button(
-                            label="📥 Descargar Reporte Oficial (Excel)", 
-                            data=generar_excel_remision(row_dict, df_det).getvalue(), 
-                            file_name=f"Remision_{r_sel}.xlsx", 
-                            key=f"btn_dl_rem_xlsx_{r_sel}",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
-                        )
-                else:
-                    st.info("💡 Selección múltiple activada. La descarga individual de reportes (PDF/Excel) no está disponible en este modo; use la descarga del correo (.eml) para adjuntos consolidados.")
-                
-                # --- ENVÍO POR CORREO (BORRADOR EML) ---
-                st.markdown("### 📧 Generar Borrador de Correo (.eml)")
-                cfg_emails = obtener_emails_config()
-                
-                col_eml1, col_eml2 = st.columns(2)
-                # Usar una key única combinada con los folios seleccionados para evitar colisiones
                 key_suffix = f"{len(selected_rows)}_{folios_lista[0]}"
-                with col_eml1:
-                    eml_to = st.text_input("Para:", value=cfg_emails.get("dest_to", ""), key=f"eml_to_{key_suffix}")
-                with col_eml2:
-                    eml_cc = st.text_input("CC:", value=cfg_emails.get("dest_cc", ""), key=f"eml_cc_{key_suffix}")
                 
-                # Preparar adjuntos
+                # --- PREPARACIÓN DE ADJUNTOS EN SEGUNDO PLANO ---
                 adjuntos_dict = {}
                 
                 # 1. Remisiones por separado en PDF
                 for row_dict in selected_rows:
                     f_rem = row_dict['Folio_Remision']
-                    # Filtrar desglose específico para esta remisión para que su reporte oficial sea el correcto
                     t_rem_asoc = row_dict['Tarimas_Asociadas']
                     if isinstance(t_rem_asoc, str):
                         try:
@@ -3127,24 +3087,62 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                             zip_file.writestr(filename, file_bytes)
                     zip_buffer.seek(0)
                     adjuntos_dict["Etiquetas_Tarimas.zip"] = zip_buffer
+
+                # --- CONFIGURAR CORREO ---
+                cfg_emails = obtener_emails_config()
                 
-                # Construir el archivo .eml al vuelo
-                if len(selected_rows) == 1:
-                    eml_subject = f"Envío de Remisión {folios_lista[0]} - Industria Sigrama"
-                else:
-                    eml_subject = f"Envío de Remisiones {folios_str} - Industria Sigrama"
+                # --- RENDERIZADO COMPACTO DE ACCIONES (SIN SCROLL) ---
+                col_acc_left, col_acc_right = st.columns([1.1, 1.3])
                 
-                eml_body = generar_cuerpo_correo_html(selected_rows, df_det)
-                eml_bytes = generar_archivo_eml(eml_to, eml_cc, eml_subject, eml_body, adjuntos_dict)
+                with col_acc_left:
+                    st.write("")
+                    st.markdown(f"📌 **Folio(s) seleccionado(s):** `{folios_str}`")
+                    if len(selected_rows) == 1:
+                        row_dict = selected_rows[0]
+                        r_sel = row_dict['Folio_Remision']
+                        st.download_button(
+                            label="📄 Descargar Reporte Oficial (PDF)", 
+                            data=generar_pdf_remision_general(row_dict, df_det), 
+                            file_name=f"Remision_{r_sel}.pdf", 
+                            key=f"btn_dl_rem_pdf_{r_sel}",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                        st.download_button(
+                            label="📥 Descargar Reporte Oficial (Excel)", 
+                            data=generar_excel_remision(row_dict, df_det).getvalue(), 
+                            file_name=f"Remision_{r_sel}.xlsx", 
+                            key=f"btn_dl_rem_xlsx_{r_sel}",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+                    else:
+                        st.info("💡 Selección múltiple. Descargas individuales (PDF/Excel) no disponibles.")
                 
-                st.download_button(
-                    label="📩 Descargar Borrador de Correo con Adjuntos (.eml)",
-                    data=eml_bytes,
-                    file_name=f"Correo_Remisiones_{key_suffix}.eml",
-                    mime="message/rfc822",
-                    use_container_width=True,
-                    key=f"btn_dl_eml_{key_suffix}"
-                )
+                with col_acc_right:
+                    col_fields1, col_fields2 = st.columns(2)
+                    with col_fields1:
+                        eml_to = st.text_input("Para:", value=cfg_emails.get("dest_to", ""), key=f"eml_to_{key_suffix}")
+                    with col_fields2:
+                        eml_cc = st.text_input("CC:", value=cfg_emails.get("dest_cc", ""), key=f"eml_cc_{key_suffix}")
+                        
+                    # Construir el archivo .eml al vuelo
+                    if len(selected_rows) == 1:
+                        eml_subject = f"Envío de Remisión {folios_lista[0]} - Industria Sigrama"
+                    else:
+                        eml_subject = f"Envío de Remisiones {folios_str} - Industria Sigrama"
+                    
+                    eml_body = generar_cuerpo_correo_html(selected_rows, df_det)
+                    eml_bytes = generar_archivo_eml(eml_to, eml_cc, eml_subject, eml_body, adjuntos_dict)
+                    
+                    st.download_button(
+                        label="📩 Descargar Borrador de Correo (.eml)",
+                        data=eml_bytes,
+                        file_name=f"Correo_Remisiones_{key_suffix}.eml",
+                        mime="message/rfc822",
+                        use_container_width=True,
+                        key=f"btn_dl_eml_{key_suffix}"
+                    )
             else:
                 st.info("💡 Seleccione una o varias filas marcando las casillas del extremo izquierdo de las remisiones para descargar el reporte o generar el correo borrador.")
 
