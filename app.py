@@ -4969,11 +4969,42 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                 df_prod_po = pd.DataFrame()
                 if not st.session_state.BD_Detalle_Tarimas.empty:
                     df_prod = st.session_state.BD_Detalle_Tarimas.copy()
-                    df_prod['PO_Clean'] = df_prod['PO'].astype(str).str.strip().str.upper()
-                    df_prod_po = df_prod[
-                        (df_prod['PO_Clean'] == po_seleccionada) | 
-                        (df_prod['PO_Clean'].str.contains(po_seleccionada, na=False))
-                    ].copy()
+                    
+                    # Normalización automática inteligente para sugerencias
+                    import re
+                    def clean_po(val):
+                        if not val or pd.isna(val): return ""
+                        val_str = str(val).strip().upper()
+                        # Quitar prefijo PO: o PO- y caracteres no alfanuméricos
+                        val_str = re.sub(r'^PO\s*[-:]*\s*', '', val_str)
+                        val_str = re.sub(r'[^A-Z0-9]', '', val_str)
+                        return val_str
+                    
+                    po_target = clean_po(po_seleccionada)
+                    
+                    # Obtener listado de PO reales registradas en las tarimas de producción
+                    pos_reales_produccion = sorted(df_prod['PO'].astype(str).str.strip().unique().tolist())
+                    
+                    # Buscar coincidencias sugeridas (por ejemplo, "PO-2602-0711" coincide con "26020711")
+                    sugeridos_coincidencia = [
+                        p for p in pos_reales_produccion
+                        if clean_po(p) == po_target or po_target in clean_po(p) or clean_po(p) in po_target
+                    ]
+                    
+                    # Mostrar la interfaz de mapeo interactivo para el usuario
+                    st.write("---")
+                    st.markdown("🔗 **Mapeo de Coincidencia de PO en Producción (Tarimas)**")
+                    st.info("💡 **Sugerencia Automática:** El sistema ha preseleccionado los valores que parecen corresponder a esta PO. Puede agregar o quitar etiquetas manualmente según sea necesario.")
+                    
+                    pos_mapeadas = st.multiselect(
+                        "Etiquetas de PO físicas detectadas en producción:",
+                        options=pos_reales_produccion,
+                        default=sugeridos_coincidencia,
+                        key=f"mapeo_po_multiselect_{po_seleccionada}"
+                    )
+                    
+                    # Filtrar los detalles de producción con base en la selección del usuario
+                    df_prod_po = df_prod[df_prod['PO'].astype(str).str.strip().isin(pos_mapeadas)].copy()
                 
                 if not df_prod_po.empty:
                     df_prod_po['ID_Tarima_Clean'] = df_prod_po['ID_Tarima'].astype(str).str.strip().str.upper()
