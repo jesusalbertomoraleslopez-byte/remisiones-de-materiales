@@ -4924,11 +4924,11 @@ elif opcion_menu == "📉 Análisis de Faltantes":
         if st.session_state.BD_POs_Cabecera.empty:
             st.info("ℹ️ No hay Órdenes de Compra registradas. Cargue una PO en la pestaña 'Ingreso de POs' para comenzar.")
         else:
-            pos_disponibles = sorted(st.session_state.BD_POs_Cabecera['PO'].unique().tolist())
+            pos_disponibles = sorted(st.session_state.BD_POs_Cabecera['PO'].astype(str).str.strip().unique().tolist())
             po_seleccionada = st.selectbox("Seleccione la PO a consultar:", pos_disponibles, key="po_selector_matriz")
             
             # Obtener datos generales de cabecera
-            cab_info = st.session_state.BD_POs_Cabecera[st.session_state.BD_POs_Cabecera['PO'] == po_seleccionada].iloc[0].to_dict()
+            cab_info = st.session_state.BD_POs_Cabecera[st.session_state.BD_POs_Cabecera['PO'].astype(str).str.strip() == po_seleccionada].iloc[0].to_dict()
             
             st.markdown("##### 📄 Datos Generales")
             mc1, mc2, mc3, mc4 = st.columns(4)
@@ -4948,7 +4948,7 @@ elif opcion_menu == "📉 Análisis de Faltantes":
             st.info(f"📍 **Destino (L.A.B.):** {cab_info.get('Destino', 'N/A')}")
             
             # Obtener requerimientos de la PO
-            df_req_po = st.session_state.BD_Requerimientos_POs[st.session_state.BD_Requerimientos_POs['PO'] == po_seleccionada].copy()
+            df_req_po = st.session_state.BD_Requerimientos_POs[st.session_state.BD_Requerimientos_POs['PO'].astype(str).str.strip() == po_seleccionada].copy()
             
             if df_req_po.empty:
                 st.warning("⚠️ No se encontraron partidas registradas para esta PO.")
