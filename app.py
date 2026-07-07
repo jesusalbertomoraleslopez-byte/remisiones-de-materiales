@@ -812,7 +812,7 @@ def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
         rec = r.get('Nombre_Receptor', 'N/A')
         dir_rec = r.get('Direccion_Receptor', 'N/A')
         fec = r.get('Fecha_Hora_Salida', 'N/A')
-        headers_text += f"<li><b>Planta de Metales / {rec}</b> ({dir_rec}) &mdash; Fecha de Salida: {fec} (Remisión: <b>{f}</b>)</li>"
+        headers_text += f"<li><b>PLANTA METALES DIAGONAL / {rec}</b> ({dir_rec}) &mdash; Fecha de Salida: {fec} (Remisión: <b>{f}</b>)</li>"
 
     html = f"""
     <html>
@@ -822,11 +822,11 @@ def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
     <body style="font-family: 'Questrial', 'Segoe UI', Arial, sans-serif; color: #000000; line-height: 1.6; padding: 20px; background-color: #ffffff;">
         <!-- Encabezado con Logotipo Corporativo -->
         <div style="padding-bottom: 15px; border-bottom: 4px solid #EC2024; margin-bottom: 20px;">
-            <img src="https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/logo_sigrama.png" alt="Industria Sigrama" style="max-height: 55px; display: block;">
+            <img src="https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/logo_sigrama.png" alt="Industria Sigrama" style="width: 20%; max-width: 140px; display: block;">
         </div>
 
         <p style="font-size: 15px; margin-bottom: 15px;">Buen día a todos,</p>
-        <p style="font-size: 14px; margin-bottom: 15px;">El presente correo es para informar sobre la salida de producto terminado de planta metales con archivo adjunto. En este viene la cantidad, número de parte, número de tarima y orden de compra para tener la información todos.</p>
+        <p style="font-size: 14px; margin-bottom: 15px;">El presente correo es para informar sobre la salida de producto terminado de <b>PLANTA METALES DIAGONAL</b> con la documentación correspondiente adjunta. En estos archivos se detalla la cantidad, número de parte, número de tarima y orden de compra para el conocimiento de todos.</p>
         
         <!-- Caja Informativa Formato Diagonal Corporativo -->
         <div style="border-left: 4px solid #EC2024; background-color: #F8F9FA; padding: 15px; margin: 20px 0; border-radius: 0 4px 4px 0;">
