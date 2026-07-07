@@ -4230,6 +4230,53 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                         use_container_width=True
                     )
                     
+                    st.write("---")
+                    st.write("##### Artículos en Órdenes de Compra (POs) Sin Registro en Catálogo")
+                    
+                    skus_en_pos = set()
+                    if "BD_Requerimientos_POs" in st.session_state and not st.session_state.BD_Requerimientos_POs.empty:
+                        skus_en_pos = set(st.session_state.BD_Requerimientos_POs['SKU'].astype(str).str.strip().dropna().unique())
+                        
+                    skus_sin_registro_pos = sorted(list(skus_en_pos - skus_validos_sistema))
+                    skus_sin_registro_pos = [s for s in skus_sin_registro_pos if s and s.upper() not in ["TODOS", "SELECCIONE UN SKU..."]]
+                    
+                    if len(skus_sin_registro_pos) > 0:
+                        st.info(f"🔍 Se encontraron **{len(skus_sin_registro_pos)}** artículos en Órdenes de Compra (POs) que no están registrados en el catálogo.")
+                    else:
+                        st.success("🎉 ¡Todos los artículos en Órdenes de Compra (POs) están registrados en el sistema!")
+                        
+                    df_sin_registro_pos = pd.DataFrame(columns=columnas_oficiales)
+                    df_sin_registro_pos["SKU"] = skus_sin_registro_pos
+                    
+                    buf_sin_reg_pos = io.BytesIO()
+                    with pd.ExcelWriter(buf_sin_reg_pos, engine='openpyxl') as p_writer:
+                        df_sin_registro_pos.to_excel(p_writer, index=False, sheet_name='Datos_Sistema')
+                        worksheet = p_writer.sheets['Datos_Sistema']
+                        worksheet.column_dimensions['A'].width = 20
+                        worksheet.column_dimensions['B'].width = 25
+                        worksheet.column_dimensions['C'].width = 20
+                        worksheet.column_dimensions['D'].width = 25
+                        worksheet.column_dimensions['E'].width = 20
+                        
+                        dv_calibre_sin_pos = DataValidation(type="list", formula1=opciones_calibres, allow_blank=True)
+                        worksheet.add_data_validation(dv_calibre_sin_pos)
+                        dv_calibre_sin_pos.add("C2:C2000")
+                        
+                        dv_acabado_sin_pos = DataValidation(type="list", formula1=opciones_acabados, allow_blank=True)
+                        worksheet.add_data_validation(dv_acabado_sin_pos)
+                        dv_acabado_sin_pos.add("E2:E2000")
+                        
+                    buf_sin_reg_pos.seek(0)
+                    st.download_button(
+                        label="📥 Artículos de POs Sin Registro",
+                        data=buf_sin_reg_pos.getvalue(),
+                        file_name="Plantilla_Articulos_POs_Sin_Registro.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="btn_download_articulos_pos_sin_registro",
+                        disabled=len(skus_sin_registro_pos) == 0,
+                        use_container_width=True
+                    )
+                    
                 with c_art2:
                     st.write("##### Cargar / Sobrescribir Catálogo Maestro")
                     arch_articulos = st.file_uploader("Suba la Plantilla de Artículos Rellenada (Estricta 5 columnas):", type=["xlsx"], key="uploader_articulos_masivo_f")
