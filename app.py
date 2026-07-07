@@ -5174,9 +5174,23 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                         if matching_local:
                             img_path = matching_local[0]
                             
+                        # Convertir a base64 data URI para permitir visualización en navegadores / Streamlit Cloud
+                        img_base64 = None
+                        if img_path and os.path.exists(img_path):
+                            try:
+                                import base64
+                                with open(img_path, "rb") as f_img:
+                                    encoded_img = base64.b64encode(f_img.read()).decode()
+                                    ext_img = os.path.splitext(img_path)[1].lower().replace(".", "")
+                                    if ext_img not in ["png", "jpg", "jpeg", "webp", "gif"]:
+                                        ext_img = "png"
+                                    img_base64 = f"data:image/{ext_img};base64,{encoded_img}"
+                            except Exception:
+                                pass
+                                
                         row_data = {
                             "SKU": sku,
-                            "Imagen": img_path,
+                            "Imagen": img_base64,
                             "Total Requerido": total_req,
                             "Total Entregado": total_rem,
                             "Total Almacén": total_stk,
@@ -5281,7 +5295,14 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                         )
                         return styler
                     
-                    styled_matrix_df = style_matrix(df_matrix)
+                    # Copiar para visualización y forzar tipo texto en números para permitir alineación centrada
+                    df_display = df_matrix.copy()
+                    cols_to_str = ["Total Requerido", "Total Entregado", "Total Almacén", "Total Faltante"]
+                    for col_name in cols_to_str:
+                        if col_name in df_display.columns:
+                            df_display[col_name] = df_display[col_name].astype(str)
+                            
+                    styled_matrix_df = style_matrix(df_display)
                     st.dataframe(
                         styled_matrix_df,
                         use_container_width=True,
@@ -5290,8 +5311,24 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                             "Imagen": st.column_config.ImageColumn(
                                 "Imagen",
                                 help="Miniatura de la pieza",
-                                width="small"
-                            )
+                                width=80
+                            ),
+                            "Total Requerido": st.column_config.TextColumn(
+                                "Total Requerido",
+                                width=110
+                            ),
+                            "Total Entregado": st.column_config.TextColumn(
+                                "Total Entregado",
+                                width=110
+                            ),
+                            "Total Almacén": st.column_config.TextColumn(
+                                "Total Almacén",
+                                width=110
+                            ),
+                            "Total Faltante": st.column_config.TextColumn(
+                                "Total Faltante",
+                                width=110
+                            ),
                         }
                     )
                     
