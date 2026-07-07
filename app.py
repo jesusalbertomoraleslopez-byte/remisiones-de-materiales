@@ -5098,7 +5098,6 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                     
                     row_data = {
                         "SKU": sku,
-                        "Nombre": sku_desc,
                         "Total Requerido": total_req,
                         "Total Entregado": total_rem,
                         "Total Almacén": total_stk,
@@ -5135,7 +5134,6 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                 # Construir fila resumen "📈 % AVANCE"
                 summary_row = {
                     "SKU": "📈 % AVANCE",
-                    "Nombre": "Avance global por columna",
                     "Total Requerido": f"{((tot_ent + tot_stk) / tot_req * 100):.1f}%" if tot_req > 0 else "0.0%",
                     "Total Entregado": tot_ent,
                     "Total Almacén": tot_stk,
@@ -5176,7 +5174,33 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                 with col_met4:
                     st.metric("Pendiente (Faltante)", f"{tot_fal:,} PZS")
                     
-                st.dataframe(df_matrix, use_container_width=True, hide_index=True)
+                # Aplicar estilos CSS solicitados a columnas específicas
+                def style_matrix(df):
+                    styler = df.style
+                    # "Total Requerido" Fondo Negro, Letra Blanca
+                    styler = styler.set_properties(
+                        subset=["Total Requerido"],
+                        **{"background-color": "#000000", "color": "#FFFFFF", "font-weight": "bold"}
+                    )
+                    # "Total Entregado" Fondo Verde, Letra Blanca
+                    styler = styler.set_properties(
+                        subset=["Total Entregado"],
+                        **{"background-color": "#2E7D32", "color": "#FFFFFF", "font-weight": "bold"}
+                    )
+                    # "Total Almacén" Fondo Amarillo, Letra Negra
+                    styler = styler.set_properties(
+                        subset=["Total Almacén"],
+                        **{"background-color": "#FBC02D", "color": "#000000", "font-weight": "bold"}
+                    )
+                    # "Total Faltante" Fondo Rojo, Letra Blanca
+                    styler = styler.set_properties(
+                        subset=["Total Faltante"],
+                        **{"background-color": "#C62828", "color": "#FFFFFF", "font-weight": "bold"}
+                    )
+                    return styler
+                
+                styled_matrix_df = style_matrix(df_matrix)
+                st.dataframe(styled_matrix_df, use_container_width=True, hide_index=True)
                 
                 with st.expander("📖 Glosario de Acrónimos de la Matriz (R | E | S | F)", expanded=True):
                     st.markdown("""
