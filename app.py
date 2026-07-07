@@ -4897,8 +4897,8 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                                     ], ignore_index=True)
                                     
                                 # Guardar cambios en GitHub
-                                res_cab = guardar_excel_en_github("BD_POs_Cabecera.xlsx", st.session_state.BD_POs_Cabecera)
-                                res_req = guardar_excel_en_github("BD_Requerimientos_POs.xlsx", st.session_state.BD_Requerimientos_POs)
+                                res_cab = subir_excel_a_github("BD_POs_Cabecera.xlsx", st.session_state.BD_POs_Cabecera)
+                                res_req = subir_excel_a_github("BD_Requerimientos_POs.xlsx", st.session_state.BD_Requerimientos_POs)
                                 
                                 if res_cab and res_req:
                                     st.success(f"✅ Requerimientos de la PO {po_num} integrados y guardados en GitHub con éxito.")
