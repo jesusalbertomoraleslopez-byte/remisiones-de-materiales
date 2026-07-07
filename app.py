@@ -5595,23 +5595,10 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                     st.session_state.last_matrix_df = df_matrix
                     st.session_state.last_matrix_po = pos_seleccionadas
                     
-                    st.write("---")
-                    st.subheader("📩 Generar Notificación por Correo (Borrador Outlook)")
-                    st.caption("Ensamblado dinámico de correos con formato de borrador de Outlook, tablas HTML y el reporte Excel adjunto de esta consulta.")
-                    
-                    # Cargar destinatarios configurados por defecto
-                    cfg_emails_po = obtener_emails_config()
-                    
                     po_names_str = "_".join(pos_seleccionadas)
                     po_names_display = ", ".join(pos_seleccionadas)
                     
-                    col_em_po1, col_em_po2 = st.columns(2)
-                    with col_em_po1:
-                        eml_po_to = st.text_input("Para:", value=cfg_emails_po.get("dest_to", ""), key=f"eml_po_to_{po_names_str}")
-                    with col_em_po2:
-                        eml_po_cc = st.text_input("CC:", value=cfg_emails_po.get("dest_cc", ""), key=f"eml_po_cc_{po_names_str}")
-                        
-                    # Generar el Excel del avance
+                    # Generar el Excel del avance para descarga directa
                     buf_eml_xlsx = io.BytesIO()
                     with pd.ExcelWriter(buf_eml_xlsx, engine='openpyxl') as writer_dl:
                         sheet_title = f"Avance_POs_{po_names_str}"[:30] # Límite de 30 caracteres
@@ -5652,6 +5639,30 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                         sheet.freeze_panes = "A2"
                     
                     buf_eml_xlsx.seek(0)
+                    
+                    # Botón de descarga directa de Excel
+                    st.write("")
+                    st.download_button(
+                        label=f"📥 Descargar Reporte de Avance Excel (POs: {po_names_display})",
+                        data=buf_eml_xlsx.getvalue(),
+                        file_name=f"Reporte_Avance_POs_{po_names_str}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"btn_dl_matrix_direct_xlsx_{po_names_str}",
+                        use_container_width=True
+                    )
+                    
+                    st.write("---")
+                    st.subheader("📩 Generar Notificación por Correo (Borrador Outlook)")
+                    st.caption("Ensamblado dinámico de correos con formato de borrador de Outlook, tablas HTML y el reporte Excel adjunto de esta consulta.")
+                    
+                    # Cargar destinatarios configurados por defecto
+                    cfg_emails_po = obtener_emails_config()
+                    
+                    col_em_po1, col_em_po2 = st.columns(2)
+                    with col_em_po1:
+                        eml_po_to = st.text_input("Para:", value=cfg_emails_po.get("dest_to", ""), key=f"eml_po_to_{po_names_str}")
+                    with col_em_po2:
+                        eml_po_cc = st.text_input("CC:", value=cfg_emails_po.get("dest_cc", ""), key=f"eml_po_cc_{po_names_str}")
                     
                     # Generar cuerpo HTML
                     cuerpo_html = generar_cuerpo_correo_po_html(po_names_display, cab_info, df_matrix, fechas_columnas)
