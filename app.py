@@ -225,6 +225,10 @@ def clean_project_val(val):
     if not val_str:
         return ""
     
+    # Si es "RECHASO", "RECHAZO" o variantes, mapear a "Material Rechazado"
+    if val_str.upper() in ["RECHASO", "RECHAZO", "MATERIAL RECHAZADO", "MATRIAL RECHAZADO"]:
+        return "Material Rechazado"
+    
     # Si es puramente un número entero (ej. 3, 15)
     if val_str.isdigit():
         return f"INT-{int(val_str):03d}"
