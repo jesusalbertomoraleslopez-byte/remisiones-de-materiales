@@ -808,11 +808,26 @@ def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
 
     headers_text = ""
     for r in list_selected_remisiones:
+        import ast
         f = r.get('Folio_Remision', 'N/A')
         rec = r.get('Nombre_Receptor', 'N/A')
         dir_rec = r.get('Direccion_Receptor', 'N/A')
         fec = r.get('Fecha_Hora_Salida', 'N/A')
-        headers_text += f"<li><b>PLANTA METALES DIAGONAL / {rec}</b> ({dir_rec}) &mdash; Fecha de Salida: {fec} (Remisión: <b>{f}</b>)</li>"
+        
+        # Calcular total de piezas de esta remisión específica
+        t_asoc = r.get('Tarimas_Asociadas', [])
+        if isinstance(t_asoc, str):
+            try:
+                t_asoc_list = ast.literal_eval(t_asoc)
+            except Exception:
+                t_asoc_list = [t_asoc]
+        else:
+            t_asoc_list = t_asoc if isinstance(t_asoc, list) else []
+            
+        df_rem_det = df_det[df_det['ID_Tarima'].isin(t_asoc_list)]
+        total_pzs = int(df_rem_det['Cantidad'].sum())
+        
+        headers_text += f"<li><b>PLANTA METALES DIAGONAL / {rec}</b> ({dir_rec}) &mdash; Fecha de Salida: {fec} (Remisión: <b>{f}</b> &mdash; <span style='color: #0056b3; font-weight: bold;'>{total_pzs} pzs</span>)</li>"
 
     html = f"""
     <html>
