@@ -5190,7 +5190,7 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                                 
                         row_data = {
                             "SKU": sku,
-                            "Imagen": img_base64,
+                            "Imagen": img_base64 if img_base64 else "",
                             "Total Requerido": total_req,
                             "Total Entregado": total_rem,
                             "Total Almacén": total_stk,
@@ -5227,7 +5227,7 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                     # Construir fila resumen "📈 % AVANCE"
                     summary_row = {
                         "SKU": "📈 % AVANCE",
-                        "Imagen": None,
+                        "Imagen": "",
                         "Total Requerido": f"{((tot_ent + tot_stk) / tot_req * 100):.1f}%" if tot_req > 0 else "0.0%",
                         "Total Entregado": tot_ent,
                         "Total Almacén": tot_stk,
