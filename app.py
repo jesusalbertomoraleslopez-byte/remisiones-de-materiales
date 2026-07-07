@@ -5386,27 +5386,6 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                         total_cubierto = total_rem + total_stk
                         total_faltante = max(0, total_req - total_cubierto)
                         
-                        # Buscar imagen
-                        img_path = None
-                        import glob
-                        matching_local = glob.glob(f"imagenes_articulos/{sku}*.*")
-                        if matching_local:
-                            img_path = matching_local[0]
-                            
-                        # Convertir a base64 data URI para permitir visualización en navegadores / Streamlit Cloud
-                        img_base64 = None
-                        if img_path and os.path.exists(img_path):
-                            try:
-                                import base64
-                                with open(img_path, "rb") as f_img:
-                                    encoded_img = base64.b64encode(f_img.read()).decode()
-                                    ext_img = os.path.splitext(img_path)[1].lower().replace(".", "")
-                                    if ext_img not in ["png", "jpg", "jpeg", "webp", "gif"]:
-                                        ext_img = "png"
-                                    img_base64 = f"data:image/{ext_img};base64,{encoded_img}"
-                            except Exception:
-                                pass
-                                
                         # Obtener detalle de tarimas para este SKU
                         tarimas_text_app = "-"
                         if not df_prod_po.empty:
@@ -5424,7 +5403,6 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                                 
                         row_data = {
                             "SKU": sku,
-                            "Imagen": img_base64 if img_base64 else "",
                             "Detalle Tarimas": tarimas_text_app,
                             "Total Requerido": total_req,
                             "Total Entregado": total_rem,
@@ -5462,7 +5440,6 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                     # Construir fila resumen "📈 % AVANCE"
                     summary_row = {
                         "SKU": "📈 % AVANCE",
-                        "Imagen": "",
                         "Detalle Tarimas": "",
                         "Total Requerido": f"{((tot_ent + tot_stk) / tot_req * 100):.1f}%" if tot_req > 0 else "0.0%",
                         "Total Entregado": tot_ent,
@@ -5562,11 +5539,6 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                             "SKU": st.column_config.TextColumn(
                                 "SKU",
                                 width=120
-                            ),
-                            "Imagen": st.column_config.ImageColumn(
-                                "Imagen",
-                                help="Miniatura de la pieza",
-                                width=80
                             ),
                             "Detalle Tarimas": st.column_config.TextColumn(
                                 "Detalle Tarimas",
