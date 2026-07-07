@@ -811,6 +811,7 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
             <thead>
                 <tr>
                     <th>SKU</th>
+                    <th>Imagen</th>
                     <th class="metric-req">Total Requerido</th>
                     <th class="metric-ent">Total Entregado</th>
                     <th class="metric-stk">Total Almacén</th>
@@ -835,6 +836,26 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
         row_class = ' class="summary-row"' if is_summary else ""
         html += f"<tr{row_class}>"
         html += f"<td><b>{sku}</b></td>"
+        
+        # Imagen
+        if is_summary:
+            html += "<td></td>"
+        else:
+            # Buscar imagen local
+            import glob
+            import os
+            img_filename = None
+            matching_local = glob.glob(f"imagenes_articulos/{sku}*.*")
+            if matching_local:
+                img_filename = os.path.basename(matching_local[0])
+                
+            img_tag = ""
+            if img_filename:
+                import urllib.parse
+                img_filename_encoded = urllib.parse.quote(img_filename)
+                img_url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/imagenes_articulos/{img_filename_encoded}"
+                img_tag = f'<img src="{img_url}" width="50" height="50" style="border-radius:4px; border:1px solid #ccc;">'
+            html += f"<td>{img_tag}</td>"
         
         # Columnas de totales
         if is_summary:
