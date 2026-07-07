@@ -251,6 +251,24 @@ def clean_project_val(val):
     # De lo contrario, dejarlo como está (ej. LC8, RECHASO)
     return val_str
 
+def clean_po_val(val):
+    if pd.isna(val):
+        return ""
+    val_str = str(val).strip()
+    if not val_str:
+        return ""
+    
+    # Extraer todos los dígitos de la cadena
+    import re
+    digits = "".join(re.findall(r'\d', val_str))
+    
+    # Si tenemos exactamente 8 dígitos, formatear como PO XXXX-XXXX
+    if len(digits) == 8:
+        return f"PO {digits[:4]}-{digits[4:]}"
+        
+    # De lo contrario, dejarlo limpio pero como está
+    return val_str
+
 def cargar_excel_desde_github(file_name):
     """Carga el archivo Excel: primero busca en disco local (modo offline), luego en GitHub API."""
     import os
@@ -2648,7 +2666,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
 
                         items = df_ex[df_ex['Tarima'] == t_orig]
                         for _, item in items.iterrows():
-                            st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas) + 1, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": item['PO'], "Proyecto": clean_project_val(item['Proyecto']), "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']}])], ignore_index=True)
+                            st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas) + 1, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": clean_po_val(item['PO']), "Proyecto": clean_project_val(item['Proyecto']), "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']}])], ignore_index=True)
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
                     # Eliminamos el archivo de override si existe, ya que ha sido consumido
@@ -4897,7 +4915,7 @@ elif opcion_menu == "🕰️ Carga Histórica":
                                 "ID_Detalle": id_det,
                                 "ID_Tarima": mapa_tpm[t_excel],
                                 "SKU": row['Producto/SKU'],
-                                "PO": row['PO'],
+                                "PO": clean_po_val(row['PO']),
                                 "Proyecto": clean_project_val(row['Proyecto']),
                                 "Parcialidad": row['Parcialidad'],
                                 "Descripcion": row['Descripcion'],
@@ -5077,7 +5095,8 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                         else:
                             # 1. Procesar Cabecera
                             row_gen = df_gen.iloc[0].to_dict()
-                            po_num = str(row_gen.get("PO", "")).strip().upper()
+                            po_num = clean_po_val(row_gen.get("PO", ""))
+                            row_gen["PO"] = po_num
                             if "Proyecto" in row_gen:
                                 row_gen["Proyecto"] = clean_project_val(row_gen["Proyecto"])
                             
