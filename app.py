@@ -5050,263 +5050,262 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                 
                 if df_req_po.empty:
                     st.warning("⚠️ Seleccione al menos una parcialidad en el filtro superior para mostrar los datos de avance.")
-                    st.stop()
+                else:
+                    # Agrupar por SKU y Fecha de Entrega por seguridad
+                    df_req_grouped = df_req_po.groupby(['PO', 'SKU', 'Fecha_Entrega', 'Parcialidad'], as_index=False)['Cantidad_Requerida'].sum()
                     
-                # Agrupar por SKU y Fecha de Entrega por seguridad
-                df_req_grouped = df_req_po.groupby(['PO', 'SKU', 'Fecha_Entrega', 'Parcialidad'], as_index=False)['Cantidad_Requerida'].sum()
-                
-                # Fechas de entrega únicas ordenadas cronológicamente
-                fechas_columnas = sorted(df_req_grouped['Fecha_Entrega'].unique().tolist())
-                unique_skus = df_req_grouped['SKU'].unique().tolist()
-                
-                # Obtener estatus de tarimas
-                mapa_tarimas_status = {}
-                if not st.session_state.BD_Tarimas.empty:
-                    for _, t_row in st.session_state.BD_Tarimas.iterrows():
-                        mapa_tarimas_status[str(t_row['ID_Tarima']).strip().upper()] = str(t_row['Estatus']).strip().upper()
-                
-                # Obtener detalles de producción para esta PO
-                df_prod_po = pd.DataFrame()
-                if not st.session_state.BD_Detalle_Tarimas.empty:
-                    df_prod = st.session_state.BD_Detalle_Tarimas.copy()
+                    # Fechas de entrega únicas ordenadas cronológicamente
+                    fechas_columnas = sorted(df_req_grouped['Fecha_Entrega'].unique().tolist())
+                    unique_skus = df_req_grouped['SKU'].unique().tolist()
                     
-                    # Normalización automática inteligente para sugerencias
-                    import re
-                    def clean_po(val):
-                        if not val or pd.isna(val): return ""
-                        val_str = str(val).strip().upper()
-                        # Quitar prefijo PO: o PO- y caracteres no alfanuméricos
-                        val_str = re.sub(r'^PO\s*[-:]*\s*', '', val_str)
-                        val_str = re.sub(r'[^A-Z0-9]', '', val_str)
-                        return val_str
+                    # Obtener estatus de tarimas
+                    mapa_tarimas_status = {}
+                    if not st.session_state.BD_Tarimas.empty:
+                        for _, t_row in st.session_state.BD_Tarimas.iterrows():
+                            mapa_tarimas_status[str(t_row['ID_Tarima']).strip().upper()] = str(t_row['Estatus']).strip().upper()
                     
-                    po_target = clean_po(po_seleccionada)
-                    
-                    # Obtener listado de PO reales registradas en las tarimas de producción
-                    pos_reales_produccion = sorted(df_prod['PO'].astype(str).str.strip().unique().tolist())
-                    
-                    # Buscar coincidencias sugeridas (por ejemplo, "PO-2602-0711" coincide con "26020711")
-                    sugeridos_coincidencia = [
-                        p for p in pos_reales_produccion
-                        if clean_po(p) == po_target or po_target in clean_po(p) or clean_po(p) in po_target
-                    ]
-                    
-                    # Mostrar la interfaz de mapeo interactivo para el usuario
-                    st.write("---")
-                    st.markdown("🔗 **Mapeo de Coincidencia de PO en Producción (Tarimas)**")
-                    st.info("💡 **Sugerencia Automática:** El sistema ha preseleccionado los valores que parecen corresponder a esta PO. Puede agregar o quitar etiquetas manualmente según sea necesario.")
-                    
-                    pos_mapeadas = st.multiselect(
-                        "Etiquetas de PO físicas detectadas en producción:",
-                        options=pos_reales_produccion,
-                        default=sugeridos_coincidencia,
-                        key=f"mapeo_po_multiselect_{po_seleccionada}"
-                    )
-                    
-                    # Filtrar los detalles de producción con base en la selección del usuario
-                    df_prod_po = df_prod[df_prod['PO'].astype(str).str.strip().isin(pos_mapeadas)].copy()
-                
-                if not df_prod_po.empty:
-                    df_prod_po['ID_Tarima_Clean'] = df_prod_po['ID_Tarima'].astype(str).str.strip().str.upper()
-                    df_prod_po['Estatus'] = df_prod_po['ID_Tarima_Clean'].map(mapa_tarimas_status).fillna("DISPONIBLE")
-                    df_prod_po['Cantidad'] = pd.to_numeric(df_prod_po['Cantidad'], errors='coerce').fillna(0)
-                    df_prod_po['Remesada'] = df_prod_po.apply(lambda r: r['Cantidad'] if r['Estatus'] == 'REMESADA' else 0, axis=1)
-                    df_prod_po['Stock'] = df_prod_po.apply(lambda r: r['Cantidad'] if r['Estatus'] != 'REMESADA' else 0, axis=1)
-                
-                # Construir matriz de dispersión FIFO
-                matrix_rows = []
-                import ast
-                
-                # Inicializar totalizadores por columna de fecha
-                col_req_totals = {d: 0 for d in fechas_columnas}
-                col_ent_totals = {d: 0 for d in fechas_columnas}
-                col_stk_totals = {d: 0 for d in fechas_columnas}
-                
-                for sku in unique_skus:
-                    sku_desc = "Sin Registro en Catálogo"
-                    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                        match_art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku]
-                        if not match_art.empty:
-                            sku_desc = match_art.iloc[0]['Nombre']
-                            
-                    # Requerimientos para este SKU específico
-                    sku_reqs = df_req_grouped[df_req_grouped['SKU'] == sku].sort_values(by='Fecha_Entrega')
-                    total_req = int(sku_reqs['Cantidad_Requerida'].sum())
-                    
-                    # Consolidado producido real
-                    total_rem = 0
-                    total_stk = 0
-                    if not df_prod_po.empty:
-                        match_prod = df_prod_po[df_prod_po['SKU'] == sku]
-                        total_rem = int(match_prod['Remesada'].sum())
-                        total_stk = int(match_prod['Stock'].sum())
-                    
-                    # --- ALGORITMO FIFO ---
-                    # Pasada 1: Asignar Remesado (Entregado)
-                    rem_restante = total_rem
-                    allocated_rem = {}
-                    for _, req_row in sku_reqs.iterrows():
-                        d = req_row['Fecha_Entrega']
-                        req_qty = req_row['Cantidad_Requerida']
-                        alloc = min(req_qty, rem_restante)
-                        allocated_rem[d] = alloc
-                        rem_restante -= alloc
+                    # Obtener detalles de producción para esta PO
+                    df_prod_po = pd.DataFrame()
+                    if not st.session_state.BD_Detalle_Tarimas.empty:
+                        df_prod = st.session_state.BD_Detalle_Tarimas.copy()
                         
-                    # Pasada 2: Asignar Stock (Disponible en Almacén)
-                    stk_restante = total_stk
-                    allocated_stk = {}
-                    for _, req_row in sku_reqs.iterrows():
-                        d = req_row['Fecha_Entrega']
-                        req_qty = req_row['Cantidad_Requerida']
-                        already_alloc = allocated_rem.get(d, 0)
-                        needed = req_qty - already_alloc
-                        alloc = min(needed, stk_restante)
-                        allocated_stk[d] = alloc
-                        stk_restante -= alloc
+                        # Normalización automática inteligente para sugerencias
+                        import re
+                        def clean_po(val):
+                            if not val or pd.isna(val): return ""
+                            val_str = str(val).strip().upper()
+                            # Quitar prefijo PO: o PO- y caracteres no alfanuméricos
+                            val_str = re.sub(r'^PO\s*[-:]*\s*', '', val_str)
+                            val_str = re.sub(r'[^A-Z0-9]', '', val_str)
+                            return val_str
                         
-                    # Construir renglón
-                    total_cubierto = total_rem + total_stk
-                    total_faltante = max(0, total_req - total_cubierto)
-                    
-                    # Buscar imagen
-                    img_path = None
-                    import glob
-                    matching_local = glob.glob(f"imagenes_articulos/{sku}*.*")
-                    if matching_local:
-                        img_path = matching_local[0]
+                        po_target = clean_po(po_seleccionada)
                         
-                    row_data = {
-                        "SKU": sku,
-                        "Imagen": img_path,
-                        "Total Requerido": total_req,
-                        "Total Entregado": total_rem,
-                        "Total Almacén": total_stk,
-                        "Total Faltante": total_faltante
-                    }
-                    
-                    # Columnas dinámicas de Fechas
-                    for d in fechas_columnas:
-                        match_date = sku_reqs[sku_reqs['Fecha_Entrega'] == d]
-                        if match_date.empty:
-                            row_data[d] = "-"
-                        else:
-                            req_val = int(match_date.iloc[0]['Cantidad_Requerida'])
-                            ent_val = int(allocated_rem.get(d, 0))
-                            stk_val = int(allocated_stk.get(d, 0))
-                            falt_val = max(0, req_val - (ent_val + stk_val))
-                            
-                            status_sym = "✅" if falt_val == 0 else "⚠️"
-                            row_data[d] = f"R:{req_val} | E:{ent_val} | S:{stk_val} | F:{falt_val} {status_sym}"
-                            
-                            # Acumular para totales globales por columna
-                            col_req_totals[d] += req_val
-                            col_ent_totals[d] += ent_val
-                            col_stk_totals[d] += stk_val
-                            
-                    matrix_rows.append(row_data)
-                    
-                # Totales globales a nivel de métricas
-                tot_req = sum(r["Total Requerido"] for r in matrix_rows)
-                tot_ent = sum(r["Total Entregado"] for r in matrix_rows)
-                tot_stk = sum(r["Total Almacén"] for r in matrix_rows)
-                tot_fal = sum(r["Total Faltante"] for r in matrix_rows)
-                
-                # Construir fila resumen "📈 % AVANCE"
-                summary_row = {
-                    "SKU": "📈 % AVANCE",
-                    "Imagen": None,
-                    "Total Requerido": f"{((tot_ent + tot_stk) / tot_req * 100):.1f}%" if tot_req > 0 else "0.0%",
-                    "Total Entregado": tot_ent,
-                    "Total Almacén": tot_stk,
-                    "Total Faltante": tot_fal
-                }
-                
-                # Para cada fecha, calculamos el porcentaje de avance global de esa fecha
-                for d in fechas_columnas:
-                    r_tot = col_req_totals[d]
-                    e_tot = col_ent_totals[d]
-                    s_tot = col_stk_totals[d]
-                    
-                    if r_tot > 0:
-                        pct = (e_tot + s_tot) / r_tot
-                        pct_val = min(100.0, pct * 100)
+                        # Obtener listado de PO reales registradas en las tarimas de producción
+                        pos_reales_produccion = sorted(df_prod['PO'].astype(str).str.strip().unique().tolist())
                         
-                        # Dibujar barra de progreso de texto (10 bloques)
-                        num_blocks = int(round(pct_val / 10))
-                        bar = "█" * num_blocks + "░" * (10 - num_blocks)
-                        sym = "✅" if pct_val >= 100 else "⚠️"
-                        summary_row[d] = f"{bar} {pct_val:.1f}% {sym}"
-                    else:
-                        summary_row[d] = "-"
+                        # Buscar coincidencias sugeridas (por ejemplo, "PO-2602-0711" coincide con "26020711")
+                        sugeridos_coincidencia = [
+                            p for p in pos_reales_produccion
+                            if clean_po(p) == po_target or po_target in clean_po(p) or clean_po(p) in po_target
+                        ]
                         
-                # Añadir fila resumen a los datos de la matriz
-                matrix_rows.append(summary_row)
-                
-                df_matrix = pd.DataFrame(matrix_rows)
-                
-                st.write("")
-                col_met1, col_met2, col_met3, col_met4 = st.columns(4)
-                with col_met1:
-                    st.metric("Total Requerido", f"{tot_req:,} PZS")
-                with col_met2:
-                    st.metric("Total Entregado (Remesado)", f"{tot_ent:,} PZS")
-                with col_met3:
-                    st.metric("Stock en Almacén", f"{tot_stk:,} PZS")
-                with col_met4:
-                    st.metric("Pendiente (Faltante)", f"{tot_fal:,} PZS")
-                    
-                # Aplicar estilos CSS solicitados a columnas específicas y centrar alineación
-                def style_matrix(df):
-                    styler = df.style
-                    # Centrar alineación de todo el texto
-                    styler = styler.set_properties(**{"text-align": "center"})
-                    # "Total Requerido" Fondo Negro, Letra Blanca
-                    styler = styler.set_properties(
-                        subset=["Total Requerido"],
-                        **{"background-color": "#000000", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center"}
-                    )
-                    # "Total Entregado" Fondo Verde, Letra Blanca
-                    styler = styler.set_properties(
-                        subset=["Total Entregado"],
-                        **{"background-color": "#2E7D32", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center"}
-                    )
-                    # "Total Almacén" Fondo Amarillo, Letra Negra
-                    styler = styler.set_properties(
-                        subset=["Total Almacén"],
-                        **{"background-color": "#FBC02D", "color": "#000000", "font-weight": "bold", "text-align": "center"}
-                    )
-                    # "Total Faltante" Fondo Rojo, Letra Blanca
-                    styler = styler.set_properties(
-                        subset=["Total Faltante"],
-                        **{"background-color": "#C62828", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center"}
-                    )
-                    return styler
-                
-                styled_matrix_df = style_matrix(df_matrix)
-                st.dataframe(
-                    styled_matrix_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Imagen": st.column_config.ImageColumn(
-                            "Imagen",
-                            help="Miniatura de la pieza",
-                            width="small"
+                        # Mostrar la interfaz de mapeo interactivo para el usuario
+                        st.write("---")
+                        st.markdown("🔗 **Mapeo de Coincidencia de PO en Producción (Tarimas)**")
+                        st.info("💡 **Sugerencia Automática:** El sistema ha preseleccionado los valores que parecen corresponder a esta PO. Puede agregar o quitar etiquetas manualmente según sea necesario.")
+                        
+                        pos_mapeadas = st.multiselect(
+                            "Etiquetas de PO físicas detectadas en producción:",
+                            options=pos_reales_produccion,
+                            default=sugeridos_coincidencia,
+                            key=f"mapeo_po_multiselect_{po_seleccionada}"
                         )
+                        
+                        # Filtrar los detalles de producción con base en la selección del usuario
+                        df_prod_po = df_prod[df_prod['PO'].astype(str).str.strip().isin(pos_mapeadas)].copy()
+                    
+                    if not df_prod_po.empty:
+                        df_prod_po['ID_Tarima_Clean'] = df_prod_po['ID_Tarima'].astype(str).str.strip().str.upper()
+                        df_prod_po['Estatus'] = df_prod_po['ID_Tarima_Clean'].map(mapa_tarimas_status).fillna("DISPONIBLE")
+                        df_prod_po['Cantidad'] = pd.to_numeric(df_prod_po['Cantidad'], errors='coerce').fillna(0)
+                        df_prod_po['Remesada'] = df_prod_po.apply(lambda r: r['Cantidad'] if r['Estatus'] == 'REMESADA' else 0, axis=1)
+                        df_prod_po['Stock'] = df_prod_po.apply(lambda r: r['Cantidad'] if r['Estatus'] != 'REMESADA' else 0, axis=1)
+                    
+                    # Construir matriz de dispersión FIFO
+                    matrix_rows = []
+                    import ast
+                    
+                    # Inicializar totalizadores por columna de fecha
+                    col_req_totals = {d: 0 for d in fechas_columnas}
+                    col_ent_totals = {d: 0 for d in fechas_columnas}
+                    col_stk_totals = {d: 0 for d in fechas_columnas}
+                    
+                    for sku in unique_skus:
+                        sku_desc = "Sin Registro en Catálogo"
+                        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                            match_art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku]
+                            if not match_art.empty:
+                                sku_desc = match_art.iloc[0]['Nombre']
+                                
+                        # Requerimientos para este SKU específico
+                        sku_reqs = df_req_grouped[df_req_grouped['SKU'] == sku].sort_values(by='Fecha_Entrega')
+                        total_req = int(sku_reqs['Cantidad_Requerida'].sum())
+                        
+                        # Consolidado producido real
+                        total_rem = 0
+                        total_stk = 0
+                        if not df_prod_po.empty:
+                            match_prod = df_prod_po[df_prod_po['SKU'] == sku]
+                            total_rem = int(match_prod['Remesada'].sum())
+                            total_stk = int(match_prod['Stock'].sum())
+                        
+                        # --- ALGORITMO FIFO ---
+                        # Pasada 1: Asignar Remesado (Entregado)
+                        rem_restante = total_rem
+                        allocated_rem = {}
+                        for _, req_row in sku_reqs.iterrows():
+                            d = req_row['Fecha_Entrega']
+                            req_qty = req_row['Cantidad_Requerida']
+                            alloc = min(req_qty, rem_restante)
+                            allocated_rem[d] = alloc
+                            rem_restante -= alloc
+                            
+                        # Pasada 2: Asignar Stock (Disponible en Almacén)
+                        stk_restante = total_stk
+                        allocated_stk = {}
+                        for _, req_row in sku_reqs.iterrows():
+                            d = req_row['Fecha_Entrega']
+                            req_qty = req_row['Cantidad_Requerida']
+                            already_alloc = allocated_rem.get(d, 0)
+                            needed = req_qty - already_alloc
+                            alloc = min(needed, stk_restante)
+                            allocated_stk[d] = alloc
+                            stk_restante -= alloc
+                            
+                        # Construir renglón
+                        total_cubierto = total_rem + total_stk
+                        total_faltante = max(0, total_req - total_cubierto)
+                        
+                        # Buscar imagen
+                        img_path = None
+                        import glob
+                        matching_local = glob.glob(f"imagenes_articulos/{sku}*.*")
+                        if matching_local:
+                            img_path = matching_local[0]
+                            
+                        row_data = {
+                            "SKU": sku,
+                            "Imagen": img_path,
+                            "Total Requerido": total_req,
+                            "Total Entregado": total_rem,
+                            "Total Almacén": total_stk,
+                            "Total Faltante": total_faltante
+                        }
+                        
+                        # Columnas dinámicas de Fechas
+                        for d in fechas_columnas:
+                            match_date = sku_reqs[sku_reqs['Fecha_Entrega'] == d]
+                            if match_date.empty:
+                                row_data[d] = "-"
+                            else:
+                                req_val = int(match_date.iloc[0]['Cantidad_Requerida'])
+                                ent_val = int(allocated_rem.get(d, 0))
+                                stk_val = int(allocated_stk.get(d, 0))
+                                falt_val = max(0, req_val - (ent_val + stk_val))
+                                
+                                status_sym = "✅" if falt_val == 0 else "⚠️"
+                                row_data[d] = f"R:{req_val} | E:{ent_val} | S:{stk_val} | F:{falt_val} {status_sym}"
+                                
+                                # Acumular para totales globales por columna
+                                col_req_totals[d] += req_val
+                                col_ent_totals[d] += ent_val
+                                col_stk_totals[d] += stk_val
+                                
+                        matrix_rows.append(row_data)
+                        
+                    # Totales globales a nivel de métricas
+                    tot_req = sum(r["Total Requerido"] for r in matrix_rows)
+                    tot_ent = sum(r["Total Entregado"] for r in matrix_rows)
+                    tot_stk = sum(r["Total Almacén"] for r in matrix_rows)
+                    tot_fal = sum(r["Total Faltante"] for r in matrix_rows)
+                    
+                    # Construir fila resumen "📈 % AVANCE"
+                    summary_row = {
+                        "SKU": "📈 % AVANCE",
+                        "Imagen": None,
+                        "Total Requerido": f"{((tot_ent + tot_stk) / tot_req * 100):.1f}%" if tot_req > 0 else "0.0%",
+                        "Total Entregado": tot_ent,
+                        "Total Almacén": tot_stk,
+                        "Total Faltante": tot_fal
                     }
-                )
-                
-                with st.expander("📖 Glosario de Acrónimos de la Matriz (R | E | S | F)", expanded=True):
-                    st.markdown("""
-                    * **R (Requerido):** El total de piezas solicitadas originalmente en la Orden de Compra (PO) para esa partida/SKU.
-                    * **E (Entregado):** Las piezas que ya han sido embarcadas y despachadas (remesadas) formalmente al cliente/destino.
-                    * **S (Stock):** Las piezas que ya han sido fabricadas y se encuentran físicamente listas y disponibles en el patio o almacén de Metales (pendientes de ser enviadas).
-                    * **F (Faltante):** La cantidad de piezas que están pendientes de fabricar para completar el requerimiento de la PO.
-                    * **✅ / ⚠️**: Indica si el requerimiento de la fecha está cubierto al 100% (`F: 0`) o si aún tiene piezas pendientes de fabricar (`F > 0`).
-                    """)
-                
-                st.session_state.last_matrix_df = df_matrix
-                st.session_state.last_matrix_po = po_seleccionada
+                    
+                    # Para cada fecha, calculamos el porcentaje de avance global de esa fecha
+                    for d in fechas_columnas:
+                        r_tot = col_req_totals[d]
+                        e_tot = col_ent_totals[d]
+                        s_tot = col_stk_totals[d]
+                        
+                        if r_tot > 0:
+                            pct = (e_tot + s_tot) / r_tot
+                            pct_val = min(100.0, pct * 100)
+                            
+                            # Dibujar barra de progreso de texto (10 bloques)
+                            num_blocks = int(round(pct_val / 10))
+                            bar = "█" * num_blocks + "░" * (10 - num_blocks)
+                            sym = "✅" if pct_val >= 100 else "⚠️"
+                            summary_row[d] = f"{bar} {pct_val:.1f}% {sym}"
+                        else:
+                            summary_row[d] = "-"
+                            
+                    # Añadir fila resumen a los datos de la matriz
+                    matrix_rows.append(summary_row)
+                    
+                    df_matrix = pd.DataFrame(matrix_rows)
+                    
+                    st.write("")
+                    col_met1, col_met2, col_met3, col_met4 = st.columns(4)
+                    with col_met1:
+                        st.metric("Total Requerido", f"{tot_req:,} PZS")
+                    with col_met2:
+                        st.metric("Total Entregado (Remesado)", f"{tot_ent:,} PZS")
+                    with col_met3:
+                        st.metric("Stock en Almacén", f"{tot_stk:,} PZS")
+                    with col_met4:
+                        st.metric("Pendiente (Faltante)", f"{tot_fal:,} PZS")
+                        
+                    # Aplicar estilos CSS solicitados a columnas específicas y centrar alineación
+                    def style_matrix(df):
+                        styler = df.style
+                        # Centrar alineación de todo el texto
+                        styler = styler.set_properties(**{"text-align": "center"})
+                        # "Total Requerido" Fondo Negro, Letra Blanca
+                        styler = styler.set_properties(
+                            subset=["Total Requerido"],
+                            **{"background-color": "#000000", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center"}
+                        )
+                        # "Total Entregado" Fondo Verde, Letra Blanca
+                        styler = styler.set_properties(
+                            subset=["Total Entregado"],
+                            **{"background-color": "#2E7D32", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center"}
+                        )
+                        # "Total Almacén" Fondo Amarillo, Letra Negra
+                        styler = styler.set_properties(
+                            subset=["Total Almacén"],
+                            **{"background-color": "#FBC02D", "color": "#000000", "font-weight": "bold", "text-align": "center"}
+                        )
+                        # "Total Faltante" Fondo Rojo, Letra Blanca
+                        styler = styler.set_properties(
+                            subset=["Total Faltante"],
+                            **{"background-color": "#C62828", "color": "#FFFFFF", "font-weight": "bold", "text-align": "center"}
+                        )
+                        return styler
+                    
+                    styled_matrix_df = style_matrix(df_matrix)
+                    st.dataframe(
+                        styled_matrix_df,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Imagen": st.column_config.ImageColumn(
+                                "Imagen",
+                                help="Miniatura de la pieza",
+                                width="small"
+                            )
+                        }
+                    )
+                    
+                    with st.expander("📖 Glosario de Acrónimos de la Matriz (R | E | S | F)", expanded=True):
+                        st.markdown("""
+                        * **R (Requerido):** El total de piezas solicitadas originalmente en la Orden de Compra (PO) para esa partida/SKU.
+                        * **E (Entregado):** Las piezas que ya han sido embarcadas y despachadas (remesadas) formalmente al cliente/destino.
+                        * **S (Stock):** Las piezas que ya han sido fabricadas y se encuentran físicamente listas y disponibles en el patio o almacén de Metales (pendientes de ser enviadas).
+                        * **F (Faltante):** La cantidad de piezas que están pendientes de fabricar para completar el requerimiento de la PO.
+                        * **✅ / ⚠️**: Indica si el requerimiento de la fecha está cubierto al 100% (`F: 0`) o si aún tiene piezas pendientes de fabricar (`F > 0`).
+                        """)
+                    
+                    st.session_state.last_matrix_df = df_matrix
+                    st.session_state.last_matrix_po = po_seleccionada
 
     with tab_dl:
         st.write("")
