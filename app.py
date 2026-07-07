@@ -4768,6 +4768,39 @@ elif opcion_menu == "📉 Análisis de Faltantes":
         with pd.ExcelWriter(buf_t, engine='openpyxl') as writer_t:
             df_template_gen.to_excel(writer_t, sheet_name="Datos_Generales", index=False)
             df_template_det.to_excel(writer_t, sheet_name="Detalle_Entregas", index=False)
+            
+            from openpyxl.styles import Font, PatternFill, Alignment
+            workbook_t = writer_t.book
+            
+            header_fill = PatternFill(start_color="EC2024", end_color="EC2024", fill_type="solid")
+            header_font = Font(name="Arial", color="FFFFFF", bold=True, size=11)
+            center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            
+            # Formatear Datos_Generales
+            sheet_gen = workbook_t["Datos_Generales"]
+            for cell in sheet_gen[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = center_alignment
+            
+            # Ancho de columnas para Datos_Generales
+            for col in sheet_gen.columns:
+                max_len = max(len(str(cell.value or '')) for cell in col)
+                col_letter = col[0].column_letter
+                sheet_gen.column_dimensions[col_letter].width = max(max_len + 5, 22)
+                
+            # Formatear Detalle_Entregas
+            sheet_det = workbook_t["Detalle_Entregas"]
+            for cell in sheet_det[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = center_alignment
+                
+            # Ancho de columnas para Detalle_Entregas
+            for col in sheet_det.columns:
+                max_len = max(len(str(cell.value or '')) for cell in col)
+                col_letter = col[0].column_letter
+                sheet_det.column_dimensions[col_letter].width = max(max_len + 5, 18)
         
         st.download_button(
             label="📥 Descargar Plantilla Oficial de Carga (2 Hojas)",
