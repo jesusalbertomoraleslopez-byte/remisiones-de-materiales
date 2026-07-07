@@ -804,8 +804,9 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
         <table class="matrix-table">
             <thead>
                 <tr>
-                    <th style="background-color: #EC2024; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 110px;">SKU</th>
+                    <th style="background-color: #EC2024; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 120px;">SKU</th>
                     <th style="background-color: #EC2024; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 100px;">Imagen</th>
+                    <th style="background-color: #EC2024; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 180px;">Tarimas / Detalle</th>
                     <th style="background-color: #000000; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 85px;">Total Requerido</th>
                     <th style="background-color: #2E7D32; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 85px;">Total Entregado</th>
                     <th style="background-color: #FBC02D; color: #000000; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 85px;">Total Almacén</th>
@@ -829,7 +830,7 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
         
         row_class = ' class="summary-row"' if is_summary else ""
         html += f"<tr{row_class}>"
-        html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; font-weight: bold;">{sku}</td>'
+        html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; font-weight: bold; font-size: 18px;">{sku}</td>'
         
         # Imagen
         if is_summary:
@@ -850,6 +851,14 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
                 img_url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/imagenes_articulos/{img_filename_encoded}"
                 img_tag = f'<img src="{img_url}" width="80" height="80" style="border-radius: 4px; border: 1px solid #ccc; max-width: 80px; height: auto; display: block; margin: 0 auto;">'
             html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{img_tag}</td>'
+            
+        # Detalle Tarimas
+        if is_summary:
+            html += '<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;"></td>'
+        else:
+            val_tarimas = row.get("Detalle Tarimas", "-")
+            val_tarimas_html = str(val_tarimas).replace("\n", "<br>")
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: left; font-size: 12px; line-height: 1.3;">{val_tarimas_html}</td>'
         
         # Columnas de totales
         if is_summary:
@@ -5311,9 +5320,25 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                             except Exception:
                                 pass
                                 
+                        # Obtener detalle de tarimas para este SKU
+                        tarimas_text_app = "-"
+                        if not df_prod_po.empty:
+                            sku_tarimas = df_prod_po[df_prod_po['SKU'] == sku]
+                            tarimas_info_list = []
+                            for _, t_row in sku_tarimas.iterrows():
+                                t_id = str(t_row['ID_Tarima']).strip()
+                                t_qty = int(t_row['Cantidad'])
+                                t_status = str(t_row['Estatus']).strip().upper()
+                                status_emoji = "✅" if t_status == "REMESADA" else "📦"
+                                tarimas_info_list.append(f"{status_emoji} {t_id} ({t_qty} pzs)")
+                            
+                            if tarimas_info_list:
+                                tarimas_text_app = "\n".join(tarimas_info_list)
+                                
                         row_data = {
                             "SKU": sku,
                             "Imagen": img_base64 if img_base64 else "",
+                            "Detalle Tarimas": tarimas_text_app,
                             "Total Requerido": total_req,
                             "Total Entregado": total_rem,
                             "Total Almacén": total_stk,
@@ -5351,6 +5376,7 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                     summary_row = {
                         "SKU": "📈 % AVANCE",
                         "Imagen": "",
+                        "Detalle Tarimas": "",
                         "Total Requerido": f"{((tot_ent + tot_stk) / tot_req * 100):.1f}%" if tot_req > 0 else "0.0%",
                         "Total Entregado": tot_ent,
                         "Total Almacén": tot_stk,
@@ -5394,8 +5420,23 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                     # Aplicar estilos CSS solicitados a columnas específicas y centrar alineación
                     def style_matrix(df):
                         styler = df.style
-                        # Centrar alineación de todo el texto
+                        # Centrar alineación de todo el texto por defecto
                         styler = styler.set_properties(**{"text-align": "center"})
+                        
+                        # "SKU" Negrita y más grande (doble/grande)
+                        if "SKU" in df.columns:
+                            styler = styler.set_properties(
+                                subset=["SKU"],
+                                **{"font-weight": "bold", "text-align": "center", "font-size": "18px"}
+                            )
+                            
+                        # "Detalle Tarimas" alineado a la izquierda y tamaño cómodo
+                        if "Detalle Tarimas" in df.columns:
+                            styler = styler.set_properties(
+                                subset=["Detalle Tarimas"],
+                                **{"text-align": "left", "font-size": "13px"}
+                            )
+                            
                         # "Total Requerido" Fondo Negro, Letra Blanca
                         styler = styler.set_properties(
                             subset=["Total Requerido"],
@@ -5431,10 +5472,19 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                         use_container_width=True,
                         hide_index=True,
                         column_config={
+                            "SKU": st.column_config.TextColumn(
+                                "SKU",
+                                width=120
+                            ),
                             "Imagen": st.column_config.ImageColumn(
                                 "Imagen",
                                 help="Miniatura de la pieza",
                                 width=80
+                            ),
+                            "Detalle Tarimas": st.column_config.TextColumn(
+                                "Detalle Tarimas",
+                                help="Detalle de tarimas asociadas y sus cantidades/estatus",
+                                width=200
                             ),
                             "Total Requerido": st.column_config.TextColumn(
                                 "Total Requerido",
