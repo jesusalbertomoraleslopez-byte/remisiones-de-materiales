@@ -768,13 +768,7 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
             .header-table {{ border-collapse: collapse; margin-bottom: 20px; width: 100%; max-width: 600px; }}
             .header-table td {{ padding: 6px 12px; border: 1px solid #e0e0e0; }}
             .header-table td.label {{ font-weight: bold; background-color: #f5f5f5; width: 150px; }}
-            .matrix-table {{ border-collapse: collapse; width: 100%; margin-top: 15px; font-size: 13px; }}
-            .matrix-table th {{ background-color: #EC2024; color: #FFFFFF; font-weight: bold; padding: 8px; border: 1px solid #dcdcdc; text-align: center; }}
-            .matrix-table td {{ padding: 8px; border: 1px solid #dcdcdc; text-align: center; }}
-            .metric-req {{ background-color: #000000; color: #FFFFFF; font-weight: bold; }}
-            .metric-ent {{ background-color: #2E7D32; color: #FFFFFF; font-weight: bold; }}
-            .metric-stk {{ background-color: #FBC02D; color: #000000; font-weight: bold; }}
-            .metric-fal {{ background-color: #C62828; color: #FFFFFF; font-weight: bold; }}
+            .matrix-table {{ border-collapse: collapse; width: 100%; margin-top: 15px; font-size: 13px; table-layout: fixed; }}
             .summary-row {{ font-weight: bold; background-color: #f9f9f9; }}
         </style>
     </head>
@@ -810,17 +804,17 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
         <table class="matrix-table">
             <thead>
                 <tr>
-                    <th>SKU</th>
-                    <th>Imagen</th>
-                    <th class="metric-req">Total Requerido</th>
-                    <th class="metric-ent">Total Entregado</th>
-                    <th class="metric-stk">Total Almacén</th>
-                    <th class="metric-fal">Total Faltante</th>
+                    <th style="background-color: #EC2024; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 110px;">SKU</th>
+                    <th style="background-color: #EC2024; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 100px;">Imagen</th>
+                    <th style="background-color: #000000; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 85px;">Total Requerido</th>
+                    <th style="background-color: #2E7D32; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 85px;">Total Entregado</th>
+                    <th style="background-color: #FBC02D; color: #000000; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 85px;">Total Almacén</th>
+                    <th style="background-color: #C62828; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 85px;">Total Faltante</th>
     """
     
     # Agregar cabeceras de fechas
     for d in fechas_columnas:
-        html += f"<th>{d}</th>"
+        html += f'<th style="background-color: #EC2024; color: #FFFFFF; font-weight: bold; padding: 6px; border: 1px solid #dcdcdc; text-align: center; width: 160px;">{d}</th>'
         
     html += """
                 </tr>
@@ -835,11 +829,11 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
         
         row_class = ' class="summary-row"' if is_summary else ""
         html += f"<tr{row_class}>"
-        html += f"<td><b>{sku}</b></td>"
+        html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; font-weight: bold;">{sku}</td>'
         
         # Imagen
         if is_summary:
-            html += "<td></td>"
+            html += '<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;"></td>'
         else:
             # Buscar imagen local
             import glob
@@ -854,25 +848,25 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
                 import urllib.parse
                 img_filename_encoded = urllib.parse.quote(img_filename)
                 img_url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/imagenes_articulos/{img_filename_encoded}"
-                img_tag = f'<img src="{img_url}" width="50" height="50" style="border-radius:4px; border:1px solid #ccc;">'
-            html += f"<td>{img_tag}</td>"
+                img_tag = f'<img src="{img_url}" width="80" height="80" style="border-radius: 4px; border: 1px solid #ccc; max-width: 80px; height: auto; display: block; margin: 0 auto;">'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{img_tag}</td>'
         
         # Columnas de totales
         if is_summary:
-            html += f"<td>{row['Total Requerido']}</td>"
-            html += f"<td>{row['Total Entregado']}</td>"
-            html += f"<td>{row['Total Almacén']}</td>"
-            html += f"<td>{row['Total Faltante']}</td>"
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{row["Total Requerido"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{row["Total Entregado"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{row["Total Almacén"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{row["Total Faltante"]}</td>'
         else:
-            html += f"<td class='metric-req'>{row['Total Requerido']}</td>"
-            html += f"<td class='metric-ent'>{row['Total Entregado']}</td>"
-            html += f"<td class='metric-stk'>{row['Total Almacén']}</td>"
-            html += f"<td class='metric-fal'>{row['Total Faltante']}</td>"
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #000000; color: #FFFFFF; font-weight: bold;">{row["Total Requerido"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #2E7D32; color: #FFFFFF; font-weight: bold;">{row["Total Entregado"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #FBC02D; color: #000000; font-weight: bold;">{row["Total Almacén"]}</td>'
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center; background-color: #C62828; color: #FFFFFF; font-weight: bold;">{row["Total Faltante"]}</td>'
             
         # Fechas
         for d in fechas_columnas:
             val = row.get(d, "-")
-            html += f"<td>{val}</td>"
+            html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{val}</td>'
             
         html += "</tr>"
         
