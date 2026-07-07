@@ -5131,108 +5131,141 @@ elif opcion_menu == "📉 Análisis de Faltantes":
             st.info("ℹ️ No hay Órdenes de Compra registradas. Cargue una PO en la pestaña 'Ingreso de POs' para comenzar.")
         else:
             pos_disponibles = sorted(st.session_state.BD_POs_Cabecera['PO'].astype(str).str.strip().unique().tolist())
-            po_seleccionada = st.selectbox("Seleccione la PO a consultar:", pos_disponibles, key="po_selector_matriz")
+            pos_seleccionadas = st.multiselect(
+                "Seleccione las POs a consultar (puede elegir una o varias):",
+                options=pos_disponibles,
+                default=[pos_disponibles[0]] if pos_disponibles else [],
+                key="po_selector_matriz"
+            )
             
-            # Obtener datos generales de cabecera
-            cab_info = st.session_state.BD_POs_Cabecera[st.session_state.BD_POs_Cabecera['PO'].astype(str).str.strip() == po_seleccionada].iloc[0].to_dict()
-            
-            st.markdown("##### 📄 Datos Generales")
-            mc1, mc2, mc3, mc4 = st.columns(4)
-            with mc1:
-                st.metric("Proyecto / Uso", cab_info.get("Proyecto", "N/A"))
-            with mc2:
-                fecha_val = cab_info.get("Fecha_Pedido", "N/A")
-                if pd.notnull(fecha_val) and hasattr(fecha_val, 'strftime'):
-                    fecha_str = fecha_val.strftime("%Y-%m-%d")
-                else:
-                    fecha_str = str(fecha_val)
-                st.metric("Fecha Pedido", fecha_str)
-            with mc3:
-                st.metric("Solicitante", cab_info.get("Solicitante", "N/A"))
-            with mc4:
-                st.metric("Requisición", cab_info.get("Requisicion", "N/A"))
-            st.info(f"📍 **Destino (L.A.B.):** {cab_info.get('Destino', 'N/A')}")
-            
-            # Obtener requerimientos de la PO
-            df_req_po_raw = st.session_state.BD_Requerimientos_POs[st.session_state.BD_Requerimientos_POs['PO'].astype(str).str.strip() == po_seleccionada].copy()
-            
-            if df_req_po_raw.empty:
-                st.warning("⚠️ No se encontraron partidas registradas para esta PO.")
+            if not pos_seleccionadas:
+                st.info("💡 Seleccione al menos una Orden de Compra (PO) en el selector superior para mostrar los datos de avance.")
             else:
-                # Obtener parcialidades únicas ordenadas cronológicamente por su fecha
-                df_dates_map = df_req_po_raw.groupby('Parcialidad', as_index=False)['Fecha_Entrega'].min().sort_values(by='Fecha_Entrega')
-                lista_parcialidades = df_dates_map['Parcialidad'].tolist()
+                df_cab_selected = st.session_state.BD_POs_Cabecera[st.session_state.BD_POs_Cabecera['PO'].astype(str).str.strip().isin(pos_seleccionadas)].copy()
                 
-                # Crear diccionario con las etiquetas descriptivas
-                parcialidades_dict = {}
-                for _, p_row in df_dates_map.iterrows():
-                    parcialidades_dict[p_row['Parcialidad']] = f"{p_row['Parcialidad']} ({p_row['Fecha_Entrega']})"
-                
-                st.write("")
-                st.markdown("📅 **Filtro de Parcialidades a Revisar**")
-                parcialidades_selec = st.multiselect(
-                    "Seleccione las parcialidades que desea incluir en la matriz y el cálculo de faltantes:",
-                    options=lista_parcialidades,
-                    default=lista_parcialidades,
-                    format_func=lambda x: parcialidades_dict.get(x, x),
-                    key=f"filter_parcialidades_multiselect_{po_seleccionada}"
-                )
-                
-                df_req_po = df_req_po_raw[df_req_po_raw['Parcialidad'].isin(parcialidades_selec)].copy()
-                
-                if df_req_po.empty:
-                    st.warning("⚠️ Seleccione al menos una parcialidad en el filtro superior para mostrar los datos de avance.")
+                # Obtener datos generales consolidados
+                if len(pos_seleccionadas) == 1:
+                    cab_info = df_cab_selected.iloc[0].to_dict()
+                    st.markdown("##### 📄 Datos Generales")
+                    mc1, mc2, mc3, mc4 = st.columns(4)
+                    with mc1:
+                        st.metric("Proyecto / Uso", cab_info.get("Proyecto", "N/A"))
+                    with mc2:
+                        fecha_val = cab_info.get("Fecha_Pedido", "N/A")
+                        if pd.notnull(fecha_val) and hasattr(fecha_val, 'strftime'):
+                            fecha_str = fecha_val.strftime("%Y-%m-%d")
+                        else:
+                            fecha_str = str(fecha_val)
+                        st.metric("Fecha Pedido", fecha_str)
+                    with mc3:
+                        st.metric("Solicitante", cab_info.get("Solicitante", "N/A"))
+                    with mc4:
+                        st.metric("Requisición", cab_info.get("Requisicion", "N/A"))
+                    st.info(f"📍 **Destino (L.A.B.):** {cab_info.get('Destino', 'N/A')}")
                 else:
-                    # Agrupar por SKU y Fecha de Entrega por seguridad
-                    df_req_grouped = df_req_po.groupby(['PO', 'SKU', 'Fecha_Entrega', 'Parcialidad'], as_index=False)['Cantidad_Requerida'].sum()
-                    
-                    # Fechas de entrega únicas ordenadas cronológicamente
-                    fechas_columnas = sorted(df_req_grouped['Fecha_Entrega'].unique().tolist())
-                    unique_skus = df_req_grouped['SKU'].unique().tolist()
-                    
-                    # Obtener estatus de tarimas
-                    mapa_tarimas_status = {}
-                    if not st.session_state.BD_Tarimas.empty:
-                        for _, t_row in st.session_state.BD_Tarimas.iterrows():
-                            mapa_tarimas_status[str(t_row['ID_Tarima']).strip().upper()] = str(t_row['Estatus']).strip().upper()
-                    
-                    # Obtener detalles de producción para esta PO
-                    df_prod_po = pd.DataFrame()
-                    if not st.session_state.BD_Detalle_Tarimas.empty:
-                        df_prod = st.session_state.BD_Detalle_Tarimas.copy()
-                        
-                        # Normalización automática inteligente para sugerencias
-                        import re
-                        def clean_po(val):
-                            if not val or pd.isna(val): return ""
-                            val_str = str(val).strip().upper()
-                            # Quitar prefijo PO: o PO- y caracteres no alfanuméricos
-                            val_str = re.sub(r'^PO\s*[-:]*\s*', '', val_str)
-                            val_str = re.sub(r'[^A-Z0-9]', '', val_str)
-                            return val_str
-                        
-                        po_target = clean_po(po_seleccionada)
-                        
-                        # Obtener listado de PO reales registradas en las tarimas de producción
-                        pos_reales_produccion = sorted(df_prod['PO'].astype(str).str.strip().unique().tolist())
-                        
-                        # Buscar coincidencias sugeridas (por ejemplo, "PO-2602-0711" coincide con "26020711")
-                        sugeridos_coincidencia = [
-                            p for p in pos_reales_produccion
-                            if clean_po(p) == po_target or po_target in clean_po(p) or clean_po(p) in po_target
-                        ]
-                        
-                        # Mostrar la interfaz de mapeo interactivo para el usuario
-                        st.write("---")
-                        st.markdown("🔗 **Mapeo de Coincidencia de PO en Producción (Tarimas)**")
-                        st.info("💡 **Sugerencia Automática:** El sistema ha preseleccionado los valores que parecen corresponder a esta PO. Puede agregar o quitar etiquetas manualmente según sea necesario.")
-                        
-                        pos_mapeadas = st.multiselect(
-                            "Etiquetas de PO físicas detectadas en producción:",
-                            options=pos_reales_produccion,
-                            default=sugeridos_coincidencia,
-                            key=f"mapeo_po_multiselect_{po_seleccionada}"
+                    st.markdown("##### 📄 Datos Generales (Consolidado de POs)")
+                    df_cab_display = df_cab_selected.copy()
+                    if 'Fecha_Pedido' in df_cab_display.columns:
+                        df_cab_display['Fecha_Pedido'] = df_cab_display['Fecha_Pedido'].apply(
+                            lambda x: x.strftime("%Y-%m-%d") if pd.notnull(x) and hasattr(x, 'strftime') else str(x)
                         )
+                    st.dataframe(df_cab_display, use_container_width=True, hide_index=True)
+                    
+                    # Generar diccionario para EML/fácil acceso
+                    cab_info = {
+                        "Proyecto": ", ".join(df_cab_selected["Proyecto"].astype(str).str.strip().unique()),
+                        "Solicitante": ", ".join(df_cab_selected["Solicitante"].astype(str).str.strip().unique()),
+                        "Requisicion": ", ".join(df_cab_selected["Requisicion"].astype(str).str.strip().unique()),
+                        "Destino": ", ".join(df_cab_selected["Destino"].astype(str).str.strip().unique()),
+                    }
+                    
+                # Obtener requerimientos de las POs
+                df_req_po_raw = st.session_state.BD_Requerimientos_POs[st.session_state.BD_Requerimientos_POs['PO'].astype(str).str.strip().isin(pos_seleccionadas)].copy()
+                
+                if df_req_po_raw.empty:
+                    st.warning("⚠️ No se encontraron partidas registradas para estas POs.")
+                else:
+                    # Obtener parcialidades únicas ordenadas cronológicamente por su fecha
+                    df_dates_map = df_req_po_raw.groupby(['PO', 'Parcialidad'], as_index=False)['Fecha_Entrega'].min().sort_values(by='Fecha_Entrega')
+                    lista_parcialidades = []
+                    parcialidades_dict = {}
+                    
+                    for _, p_row in df_dates_map.iterrows():
+                        po_name = str(p_row['PO']).strip()
+                        p_val = str(p_row['Parcialidad']).strip()
+                        f_val = p_row['Fecha_Entrega']
+                        f_str = f_val.strftime("%Y-%m-%d") if pd.notnull(f_val) and hasattr(f_val, 'strftime') else str(f_val)
+                        
+                        op_key = f"{po_name}::{p_val}"
+                        lista_parcialidades.append(op_key)
+                        parcialidades_dict[op_key] = f"PO {po_name} - {p_val} ({f_str})"
+                        
+                    st.write("")
+                    st.markdown("📅 **Filtro de Parcialidades a Revisar**")
+                    parcialidades_selec = st.multiselect(
+                        "Seleccione las parcialidades que desea incluir en la matriz y el cálculo de faltantes:",
+                        options=lista_parcialidades,
+                        default=lista_parcialidades,
+                        format_func=lambda x: parcialidades_dict.get(x, x),
+                        key=f"filter_parcialidades_multiselect_{'_'.join(pos_seleccionadas)}"
+                    )
+                    
+                    df_req_po_raw['po_p_key'] = df_req_po_raw['PO'].astype(str).str.strip() + "::" + df_req_po_raw['Parcialidad'].astype(str).str.strip()
+                    df_req_po = df_req_po_raw[df_req_po_raw['po_p_key'].isin(parcialidades_selec)].copy()
+                    
+                    if df_req_po.empty:
+                        st.warning("⚠️ Seleccione al menos una parcialidad en el filtro superior para mostrar los datos de avance.")
+                    else:
+                        # Agrupar por SKU y Fecha de Entrega para evitar duplicados en la matriz
+                        df_req_grouped = df_req_po.groupby(['SKU', 'Fecha_Entrega'], as_index=False)['Cantidad_Requerida'].sum()
+                        
+                        # Fechas de entrega únicas ordenadas cronológicamente
+                        fechas_columnas = sorted(df_req_grouped['Fecha_Entrega'].unique().tolist())
+                        unique_skus = df_req_grouped['SKU'].unique().tolist()
+                        
+                        # Obtener estatus de tarimas
+                        mapa_tarimas_status = {}
+                        if not st.session_state.BD_Tarimas.empty:
+                            for _, t_row in st.session_state.BD_Tarimas.iterrows():
+                                mapa_tarimas_status[str(t_row['ID_Tarima']).strip().upper()] = str(t_row['Estatus']).strip().upper()
+                        
+                        # Obtener detalles de producción para estas POs
+                        df_prod_po = pd.DataFrame()
+                        if not st.session_state.BD_Detalle_Tarimas.empty:
+                            df_prod = st.session_state.BD_Detalle_Tarimas.copy()
+                            
+                            # Normalización automática inteligente para sugerencias
+                            import re
+                            def clean_po(val):
+                                if not val or pd.isna(val): return ""
+                                val_str = str(val).strip().upper()
+                                # Quitar prefijo PO: o PO- y caracteres no alfanuméricos
+                                val_str = re.sub(r'^PO\s*[-:]*\s*', '', val_str)
+                                val_str = re.sub(r'[^A-Z0-9]', '', val_str)
+                                return val_str
+                            
+                            po_targets = [clean_po(p) for p in pos_seleccionadas]
+                            
+                            # Obtener listado de PO reales registradas en las tarimas de producción
+                            pos_reales_produccion = sorted(df_prod['PO'].astype(str).str.strip().unique().tolist())
+                            
+                            # Buscar coincidencias sugeridas (por ejemplo, "PO-2602-0711" coincide con "26020711")
+                            sugeridos_coincidencia = [
+                                p for p in pos_reales_produccion
+                                if clean_po(p) in po_targets or any(target in clean_po(p) for target in po_targets)
+                            ]
+                            
+                            # Mostrar la interfaz de mapeo interactivo para el usuario
+                            st.write("---")
+                            st.markdown("🔗 **Mapeo de Coincidencia de POs en Producción (Tarimas)**")
+                            st.info("💡 **Sugerencia Automática:** El sistema ha preseleccionado los valores que parecen corresponder a las POs consultadas. Puede agregar o quitar etiquetas manualmente según sea necesario.")
+                            
+                            pos_mapeadas = st.multiselect(
+                                "Etiquetas de PO físicas detectadas en producción:",
+                                options=pos_reales_produccion,
+                                default=sugeridos_coincidencia,
+                                key=f"mapeo_po_multiselect_{'_'.join(pos_seleccionadas)}"
+                            )
                         
                         # Filtrar los detalles de producción con base en la selección del usuario
                         df_prod_po = df_prod[df_prod['PO'].astype(str).str.strip().isin(pos_mapeadas)].copy()
@@ -5505,17 +5538,8 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                         }
                     )
                     
-                    with st.expander("📖 Glosario de Acrónimos de la Matriz (R | E | S | F)", expanded=True):
-                        st.markdown("""
-                        * **R (Requerido):** El total de piezas solicitadas originalmente en la Orden de Compra (PO) para esa partida/SKU.
-                        * **E (Entregado):** Las piezas que ya han sido embarcadas y despachadas (remesadas) formalmente al cliente/destino.
-                        * **S (Stock):** Las piezas que ya han sido fabricadas y se encuentran físicamente listas y disponibles en el patio o almacén de Metales (pendientes de ser enviadas).
-                        * **F (Faltante):** La cantidad de piezas que están pendientes de fabricar para completar el requerimiento de la PO.
-                        * **✅ / ⚠️**: Indica si el requerimiento de la fecha está cubierto al 100% (`F: 0`) o si aún tiene piezas pendientes de fabricar (`F > 0`).
-                        """)
-                    
                     st.session_state.last_matrix_df = df_matrix
-                    st.session_state.last_matrix_po = po_seleccionada
+                    st.session_state.last_matrix_po = pos_seleccionadas
                     
                     st.write("---")
                     st.subheader("📩 Generar Notificación por Correo (Borrador Outlook)")
@@ -5524,20 +5548,24 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                     # Cargar destinatarios configurados por defecto
                     cfg_emails_po = obtener_emails_config()
                     
+                    po_names_str = "_".join(pos_seleccionadas)
+                    po_names_display = ", ".join(pos_seleccionadas)
+                    
                     col_em_po1, col_em_po2 = st.columns(2)
                     with col_em_po1:
-                        eml_po_to = st.text_input("Para:", value=cfg_emails_po.get("dest_to", ""), key=f"eml_po_to_{po_seleccionada}")
+                        eml_po_to = st.text_input("Para:", value=cfg_emails_po.get("dest_to", ""), key=f"eml_po_to_{po_names_str}")
                     with col_em_po2:
-                        eml_po_cc = st.text_input("CC:", value=cfg_emails_po.get("dest_cc", ""), key=f"eml_po_cc_{po_seleccionada}")
+                        eml_po_cc = st.text_input("CC:", value=cfg_emails_po.get("dest_cc", ""), key=f"eml_po_cc_{po_names_str}")
                         
                     # Generar el Excel del avance
                     buf_eml_xlsx = io.BytesIO()
                     with pd.ExcelWriter(buf_eml_xlsx, engine='openpyxl') as writer_dl:
-                        df_matrix.to_excel(writer_dl, index=False, sheet_name=f"Avance_PO_{po_seleccionada}")
+                        sheet_title = f"Avance_POs_{po_names_str}"[:30] # Límite de 30 caracteres
+                        df_matrix.to_excel(writer_dl, index=False, sheet_name=sheet_title)
                         
                         from openpyxl.styles import Font, PatternFill, Alignment
                         workbook = writer_dl.book
-                        sheet = workbook[f"Avance_PO_{po_seleccionada}"]
+                        sheet = workbook[sheet_title]
                         
                         header_fill = PatternFill(start_color="EC2024", end_color="EC2024", fill_type="solid")
                         header_font = Font(color="FFFFFF", bold=True)
@@ -5572,23 +5600,23 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                     buf_eml_xlsx.seek(0)
                     
                     # Generar cuerpo HTML
-                    cuerpo_html = generar_cuerpo_correo_po_html(po_seleccionada, cab_info, df_matrix, fechas_columnas)
+                    cuerpo_html = generar_cuerpo_correo_po_html(po_names_display, cab_info, df_matrix, fechas_columnas)
                     
                     # Generar adjuntos
                     adjuntos_dict = {
-                        f"Reporte_Avance_PO_{po_seleccionada}.xlsx": buf_eml_xlsx.getvalue()
+                        f"Reporte_Avance_POs_{po_names_str}.xlsx": buf_eml_xlsx.getvalue()
                     }
                     
                     # Generar borrador EML
-                    eml_subject = f"Reporte de Avance y Dispersión - PO {po_seleccionada}"
+                    eml_subject = f"Reporte de Avance y Dispersión - POs {po_names_display}"
                     eml_bytes = generar_archivo_eml(eml_po_to, eml_po_cc, eml_subject, cuerpo_html, adjuntos_dict)
                     
                     st.download_button(
                         label="📩 Descargar Borrador de Correo de Avance (.eml)",
                         data=eml_bytes,
-                        file_name=f"Correo_Avance_PO_{po_seleccionada}.eml",
+                        file_name=f"Correo_Avance_POs_{po_names_str}.eml",
                         mime="message/rfc822",
-                        key=f"btn_dl_eml_po_{po_seleccionada}",
+                        key=f"btn_dl_eml_po_{po_names_str}",
                         use_container_width=True
                     )
 
@@ -5599,13 +5627,21 @@ elif opcion_menu == "📉 Análisis de Faltantes":
             po_name = st.session_state.last_matrix_po
             df_dl = st.session_state.last_matrix_df.copy()
             
+            if isinstance(po_name, list):
+                po_name_str = "_".join(po_name)
+                po_name_display = ", ".join(po_name)
+            else:
+                po_name_str = str(po_name)
+                po_name_display = str(po_name)
+                
             buf_dl = io.BytesIO()
             with pd.ExcelWriter(buf_dl, engine='openpyxl') as writer_dl:
-                df_dl.to_excel(writer_dl, index=False, sheet_name=f"Avance_PO_{po_name}")
+                sheet_title = f"Avance_{po_name_str}"[:30] # Límite de 30 caracteres
+                df_dl.to_excel(writer_dl, index=False, sheet_name=sheet_title)
                 
                 from openpyxl.styles import Font, PatternFill, Alignment
                 workbook = writer_dl.book
-                sheet = workbook[f"Avance_PO_{po_name}"]
+                sheet = workbook[sheet_title]
                 
                 header_fill = PatternFill(start_color="EC2024", end_color="EC2024", fill_type="solid")
                 header_font = Font(color="FFFFFF", bold=True)
@@ -5638,11 +5674,12 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                 sheet.freeze_panes = "A2"
                 
             st.download_button(
-                label=f"📥 Descargar Avance de PO {po_name} (.xlsx)",
+                label=f"📥 Descargar Reporte de Avance Excel (POs: {po_name_display})",
                 data=buf_dl.getvalue(),
-                file_name=f"Reporte_Avance_PO_{po_name}.xlsx",
+                file_name=f"Reporte_Avance_POs_{po_name_str}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="btn_download_po_matrix_xlsx"
+                key="btn_download_po_matrix_xlsx",
+                use_container_width=True
             )
         else:
             st.info("💡 Por favor consulte primero una PO en la pestaña 'Matriz de Avance por PO' para poder descargar su reporte de dispersión.")
