@@ -5022,11 +5022,36 @@ elif opcion_menu == "📉 Análisis de Faltantes":
             st.info(f"📍 **Destino (L.A.B.):** {cab_info.get('Destino', 'N/A')}")
             
             # Obtener requerimientos de la PO
-            df_req_po = st.session_state.BD_Requerimientos_POs[st.session_state.BD_Requerimientos_POs['PO'].astype(str).str.strip() == po_seleccionada].copy()
+            df_req_po_raw = st.session_state.BD_Requerimientos_POs[st.session_state.BD_Requerimientos_POs['PO'].astype(str).str.strip() == po_seleccionada].copy()
             
-            if df_req_po.empty:
+            if df_req_po_raw.empty:
                 st.warning("⚠️ No se encontraron partidas registradas para esta PO.")
             else:
+                # Obtener parcialidades únicas ordenadas cronológicamente por su fecha
+                df_dates_map = df_req_po_raw.groupby('Parcialidad', as_index=False)['Fecha_Entrega'].min().sort_values(by='Fecha_Entrega')
+                lista_parcialidades = df_dates_map['Parcialidad'].tolist()
+                
+                # Crear diccionario con las etiquetas descriptivas
+                parcialidades_dict = {}
+                for _, p_row in df_dates_map.iterrows():
+                    parcialidades_dict[p_row['Parcialidad']] = f"{p_row['Parcialidad']} ({p_row['Fecha_Entrega']})"
+                
+                st.write("")
+                st.markdown("📅 **Filtro de Parcialidades a Revisar**")
+                parcialidades_selec = st.multiselect(
+                    "Seleccione las parcialidades que desea incluir en la matriz y el cálculo de faltantes:",
+                    options=lista_parcialidades,
+                    default=lista_parcialidades,
+                    format_func=lambda x: parcialidades_dict.get(x, x),
+                    key=f"filter_parcialidades_multiselect_{po_seleccionada}"
+                )
+                
+                df_req_po = df_req_po_raw[df_req_po_raw['Parcialidad'].isin(parcialidades_selec)].copy()
+                
+                if df_req_po.empty:
+                    st.warning("⚠️ Seleccione al menos una parcialidad en el filtro superior para mostrar los datos de avance.")
+                    st.stop()
+                    
                 # Agrupar por SKU y Fecha de Entrega por seguridad
                 df_req_grouped = df_req_po.groupby(['PO', 'SKU', 'Fecha_Entrega', 'Parcialidad'], as_index=False)['Cantidad_Requerida'].sum()
                 
