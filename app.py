@@ -1071,6 +1071,28 @@ if "BD_Datos_Generales_Remision" not in st.session_state:
     else:
         st.session_state.BD_Datos_Generales_Remision = pd.DataFrame(columns=["ID_Remision", "Folio_Remision", "Fecha_Hora_Salida", "Nombre_Emisor", "Direccion_Emisor", "Nombre_Receptor", "Direccion_Receptor", "Tarimas_Asociadas"])
 
+# --- Cabecera de Órdenes de Compra (POs) ---
+if "BD_POs_Cabecera" not in st.session_state or st.session_state.get("BD_POs_Cabecera") is None:
+    df_git_po_cab = cargar_excel_desde_github("BD_POs_Cabecera.xlsx")
+    if df_git_po_cab is not None:
+        if "PO" in df_git_po_cab.columns:
+            df_git_po_cab["PO"] = df_git_po_cab["PO"].astype(str).str.strip().str.upper()
+        st.session_state.BD_POs_Cabecera = df_git_po_cab
+    else:
+        st.session_state.BD_POs_Cabecera = pd.DataFrame(columns=["PO", "Fecha_Pedido", "Proyecto", "Solicitante", "Requisicion", "Destino"])
+
+# --- Detalle de Requerimientos y Fechas de Entrega de POs ---
+if "BD_Requerimientos_POs" not in st.session_state or st.session_state.get("BD_Requerimientos_POs") is None:
+    df_git_po_req = cargar_excel_desde_github("BD_Requerimientos_POs.xlsx")
+    if df_git_po_req is not None:
+        if "PO" in df_git_po_req.columns:
+            df_git_po_req["PO"] = df_git_po_req["PO"].astype(str).str.strip().str.upper()
+        if "SKU" in df_git_po_req.columns:
+            df_git_po_req["SKU"] = df_git_po_req["SKU"].astype(str).str.strip().str.upper()
+        st.session_state.BD_Requerimientos_POs = df_git_po_req
+    else:
+        st.session_state.BD_Requerimientos_POs = pd.DataFrame(columns=["PO", "SKU", "Fecha_Entrega", "Cantidad_Requerida", "Parcialidad"])
+
 def sincronizar_estatus_tarimas(auto_save=True):
     """Compara las tarimas remesadas con las remisiones activas y corrige huérfanas."""
     if "BD_Tarimas" not in st.session_state or "BD_Datos_Generales_Remision" not in st.session_state:
@@ -4700,132 +4722,368 @@ elif opcion_menu == "🕰️ Carga Histórica":
 # =============================================================================
 elif opcion_menu == "📉 Análisis de Faltantes":
     st.title("📉 Análisis de Faltantes de Producción")
-    st.markdown("Carga tu archivo maestro de requerimientos (Órdenes de Compra / Proyectos) para compararlo globalmente contra el inventario registrado en el sistema y descubrir exactamente qué piezas faltan por fabricar.")
+    st.markdown("Gestione los requerimientos de sus Órdenes de Compra (POs) y visualice la dispersión de entregas, stock y faltantes de producción en tiempo real.")
     
-    archivo_maestro = st.file_uploader("📥 Selecciona el archivo Excel Maestro (Requerimientos)", type=['xlsx'])
+    # Asegurar inicialización en sesión
+    if "BD_POs_Cabecera" not in st.session_state:
+        st.session_state.BD_POs_Cabecera = pd.DataFrame(columns=["PO", "Fecha_Pedido", "Proyecto", "Solicitante", "Requisicion", "Destino"])
+    if "BD_Requerimientos_POs" not in st.session_state:
+        st.session_state.BD_Requerimientos_POs = pd.DataFrame(columns=["PO", "SKU", "Fecha_Entrega", "Cantidad_Requerida", "Parcialidad"])
+
+    tab_ins, tab_mat, tab_dl = st.tabs([
+        "📥 Ingreso de Órdenes de Compra (POs)", 
+        "📊 Matriz de Avance por PO", 
+        "📉 Descarga de Reportes"
+    ])
     
-    if archivo_maestro:
-        try:
-            df_maestro = pd.read_excel(archivo_maestro)
-            st.success("✅ Archivo cargado correctamente. Selecciona las columnas clave para hacer el cruce:")
+    with tab_ins:
+        st.write("")
+        st.subheader("📥 Carga de Requerimientos Oficiales")
+        
+        # Botón para descargar plantilla de 2 hojas
+        df_template_gen = pd.DataFrame([{
+            "PO": "26032107",
+            "Fecha_Pedido": "12/06/2026",
+            "Proyecto": "SWBD R5",
+            "Solicitante": "MAURICIO DOMINGUEZ",
+            "Requisicion": "22035",
+            "Destino": "ALMACEN SIGRAMA RIO XIX"
+        }])
+        
+        df_template_det = pd.DataFrame([{
+            "ID": "12-A-6359-02",
+            "23-feb-2026": 6,
+            "01-mar-2026": "-",
+            "13-mar-2026": 13,
+            "13-may-2026": 5
+        }, {
+            "ID": "P17690-17",
+            "23-feb-2026": 15,
+            "01-mar-2026": "-",
+            "13-mar-2026": 33,
+            "13-may-2026": 12
+        }])
+        
+        buf_t = io.BytesIO()
+        with pd.ExcelWriter(buf_t, engine='openpyxl') as writer_t:
+            df_template_gen.to_excel(writer_t, sheet_name="Datos_Generales", index=False)
+            df_template_det.to_excel(writer_t, sheet_name="Detalle_Entregas", index=False)
+        
+        st.download_button(
+            label="📥 Descargar Plantilla Oficial de Carga (2 Hojas)",
+            data=buf_t.getvalue(),
+            file_name="Plantilla_Requerimientos_PO.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+        st.write("---")
+        excel_po = st.file_uploader("Subir Archivo de Requerimientos de PO (Excel):", type=['xlsx'], key="po_file_uploader")
+        modo_carga = st.radio("Método de Carga:", ["Acumular registros en la base de datos", "Sobrescribir base de datos completa"], horizontal=True, key="po_load_mode")
+        
+        if excel_po:
+            if st.button("🚀 Integrar Requerimientos", use_container_width=True):
+                try:
+                    xl = pd.ExcelFile(excel_po)
+                    if "Datos_Generales" in xl.sheet_names and "Detalle_Entregas" in xl.sheet_names:
+                        df_gen = xl.parse("Datos_Generales")
+                        df_det_matrix = xl.parse("Detalle_Entregas")
+                        
+                        if df_gen.empty or df_det_matrix.empty:
+                            st.error("❌ Una o ambas pestañas están vacías.")
+                        else:
+                            # 1. Procesar Cabecera
+                            row_gen = df_gen.iloc[0].to_dict()
+                            po_num = str(row_gen.get("PO", "")).strip().upper()
+                            
+                            if not po_num or po_num == "NAN":
+                                st.error("❌ El campo 'PO' en la hoja Datos_Generales no es válido.")
+                            else:
+                                # 2. Procesar Detalle de Entregas (Despivotar Matriz)
+                                col_sku_name = df_det_matrix.columns[0]
+                                df_det_matrix = df_det_matrix.rename(columns={col_sku_name: 'SKU'})
+                                df_det_matrix['SKU'] = df_det_matrix['SKU'].astype(str).str.strip().str.upper()
+                                
+                                date_cols = df_det_matrix.columns[1:].tolist()
+                                df_flat = df_det_matrix.melt(id_vars=['SKU'], value_vars=date_cols, var_name='Fecha_Entrega', value_name='Cantidad_Requerida')
+                                
+                                # Limpiar cantidades y filtrar vacíos
+                                df_flat['Cantidad_Requerida'] = pd.to_numeric(df_flat['Cantidad_Requerida'], errors='coerce').fillna(0)
+                                df_flat = df_flat[df_flat['Cantidad_Requerida'] > 0]
+                                
+                                # Normalizar Fechas
+                                def normalize_date_col(col_name):
+                                    c_clean = str(col_name).lower().strip()
+                                    meses = {
+                                        'ene': 'jan', 'feb': 'feb', 'mar': 'mar', 'abr': 'apr', 'may': 'may', 'jun': 'jun',
+                                        'jul': 'jul', 'ago': 'aug', 'sep': 'sep', 'oct': 'oct', 'nov': 'nov', 'dic': 'dec'
+                                    }
+                                    for esp, eng in meses.items():
+                                        if esp in c_clean:
+                                            c_clean = c_clean.replace(esp, eng)
+                                    try:
+                                        return pd.to_datetime(c_clean).strftime('%Y-%m-%d')
+                                    except:
+                                        return str(col_name).strip()
+                                        
+                                df_flat['Fecha_Entrega'] = df_flat['Fecha_Entrega'].apply(normalize_date_col)
+                                
+                                # Asignar Parcialidades secuenciales cronológicamente
+                                unique_dates = sorted(df_flat['Fecha_Entrega'].unique())
+                                date_to_parcialidad = {date: f"P{idx+1}" for idx, date in enumerate(unique_dates)}
+                                df_flat['Parcialidad'] = df_flat['Fecha_Entrega'].map(date_to_parcialidad)
+                                df_flat['PO'] = po_num
+                                
+                                # Reordenar columnas
+                                df_flat = df_flat[["PO", "SKU", "Fecha_Entrega", "Cantidad_Requerida", "Parcialidad"]]
+                                
+                                # Sincronizar bases locales de sesión
+                                if modo_carga == "Sobrescribir base de datos completa":
+                                    st.session_state.BD_POs_Cabecera = pd.DataFrame([row_gen])
+                                    st.session_state.BD_Requerimientos_POs = df_flat
+                                else:
+                                    st.session_state.BD_POs_Cabecera = pd.concat([
+                                        st.session_state.BD_POs_Cabecera[st.session_state.BD_POs_Cabecera['PO'] != po_num],
+                                        pd.DataFrame([row_gen])
+                                    ], ignore_index=True)
+                                    
+                                    st.session_state.BD_Requerimientos_POs = pd.concat([
+                                        st.session_state.BD_Requerimientos_POs[st.session_state.BD_Requerimientos_POs['PO'] != po_num],
+                                        df_flat
+                                    ], ignore_index=True)
+                                    
+                                # Guardar cambios en GitHub
+                                res_cab = guardar_excel_en_github("BD_POs_Cabecera.xlsx", st.session_state.BD_POs_Cabecera)
+                                res_req = guardar_excel_en_github("BD_Requerimientos_POs.xlsx", st.session_state.BD_Requerimientos_POs)
+                                
+                                if res_cab and res_req:
+                                    st.success(f"✅ Requerimientos de la PO {po_num} integrados y guardados en GitHub con éxito.")
+                                else:
+                                    st.error("❌ Ocurrió un error al intentar guardar los archivos en GitHub.")
+                    else:
+                        st.error("❌ El Excel cargado debe contener las hojas 'Datos_Generales' y 'Detalle_Entregas'.")
+                except Exception as e:
+                    st.error(f"❌ Error al procesar el archivo Excel: {e}")
+                    
+        st.write("---")
+        st.subheader("📋 Órdenes de Compra Registradas")
+        if not st.session_state.BD_POs_Cabecera.empty:
+            st.dataframe(st.session_state.BD_POs_Cabecera, use_container_width=True, hide_index=True)
+        else:
+            st.info("💡 No hay POs registradas actualmente.")
+
+    with tab_mat:
+        st.write("")
+        st.subheader("📊 Matriz de Avance y Dispersión por PO")
+        
+        if st.session_state.BD_POs_Cabecera.empty:
+            st.info("ℹ️ No hay Órdenes de Compra registradas. Cargue una PO en la pestaña 'Ingreso de POs' para comenzar.")
+        else:
+            pos_disponibles = sorted(st.session_state.BD_POs_Cabecera['PO'].unique().tolist())
+            po_seleccionada = st.selectbox("Seleccione la PO a consultar:", pos_disponibles, key="po_selector_matriz")
             
-            columnas_excel = df_maestro.columns.tolist()
+            # Obtener datos generales de cabecera
+            cab_info = st.session_state.BD_POs_Cabecera[st.session_state.BD_POs_Cabecera['PO'] == po_seleccionada].iloc[0].to_dict()
             
-            col1, col2 = st.columns(2)
-            with col1:
-                col_sku = st.selectbox("Columna que contiene el Número de SKU/Material:", columnas_excel)
-            with col2:
-                col_qty = st.selectbox("Columna que contiene la Cantidad Requerida:", columnas_excel)
+            st.markdown("##### 📄 Datos Generales")
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            with mc1:
+                st.metric("Proyecto / Uso", cab_info.get("Proyecto", "N/A"))
+            with mc2:
+                st.metric("Fecha Pedido", cab_info.get("Fecha_Pedido", "N/A"))
+            with mc3:
+                st.metric("Solicitante", cab_info.get("Solicitante", "N/A"))
+            with mc4:
+                st.metric("Requisición", cab_info.get("Requisicion", "N/A"))
+            st.info(f"📍 **Destino (L.A.B.):** {cab_info.get('Destino', 'N/A')}")
+            
+            # Obtener requerimientos de la PO
+            df_req_po = st.session_state.BD_Requerimientos_POs[st.session_state.BD_Requerimientos_POs['PO'] == po_seleccionada].copy()
+            
+            if df_req_po.empty:
+                st.warning("⚠️ No se encontraron partidas registradas para esta PO.")
+            else:
+                # Agrupar por SKU y Fecha de Entrega por seguridad
+                df_req_grouped = df_req_po.groupby(['PO', 'SKU', 'Fecha_Entrega', 'Parcialidad'], as_index=False)['Cantidad_Requerida'].sum()
                 
-            if st.button("🚀 Calcular Faltantes"):
-                with st.spinner("Cruzando información..."):
-                    # 1. Agrupar el Maestro
-                    # Limpiar SKUs
-                    df_maestro[col_sku] = df_maestro[col_sku].astype(str).str.strip()
-                    df_maestro[col_qty] = pd.to_numeric(df_maestro[col_qty], errors='coerce').fillna(0)
-                    
-                    df_req = df_maestro.groupby(col_sku, as_index=False)[col_qty].sum()
-                    df_req = df_req.rename(columns={col_sku: 'SKU', col_qty: 'Requerido'})
-                    
-                    # 2. Agrupar la BD de Producción
-                    if not st.session_state.BD_Detalle_Tarimas.empty:
-                        df_prod = st.session_state.BD_Detalle_Tarimas.copy()
-                        df_prod['SKU'] = df_prod['SKU'].astype(str).str.strip()
-                        df_prod['Cantidad'] = pd.to_numeric(df_prod['Cantidad'], errors='coerce').fillna(0)
-                        df_fab = df_prod.groupby('SKU', as_index=False)['Cantidad'].sum()
-                        df_fab = df_fab.rename(columns={'Cantidad': 'Fabricado'})
-                    else:
-                        df_fab = pd.DataFrame(columns=['SKU', 'Fabricado'])
-                        
-                    # 3. Cruzar Datos (Merge)
-                    # Queremos todos los SKUs requeridos (Left join)
-                    df_cruce = pd.merge(df_req, df_fab, on='SKU', how='left')
-                    df_cruce['Fabricado'] = df_cruce['Fabricado'].fillna(0)
-                    
-                    # Calcular Faltante
-                    df_cruce['Faltante_por_Fabricar'] = df_cruce['Requerido'] - df_cruce['Fabricado']
-                    
-                    # Enriquecer con Nombre y Descripción si existen en Catálogo
+                # Fechas de entrega únicas ordenadas cronológicamente
+                fechas_columnas = sorted(df_req_grouped['Fecha_Entrega'].unique().tolist())
+                unique_skus = df_req_grouped['SKU'].unique().tolist()
+                
+                # Obtener estatus de tarimas
+                mapa_tarimas_status = {}
+                if not st.session_state.BD_Tarimas.empty:
+                    for _, t_row in st.session_state.BD_Tarimas.iterrows():
+                        mapa_tarimas_status[str(t_row['ID_Tarima']).strip().upper()] = str(t_row['Estatus']).strip().upper()
+                
+                # Obtener detalles de producción para esta PO
+                df_prod_po = pd.DataFrame()
+                if not st.session_state.BD_Detalle_Tarimas.empty:
+                    df_prod = st.session_state.BD_Detalle_Tarimas.copy()
+                    df_prod['PO_Clean'] = df_prod['PO'].astype(str).str.strip().str.upper()
+                    df_prod_po = df_prod[
+                        (df_prod['PO_Clean'] == po_seleccionada) | 
+                        (df_prod['PO_Clean'].str.contains(po_seleccionada, na=False))
+                    ].copy()
+                
+                if not df_prod_po.empty:
+                    df_prod_po['ID_Tarima_Clean'] = df_prod_po['ID_Tarima'].astype(str).str.strip().str.upper()
+                    df_prod_po['Estatus'] = df_prod_po['ID_Tarima_Clean'].map(mapa_tarimas_status).fillna("DISPONIBLE")
+                    df_prod_po['Cantidad'] = pd.to_numeric(df_prod_po['Cantidad'], errors='coerce').fillna(0)
+                    df_prod_po['Remesada'] = df_prod_po.apply(lambda r: r['Cantidad'] if r['Estatus'] == 'REMESADA' else 0, axis=1)
+                    df_prod_po['Stock'] = df_prod_po.apply(lambda r: r['Cantidad'] if r['Estatus'] != 'REMESADA' else 0, axis=1)
+                
+                # Construir matriz de dispersión FIFO
+                matrix_rows = []
+                import ast
+                
+                for sku in unique_skus:
+                    sku_desc = "Sin Registro en Catálogo"
                     if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                        df_art = st.session_state.BD_Articulos.copy()
-                        df_art['SKU'] = df_art['SKU'].astype(str).str.strip()
-                        df_cruce = pd.merge(df_cruce, df_art[['SKU', 'Nombre']], on='SKU', how='left')
-                        df_cruce['Nombre'] = df_cruce['Nombre'].fillna("Desconocido")
-                        # Reordenar
-                        df_cruce = df_cruce[['SKU', 'Nombre', 'Requerido', 'Fabricado', 'Faltante_por_Fabricar']]
-                    else:
-                        df_cruce = df_cruce[['SKU', 'Requerido', 'Fabricado', 'Faltante_por_Fabricar']]
+                        match_art = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku]
+                        if not match_art.empty:
+                            sku_desc = match_art.iloc[0]['Nombre']
+                            
+                    # Requerimientos para este SKU específico
+                    sku_reqs = df_req_grouped[df_req_grouped['SKU'] == sku].sort_values(by='Fecha_Entrega')
+                    total_req = int(sku_reqs['Cantidad_Requerida'].sum())
+                    
+                    # Consolidado producido real
+                    total_rem = 0
+                    total_stk = 0
+                    if not df_prod_po.empty:
+                        match_prod = df_prod_po[df_prod_po['SKU'] == sku]
+                        total_rem = int(match_prod['Remesada'].sum())
+                        total_stk = int(match_prod['Stock'].sum())
+                    
+                    # --- ALGORITMO FIFO ---
+                    # Pasada 1: Asignar Remesado (Entregado)
+                    rem_restante = total_rem
+                    allocated_rem = {}
+                    for _, req_row in sku_reqs.iterrows():
+                        d = req_row['Fecha_Entrega']
+                        req_qty = req_row['Cantidad_Requerida']
+                        alloc = min(req_qty, rem_restante)
+                        allocated_rem[d] = alloc
+                        rem_restante -= alloc
                         
-                    # Filtrar solo los que realmente faltan? No, el usuario podría querer ver si se fabricó de más.
-                    # Ordenar por Faltante de mayor a menor
-                    df_cruce = df_cruce.sort_values(by='Faltante_por_Fabricar', ascending=False)
-                    
-                    # Convertir a enteros para mejor visualización
-                    df_cruce['Requerido'] = df_cruce['Requerido'].astype(int)
-                    df_cruce['Fabricado'] = df_cruce['Fabricado'].astype(int)
-                    df_cruce['Faltante_por_Fabricar'] = df_cruce['Faltante_por_Fabricar'].astype(int)
-                    
-                    st.markdown("---")
-                    st.subheader("📊 Resultado del Análisis")
-                    
-                    col_m1, col_m2, col_m3 = st.columns(3)
-                    with col_m1:
-                        st.metric("Total Requerido", f"{df_cruce['Requerido'].sum():,}")
-                    with col_m2:
-                        st.metric("Total Fabricado Global", f"{df_cruce['Fabricado'].sum():,}")
-                    with col_m3:
-                        faltante_neto = df_cruce[df_cruce['Faltante_por_Fabricar'] > 0]['Faltante_por_Fabricar'].sum()
-                        st.metric("Total Pendiente de Fabricar", f"{faltante_neto:,}")
+                    # Pasada 2: Asignar Stock (Disponible en Almacén)
+                    stk_restante = total_stk
+                    allocated_stk = {}
+                    for _, req_row in sku_reqs.iterrows():
+                        d = req_row['Fecha_Entrega']
+                        req_qty = req_row['Cantidad_Requerida']
+                        already_alloc = allocated_rem.get(d, 0)
+                        needed = req_qty - already_alloc
+                        alloc = min(needed, stk_restante)
+                        allocated_stk[d] = alloc
+                        stk_restante -= alloc
                         
-                    st.dataframe(df_cruce, use_container_width=True, hide_index=True)
+                    # Construir renglón
+                    total_cubierto = total_rem + total_stk
+                    total_faltante = max(0, total_req - total_cubierto)
                     
-                    # Exportar a Excel
-                    buf_c = io.BytesIO()
-                    writer_c = pd.ExcelWriter(buf_c, engine='openpyxl')
-                    df_cruce.to_excel(writer_c, index=False, sheet_name='Analisis de Faltantes')
+                    row_data = {
+                        "SKU": sku,
+                        "Nombre": sku_desc,
+                        "Total Requerido": total_req,
+                        "Total Entregado": total_rem,
+                        "Total Almacén": total_stk,
+                        "Total Faltante": total_faltante
+                    }
                     
-                    from openpyxl.styles import Font, PatternFill, Alignment
-                    workbook = writer_c.book
-                    sheet = workbook['Analisis de Faltantes']
-                    header_fill = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
-                    header_font = Font(color="FFFFFF", bold=True)
-                    center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                    # Columnas dinámicas de Fechas
+                    for d in fechas_columnas:
+                        match_date = sku_reqs[sku_reqs['Fecha_Entrega'] == d]
+                        if match_date.empty:
+                            row_data[d] = "-"
+                        else:
+                            req_val = int(match_date.iloc[0]['Cantidad_Requerida'])
+                            ent_val = int(allocated_rem.get(d, 0))
+                            stk_val = int(allocated_stk.get(d, 0))
+                            falt_val = max(0, req_val - (ent_val + stk_val))
+                            
+                            status_sym = "✅" if falt_val == 0 else "⚠️"
+                            row_data[d] = f"R:{req_val} | E:{ent_val} | S:{stk_val} | F:{falt_val} {status_sym}"
+                            
+                    matrix_rows.append(row_data)
                     
-                    for cell in sheet[1]:
-                        cell.fill = header_fill
-                        cell.font = header_font
+                df_matrix = pd.DataFrame(matrix_rows)
+                
+                # Totales globales
+                tot_req = df_matrix["Total Requerido"].sum()
+                tot_ent = df_matrix["Total Entregado"].sum()
+                tot_stk = df_matrix["Total Almacén"].sum()
+                tot_fal = df_matrix["Total Faltante"].sum()
+                
+                st.write("")
+                col_met1, col_met2, col_met3, col_met4 = st.columns(4)
+                with col_met1:
+                    st.metric("Total Requerido", f"{tot_req:,} PZS")
+                with col_met2:
+                    st.metric("Total Entregado (Remesado)", f"{tot_ent:,} PZS")
+                with col_met3:
+                    st.metric("Stock en Almacén", f"{tot_stk:,} PZS")
+                with col_met4:
+                    st.metric("Pendiente (Faltante)", f"{tot_fal:,} PZS")
+                    
+                st.dataframe(df_matrix, use_container_width=True, hide_index=True)
+                st.session_state.last_matrix_df = df_matrix
+                st.session_state.last_matrix_po = po_seleccionada
+
+    with tab_dl:
+        st.write("")
+        st.subheader("📉 Exportar Reporte de Dispersión")
+        if "last_matrix_df" in st.session_state and "last_matrix_po" in st.session_state:
+            po_name = st.session_state.last_matrix_po
+            df_dl = st.session_state.last_matrix_df.copy()
+            
+            buf_dl = io.BytesIO()
+            with pd.ExcelWriter(buf_dl, engine='openpyxl') as writer_dl:
+                df_dl.to_excel(writer_dl, index=False, sheet_name=f"Avance_PO_{po_name}")
+                
+                from openpyxl.styles import Font, PatternFill, Alignment
+                workbook = writer_dl.book
+                sheet = workbook[f"Avance_PO_{po_name}"]
+                
+                header_fill = PatternFill(start_color="EC2024", end_color="EC2024", fill_type="solid")
+                header_font = Font(color="FFFFFF", bold=True)
+                center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                
+                # Cabeceras
+                for cell in sheet[1]:
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = center_alignment
+                    
+                # Celdas
+                for row in sheet.iter_rows(min_row=2):
+                    for cell in row:
                         cell.alignment = center_alignment
                         
-                    for row in sheet.iter_rows(min_row=2):
-                        for cell in row:
-                            cell.alignment = center_alignment
-                            
-                    for col in sheet.columns:
-                        max_length = 0
-                        column = col[0].column_letter
-                        for cell in col:
-                            try:
-                                if len(str(cell.value)) > max_length:
-                                    max_length = len(str(cell.value))
-                            except:
-                                pass
-                        sheet.column_dimensions[column].width = min((max_length + 2), 60)
-                        
-                    sheet.auto_filter.ref = sheet.dimensions
-                    sheet.freeze_panes = "A2"
+                # Ajustar ancho
+                for col in sheet.columns:
+                    max_length = 0
+                    column = col[0].column_letter
+                    for cell in col:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    sheet.column_dimensions[column].width = min((max_length + 2), 60)
                     
-                    writer_c.close()
-                    buf_c.seek(0)
-                    
-                    st.download_button(
-                        label="📥 Descargar Reporte de Faltantes (.xlsx)",
-                        data=buf_c.getvalue(),
-                        file_name="Reporte_Faltantes_Globales.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                    
-        except Exception as e:
-            st.error(f"❌ No se pudo leer el archivo: {e}")
+                sheet.auto_filter.ref = sheet.dimensions
+                sheet.freeze_panes = "A2"
+                
+            st.download_button(
+                label=f"📥 Descargar Avance de PO {po_name} (.xlsx)",
+                data=buf_dl.getvalue(),
+                file_name=f"Reporte_Avance_PO_{po_name}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_download_po_matrix_xlsx"
+            )
+        else:
+            st.info("💡 Por favor consulte primero una PO en la pestaña 'Matriz de Avance por PO' para poder descargar su reporte de dispersión.")
             
 # =============================================================================
 # 17. CONSULTA POR LOTE SKU
