@@ -5109,6 +5109,16 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                     st.metric("Pendiente (Faltante)", f"{tot_fal:,} PZS")
                     
                 st.dataframe(df_matrix, use_container_width=True, hide_index=True)
+                
+                with st.expander("📖 Glosario de Acrónimos de la Matriz (R | E | S | F)", expanded=True):
+                    st.markdown("""
+                    * **R (Requerido):** El total de piezas solicitadas originalmente en la Orden de Compra (PO) para esa partida/SKU.
+                    * **E (Entregado):** Las piezas que ya han sido embarcadas y despachadas (remesadas) formalmente al cliente/destino.
+                    * **S (Stock):** Las piezas que ya han sido fabricadas y se encuentran físicamente listas y disponibles en el patio o almacén de Metales (pendientes de ser enviadas).
+                    * **F (Faltante):** La cantidad de piezas que están pendientes de fabricar para completar el requerimiento de la PO.
+                    * **✅ / ⚠️**: Indica si el requerimiento de la fecha está cubierto al 100% (`F: 0`) o si aún tiene piezas pendientes de fabricar (`F > 0`).
+                    """)
+                
                 st.session_state.last_matrix_df = df_matrix
                 st.session_state.last_matrix_po = po_seleccionada
 
