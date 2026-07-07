@@ -758,6 +758,114 @@ def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
         
     return msg.as_bytes()
 
+def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas):
+    # Cabecera informativa
+    html = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; color: #333333; }}
+            .header-table {{ border-collapse: collapse; margin-bottom: 20px; width: 100%; max-width: 600px; }}
+            .header-table td {{ padding: 6px 12px; border: 1px solid #e0e0e0; }}
+            .header-table td.label {{ font-weight: bold; background-color: #f5f5f5; width: 150px; }}
+            .matrix-table {{ border-collapse: collapse; width: 100%; margin-top: 15px; font-size: 13px; }}
+            .matrix-table th {{ background-color: #EC2024; color: #FFFFFF; font-weight: bold; padding: 8px; border: 1px solid #dcdcdc; text-align: center; }}
+            .matrix-table td {{ padding: 8px; border: 1px solid #dcdcdc; text-align: center; }}
+            .metric-req {{ background-color: #000000; color: #FFFFFF; font-weight: bold; }}
+            .metric-ent {{ background-color: #2E7D32; color: #FFFFFF; font-weight: bold; }}
+            .metric-stk {{ background-color: #FBC02D; color: #000000; font-weight: bold; }}
+            .metric-fal {{ background-color: #C62828; color: #FFFFFF; font-weight: bold; }}
+            .summary-row {{ font-weight: bold; background-color: #f9f9f9; }}
+        </style>
+    </head>
+    <body>
+        <h2>Reporte de Avance y Dispersión de PO {po_name}</h2>
+        <p>Estimado equipo,</p>
+        <p>A continuación se presenta el reporte de avance y dispersión de entregas de la Orden de Compra solicitado:</p>
+        
+        <table class="header-table">
+            <tr>
+                <td class="label">Orden de Compra:</td>
+                <td><b>PO {po_name}</b></td>
+            </tr>
+            <tr>
+                <td class="label">Proyecto:</td>
+                <td>{cab_info.get('Proyecto', 'N/A')}</td>
+            </tr>
+            <tr>
+                <td class="label">Solicitante:</td>
+                <td>{cab_info.get('Solicitante', 'N/A')}</td>
+            </tr>
+            <tr>
+                <td class="label">Requisición:</td>
+                <td>{cab_info.get('Requisicion', 'N/A')}</td>
+            </tr>
+            <tr>
+                <td class="label">Destino (L.A.B.):</td>
+                <td>{cab_info.get('Destino', 'N/A')}</td>
+            </tr>
+        </table>
+        
+        <h3>Resumen de Partidas y Dispersión por Fecha</h3>
+        <table class="matrix-table">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th class="metric-req">Total Requerido</th>
+                    <th class="metric-ent">Total Entregado</th>
+                    <th class="metric-stk">Total Almacén</th>
+                    <th class="metric-fal">Total Faltante</th>
+    """
+    
+    # Agregar cabeceras de fechas
+    for d in fechas_columnas:
+        html += f"<th>{d}</th>"
+        
+    html += """
+                </tr>
+            </thead>
+            <tbody>
+    """
+    
+    # Agregar filas
+    for _, row in df_matrix.iterrows():
+        sku = row["SKU"]
+        is_summary = (sku == "📈 % AVANCE")
+        
+        row_class = ' class="summary-row"' if is_summary else ""
+        html += f"<tr{row_class}>"
+        html += f"<td><b>{sku}</b></td>"
+        
+        # Columnas de totales
+        if is_summary:
+            html += f"<td>{row['Total Requerido']}</td>"
+            html += f"<td>{row['Total Entregado']}</td>"
+            html += f"<td>{row['Total Almacén']}</td>"
+            html += f"<td>{row['Total Faltante']}</td>"
+        else:
+            html += f"<td class='metric-req'>{row['Total Requerido']}</td>"
+            html += f"<td class='metric-ent'>{row['Total Entregado']}</td>"
+            html += f"<td class='metric-stk'>{row['Total Almacén']}</td>"
+            html += f"<td class='metric-fal'>{row['Total Faltante']}</td>"
+            
+        # Fechas
+        for d in fechas_columnas:
+            val = row.get(d, "-")
+            html += f"<td>{val}</td>"
+            
+        html += "</tr>"
+        
+    html += """
+            </tbody>
+        </table>
+        <p><i>Nota: Se anexa a este correo el reporte de Excel oficial con los datos completos de dispersión de entregas.</i></p>
+        <br>
+        <p>Saludos cordiales,<br><b>Sistema de Control de Remisiones y Metales</b></p>
+    </body>
+    </html>
+    """
+    return html
+
 def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
     # Obtener listado de imágenes desde GitHub una sola vez para no saturar la API
     github_items = []
@@ -5343,6 +5451,81 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                     
                     st.session_state.last_matrix_df = df_matrix
                     st.session_state.last_matrix_po = po_seleccionada
+                    
+                    st.write("---")
+                    st.subheader("📩 Generar Notificación por Correo (Borrador Outlook)")
+                    st.caption("Ensamblado dinámico de correos con formato de borrador de Outlook, tablas HTML y el reporte Excel adjunto de esta consulta.")
+                    
+                    # Cargar destinatarios configurados por defecto
+                    cfg_emails_po = obtener_emails_config()
+                    
+                    col_em_po1, col_em_po2 = st.columns(2)
+                    with col_em_po1:
+                        eml_po_to = st.text_input("Para:", value=cfg_emails_po.get("dest_to", ""), key=f"eml_po_to_{po_seleccionada}")
+                    with col_em_po2:
+                        eml_po_cc = st.text_input("CC:", value=cfg_emails_po.get("dest_cc", ""), key=f"eml_po_cc_{po_seleccionada}")
+                        
+                    # Generar el Excel del avance
+                    buf_eml_xlsx = io.BytesIO()
+                    with pd.ExcelWriter(buf_eml_xlsx, engine='openpyxl') as writer_dl:
+                        df_matrix.to_excel(writer_dl, index=False, sheet_name=f"Avance_PO_{po_seleccionada}")
+                        
+                        from openpyxl.styles import Font, PatternFill, Alignment
+                        workbook = writer_dl.book
+                        sheet = workbook[f"Avance_PO_{po_seleccionada}"]
+                        
+                        header_fill = PatternFill(start_color="EC2024", end_color="EC2024", fill_type="solid")
+                        header_font = Font(color="FFFFFF", bold=True)
+                        center_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                        
+                        # Cabeceras
+                        for cell in sheet[1]:
+                            cell.fill = header_fill
+                            cell.font = header_font
+                            cell.alignment = center_alignment
+                            
+                        # Celdas
+                        for row in sheet.iter_rows(min_row=2):
+                            for cell in row:
+                                cell.alignment = center_alignment
+                                
+                        # Ajustar ancho
+                        for col in sheet.columns:
+                            max_length = 0
+                            column = col[0].column_letter
+                            for cell in col:
+                                try:
+                                    if len(str(cell.value)) > max_length:
+                                        max_length = len(str(cell.value))
+                                except:
+                                    pass
+                            sheet.column_dimensions[column].width = min((max_length + 2), 60)
+                            
+                        sheet.auto_filter.ref = sheet.dimensions
+                        sheet.freeze_panes = "A2"
+                    
+                    buf_eml_xlsx.seek(0)
+                    
+                    # Generar cuerpo HTML
+                    cuerpo_html = generar_cuerpo_correo_po_html(po_seleccionada, cab_info, df_matrix, fechas_columnas)
+                    
+                    # Generar adjuntos
+                    adjuntos_dict = {
+                        f"Reporte_Avance_PO_{po_seleccionada}.xlsx": buf_eml_xlsx.getvalue()
+                    }
+                    
+                    # Generar borrador EML
+                    eml_subject = f"Reporte de Avance y Dispersión - PO {po_seleccionada}"
+                    eml_bytes = generar_archivo_eml(eml_po_to, eml_po_cc, eml_subject, cuerpo_html, adjuntos_dict)
+                    
+                    st.download_button(
+                        label="📩 Descargar Borrador de Correo de Avance (.eml)",
+                        data=eml_bytes,
+                        file_name=f"Correo_Avance_PO_{po_seleccionada}.eml",
+                        mime="message/rfc822",
+                        key=f"btn_dl_eml_po_{po_seleccionada}",
+                        use_container_width=True
+                    )
 
     with tab_dl:
         st.write("")
