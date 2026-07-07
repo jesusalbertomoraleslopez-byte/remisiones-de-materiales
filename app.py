@@ -5018,6 +5018,11 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                 matrix_rows = []
                 import ast
                 
+                # Inicializar totalizadores por columna de fecha
+                col_req_totals = {d: 0 for d in fechas_columnas}
+                col_ent_totals = {d: 0 for d in fechas_columnas}
+                col_stk_totals = {d: 0 for d in fechas_columnas}
+                
                 for sku in unique_skus:
                     sku_desc = "Sin Registro en Catálogo"
                     if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
@@ -5087,15 +5092,51 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                             status_sym = "✅" if falt_val == 0 else "⚠️"
                             row_data[d] = f"R:{req_val} | E:{ent_val} | S:{stk_val} | F:{falt_val} {status_sym}"
                             
+                            # Acumular para totales globales por columna
+                            col_req_totals[d] += req_val
+                            col_ent_totals[d] += ent_val
+                            col_stk_totals[d] += stk_val
+                            
                     matrix_rows.append(row_data)
                     
-                df_matrix = pd.DataFrame(matrix_rows)
+                # Totales globales a nivel de métricas
+                tot_req = sum(r["Total Requerido"] for r in matrix_rows)
+                tot_ent = sum(r["Total Entregado"] for r in matrix_rows)
+                tot_stk = sum(r["Total Almacén"] for r in matrix_rows)
+                tot_fal = sum(r["Total Faltante"] for r in matrix_rows)
                 
-                # Totales globales
-                tot_req = df_matrix["Total Requerido"].sum()
-                tot_ent = df_matrix["Total Entregado"].sum()
-                tot_stk = df_matrix["Total Almacén"].sum()
-                tot_fal = df_matrix["Total Faltante"].sum()
+                # Construir fila resumen "📈 % AVANCE"
+                summary_row = {
+                    "SKU": "📈 % AVANCE",
+                    "Nombre": "Avance global por columna",
+                    "Total Requerido": f"{((tot_ent + tot_stk) / tot_req * 100):.1f}%" if tot_req > 0 else "0.0%",
+                    "Total Entregado": tot_ent,
+                    "Total Almacén": tot_stk,
+                    "Total Faltante": tot_fal
+                }
+                
+                # Para cada fecha, calculamos el porcentaje de avance global de esa fecha
+                for d in fechas_columnas:
+                    r_tot = col_req_totals[d]
+                    e_tot = col_ent_totals[d]
+                    s_tot = col_stk_totals[d]
+                    
+                    if r_tot > 0:
+                        pct = (e_tot + s_tot) / r_tot
+                        pct_val = min(100.0, pct * 100)
+                        
+                        # Dibujar barra de progreso de texto (10 bloques)
+                        num_blocks = int(round(pct_val / 10))
+                        bar = "█" * num_blocks + "░" * (10 - num_blocks)
+                        sym = "✅" if pct_val >= 100 else "⚠️"
+                        summary_row[d] = f"{bar} {pct_val:.1f}% {sym}"
+                    else:
+                        summary_row[d] = "-"
+                        
+                # Añadir fila resumen a los datos de la matriz
+                matrix_rows.append(summary_row)
+                
+                df_matrix = pd.DataFrame(matrix_rows)
                 
                 st.write("")
                 col_met1, col_met2, col_met3, col_met4 = st.columns(4)
