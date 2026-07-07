@@ -218,6 +218,35 @@ REPO_OWNER = "jesusalbertomoraleslopez-byte"
 REPO_NAME = "remisiones-de-materiales"
 BRANCH = "main"
 
+def clean_project_val(val):
+    if pd.isna(val):
+        return ""
+    val_str = str(val).strip()
+    if not val_str:
+        return ""
+    
+    # Si es puramente un número entero (ej. 3, 15)
+    if val_str.isdigit():
+        return f"INT-{int(val_str):03d}"
+    
+    # Si es un número decimal que termina en .0 (ej. 3.0, 15.0)
+    try:
+        float_val = float(val_str)
+        if float_val.is_integer():
+            return f"INT-{int(float_val):03d}"
+    except ValueError:
+        pass
+        
+    # Si tiene el patrón INT- seguido de un número (ej. INT-3, INT-03, INT-003)
+    import re
+    match = re.match(r'^INT\s*-\s*(\d+)$', val_str, re.IGNORECASE)
+    if match:
+        num = int(match.group(1))
+        return f"INT-{num:03d}"
+        
+    # De lo contrario, dejarlo como está (ej. LC8, RECHASO)
+    return val_str
+
 def cargar_excel_desde_github(file_name):
     """Carga el archivo Excel: primero busca en disco local (modo offline), luego en GitHub API."""
     import os
@@ -2615,7 +2644,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
 
                         items = df_ex[df_ex['Tarima'] == t_orig]
                         for _, item in items.iterrows():
-                            st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas) + 1, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": item['PO'], "Proyecto": item['Proyecto'], "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']}])], ignore_index=True)
+                            st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas) + 1, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": item['PO'], "Proyecto": clean_project_val(item['Proyecto']), "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']}])], ignore_index=True)
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
                     # Eliminamos el archivo de override si existe, ya que ha sido consumido
@@ -4865,7 +4894,7 @@ elif opcion_menu == "🕰️ Carga Histórica":
                                 "ID_Tarima": mapa_tpm[t_excel],
                                 "SKU": row['Producto/SKU'],
                                 "PO": row['PO'],
-                                "Proyecto": row['Proyecto'],
+                                "Proyecto": clean_project_val(row['Proyecto']),
                                 "Parcialidad": row['Parcialidad'],
                                 "Descripcion": row['Descripcion'],
                                 "Cantidad": row['Cantidad']
@@ -5045,6 +5074,8 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                             # 1. Procesar Cabecera
                             row_gen = df_gen.iloc[0].to_dict()
                             po_num = str(row_gen.get("PO", "")).strip().upper()
+                            if "Proyecto" in row_gen:
+                                row_gen["Proyecto"] = clean_project_val(row_gen["Proyecto"])
                             
                             if not po_num or po_num == "NAN":
                                 st.error("❌ El campo 'PO' en la hoja Datos_Generales no es válido.")
