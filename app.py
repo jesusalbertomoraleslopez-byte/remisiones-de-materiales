@@ -3234,6 +3234,76 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     key="po_color_config_selector"
                 )
                 
+                # --- NUEVA SECCIÓN DE DATOS RELACIONADOS Y ESTADÍSTICAS DE LA PO ---
+                po_metadata = {}
+                found_meta = False
+                if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+                    df_pos_cab = st.session_state.BD_POs_Cabecera
+                    po_rows = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == po_sel]
+                    if not po_rows.empty:
+                        row_meta = po_rows.iloc[0]
+                        found_meta = True
+                        po_metadata = {
+                            "Fecha_Pedido": row_meta.get("Fecha_Pedido", "N/A"),
+                            "Proyecto": row_meta.get("Proyecto", "N/A"),
+                            "Solicitante": row_meta.get("Solicitante", "N/A"),
+                            "Requisicion": row_meta.get("Requisicion", "N/A"),
+                            "Destino": row_meta.get("Destino", "N/A")
+                        }
+                
+                # Calcular estadísticas de la PO
+                total_skus = 0
+                cant_req = 0
+                cant_rec = 0
+                
+                if "BD_Requerimientos_POs" in st.session_state and not st.session_state.BD_Requerimientos_POs.empty:
+                    df_req = st.session_state.BD_Requerimientos_POs
+                    df_req_po = df_req[df_req["PO"].astype(str).str.strip().str.upper() == po_sel]
+                    if not df_req_po.empty:
+                        total_skus = len(df_req_po["SKU"].unique())
+                        cant_req = int(df_req_po["Cantidad_Requerida"].sum())
+                
+                if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                    df_det = st.session_state.BD_Detalle_Tarimas
+                    df_det_po = df_det[df_det["PO"].astype(str).str.strip().str.upper() == po_sel]
+                    if not df_det_po.empty:
+                        cant_rec = int(df_det_po["Cantidad"].sum())
+                
+                if found_meta:
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #F8F9FA; border: 1px solid #D2D3D5; border-radius: 4px; padding: 14px; margin-bottom: 20px;">
+                            <span style="font-weight: bold; color: #111111; font-size: 15px;">📋 Datos Maestros de la PO en Cabecera:</span>
+                            <hr style="margin: 8px 0; border: 0; border-top: 1px solid #D2D3D5;"/>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; font-size: 13.5px; color: #333333;">
+                                <div><b>📅 Fecha de Pedido:</b> {po_metadata["Fecha_Pedido"] if pd.notna(po_metadata["Fecha_Pedido"]) else "N/A"}</div>
+                                <div><b>🏗️ Proyecto:</b> {po_metadata["Proyecto"] if pd.notna(po_metadata["Proyecto"]) else "N/A"}</div>
+                                <div><b>👤 Solicitante:</b> {po_metadata["Solicitante"] if pd.notna(po_metadata["Solicitante"]) else "N/A"}</div>
+                                <div><b>📝 Requisición:</b> {po_metadata["Requisicion"] if pd.notna(po_metadata["Requisicion"]) else "N/A"}</div>
+                                <div><b>📍 Destino:</b> {po_metadata["Destino"] if pd.notna(po_metadata["Destino"]) else "N/A"}</div>
+                            </div>
+                            <hr style="margin: 10px 0; border: 0; border-top: 1px dashed #D2D3D5;"/>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; font-size: 13.5px; color: #333333;">
+                                <div><b>🔢 SKUs Requeridos:</b> {total_skus}</div>
+                                <div><b>📊 Cantidad Requerida:</b> {cant_req:,} Pzs</div>
+                                <div><b>📦 Cantidad Recibida en Tarimas:</b> {cant_rec:,} Pzs</div>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.info(
+                        f"""
+                        💡 **Nota del Sistema**: La PO **{po_sel}** no cuenta con registro en el catálogo maestro de cabecera de POs (solo ha sido detectada en el inventario/detalles de tarimas cargadas).
+                        <br/>
+                        <b>Estatus Logístico actual:</b>
+                        * 📦 **Cantidad Recibida en Tarimas:** {cant_rec:,} Pzs
+                        """,
+                        unsafe_allow_html=True
+                    )
+                # -------------------------------------------------------------------
+                
                 # Valores por defecto
                 val_text = ""
                 val_bg = "#85A3D4" # Azul claro por defecto
