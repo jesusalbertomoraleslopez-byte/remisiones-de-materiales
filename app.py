@@ -1099,25 +1099,27 @@ def generar_pdf_etiqueta(t_imp):
     fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
 
     # Buscar si alguna PO de la tarima tiene formato de color configurado
-    color_bg = None
-    color_fg = None
-    texto_etiqueta = None
+    etiquetas_configuradas = []
     
     if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
         df_pos_cab = st.session_state.BD_POs_Cabecera
         pos_tarima = det['PO'].dropna().unique().tolist()
+        vistas = set()
         for p in pos_tarima:
             p_upper = str(p).strip().upper()
             po_rows = df_pos_cab[df_pos_cab['PO'].astype(str).str.strip().str.upper() == p_upper]
             if not po_rows.empty:
                 row = po_rows.iloc[0]
                 if 'Color_Fondo' in df_pos_cab.columns and pd.notna(row.get('Color_Fondo')) and str(row.get('Color_Fondo')).strip():
-                    color_bg = str(row['Color_Fondo']).strip()
-                    color_fg = str(row.get('Color_Texto', '#FFFFFF')).strip()
-                    texto_etiqueta = str(row.get('Texto_Etiqueta', '')).strip()
-                    if not texto_etiqueta:
-                        texto_etiqueta = p
-                    break
+                    bg = str(row['Color_Fondo']).strip()
+                    fg = str(row.get('Color_Texto', '#FFFFFF')).strip()
+                    txt = str(row.get('Texto_Etiqueta', '')).strip()
+                    if not txt:
+                        txt = p
+                    clave = (bg, fg, txt)
+                    if clave not in vistas:
+                        vistas.add(clave)
+                        etiquetas_configuradas.append({"bg": bg, "fg": fg, "text": txt})
 
     # HOJA 1: CARÁTULA DE IDENTIFICACIÓN
     story_l.append(Spacer(1, 1.2 * inch))
@@ -1127,7 +1129,7 @@ def generar_pdf_etiqueta(t_imp):
     num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
     story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
     
-    if color_bg and texto_etiqueta:
+    if etiquetas_configuradas:
         story_l.append(Spacer(1, 0.6 * inch))
     else:
         story_l.append(Spacer(1, 1.5 * inch))
@@ -1144,25 +1146,35 @@ def generar_pdf_etiqueta(t_imp):
     ]))
     story_l.append(tabla_base)
 
-    if color_bg and texto_etiqueta:
+    if etiquetas_configuradas:
         story_l.append(Spacer(1, 0.3 * inch))
-        style_color_tag = ParagraphStyle(
-            'ColorTagText', 
-            fontName="Helvetica-Bold", 
-            fontSize=34, 
-            leading=40, 
-            alignment=1, 
-            textColor=colors.HexColor(color_fg)
-        )
-        color_box_table = Table([[Paragraph(texto_etiqueta, style_color_tag)]], colWidths=[6.8 * inch], rowHeights=[1.0 * inch])
-        color_box_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor(color_bg)),
+        total_width = 6.8 * inch
+        num_cols = len(etiquetas_configuradas)
+        col_width = total_width / num_cols
+        
+        celdas = []
+        table_styles = [
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('GRID', (0,0), (-1,-1), 1.5, colors.HexColor("#EAB519")),
             ('BOTTOMPADDING', (0,0), (-1,-1), 10),
             ('TOPPADDING', (0,0), (-1,-1), 10)
-        ]))
+        ]
+        
+        for idx_e, etiq in enumerate(etiquetas_configuradas):
+            style_color_tag = ParagraphStyle(
+                f'ColorTagText_{t_imp}_{idx_e}', 
+                fontName="Helvetica-Bold", 
+                fontSize=max(16, 34 - (num_cols * 4)), 
+                leading=max(18, 40 - (num_cols * 4)), 
+                alignment=1, 
+                textColor=colors.HexColor(etiq["fg"])
+            )
+            celdas.append(Paragraph(etiq["text"], style_color_tag))
+            table_styles.append(('BACKGROUND', (idx_e, 0), (idx_e, 0), colors.HexColor(etiq["bg"])))
+            table_styles.append(('GRID', (idx_e, 0), (idx_e, 0), 1.5, colors.HexColor("#EAB519")))
+            
+        color_box_table = Table([celdas], colWidths=[col_width] * num_cols, rowHeights=[1.0 * inch])
+        color_box_table.setStyle(TableStyle(table_styles))
         story_l.append(color_box_table)
 
     story_l.append(PageBreak())
@@ -2815,25 +2827,27 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
                             
                             # Buscar si alguna PO de la tarima tiene formato de color configurado
-                            color_bg = None
-                            color_fg = None
-                            texto_etiqueta = None
+                            etiquetas_configuradas = []
                             
                             if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
                                 df_pos_cab = st.session_state.BD_POs_Cabecera
                                 pos_tarima = det['PO'].dropna().unique().tolist()
+                                vistas = set()
                                 for p in pos_tarima:
                                     p_upper = str(p).strip().upper()
                                     po_rows = df_pos_cab[df_pos_cab['PO'].astype(str).str.strip().str.upper() == p_upper]
                                     if not po_rows.empty:
                                         row = po_rows.iloc[0]
                                         if 'Color_Fondo' in df_pos_cab.columns and pd.notna(row.get('Color_Fondo')) and str(row.get('Color_Fondo')).strip():
-                                            color_bg = str(row['Color_Fondo']).strip()
-                                            color_fg = str(row.get('Color_Texto', '#FFFFFF')).strip()
-                                            texto_etiqueta = str(row.get('Texto_Etiqueta', '')).strip()
-                                            if not texto_etiqueta:
-                                                texto_etiqueta = p
-                                            break
+                                            bg = str(row['Color_Fondo']).strip()
+                                            fg = str(row.get('Color_Texto', '#FFFFFF')).strip()
+                                            txt = str(row.get('Texto_Etiqueta', '')).strip()
+                                            if not txt:
+                                                txt = p
+                                            clave = (bg, fg, txt)
+                                            if clave not in vistas:
+                                                vistas.add(clave)
+                                                etiquetas_configuradas.append({"bg": bg, "fg": fg, "text": txt})
 
                             # HOJA 1: CARÁTULA DE IDENTIFICACIÓN
                             story_l.append(Spacer(1, 1.2 * inch))
@@ -2843,7 +2857,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
                             story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
                             
-                            if color_bg and texto_etiqueta:
+                            if etiquetas_configuradas:
                                 story_l.append(Spacer(1, 0.6 * inch))
                             else:
                                 story_l.append(Spacer(1, 1.5 * inch))
@@ -2858,28 +2872,40 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                 ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor("#E0E0E0")),
                                 ('BOTTOMPADDING', (0,0), (-1,-1), 6)
                             ]))
+                            
+                            if etiquetas_configuradas:
+                                 story_l.append(Spacer(1, 0.3 * inch))
+                                 total_width = 6.8 * inch
+                                 num_cols = len(etiquetas_configuradas)
+                                 col_width = total_width / num_cols
+                                 
+                                 celdas = []
+                                 table_styles = [
+                                     ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                                     ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                                     ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+                                     ('TOPPADDING', (0,0), (-1,-1), 10)
+                                 ]
+                                 
+                                 for idx_e, etiq in enumerate(etiquetas_configuradas):
+                                     style_color_tag = ParagraphStyle(
+                                         f'ColorTagText_{t_imp}_{idx_e}', 
+                                         fontName="Helvetica-Bold", 
+                                         fontSize=max(16, 34 - (num_cols * 4)), 
+                                         leading=max(18, 40 - (num_cols * 4)), 
+                                         alignment=1, 
+                                         textColor=colors.HexColor(etiq["fg"])
+                                     )
+                                     celdas.append(Paragraph(etiq["text"], style_color_tag))
+                                     table_styles.append(('BACKGROUND', (idx_e, 0), (idx_e, 0), colors.HexColor(etiq["bg"])))
+                                     table_styles.append(('GRID', (idx_e, 0), (idx_e, 0), 1.5, colors.HexColor("#EAB519")))
+                                     
+                                 color_box_table = Table([celdas], colWidths=[col_width] * num_cols, rowHeights=[1.0 * inch])
+                                 color_box_table.setStyle(TableStyle(table_styles))
+                                 story_l.append(color_box_table)
+
                             story_l.append(tabla_base)
 
-                            if color_bg and texto_etiqueta:
-                                story_l.append(Spacer(1, 0.3 * inch))
-                                style_color_tag = ParagraphStyle(
-                                    'ColorTagText', 
-                                    fontName="Helvetica-Bold", 
-                                    fontSize=34, 
-                                    leading=40, 
-                                    alignment=1, 
-                                    textColor=colors.HexColor(color_fg)
-                                )
-                                color_box_table = Table([[Paragraph(texto_etiqueta, style_color_tag)]], colWidths=[6.8 * inch], rowHeights=[1.0 * inch])
-                                color_box_table.setStyle(TableStyle([
-                                    ('BACKGROUND', (0,0), (-1,-1), colors.HexColor(color_bg)),
-                                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                                    ('GRID', (0,0), (-1,-1), 1.5, colors.HexColor("#EAB519")),
-                                    ('BOTTOMPADDING', (0,0), (-1,-1), 10),
-                                    ('TOPPADDING', (0,0), (-1,-1), 10)
-                                ]))
-                                story_l.append(color_box_table)
 
                             story_l.append(PageBreak())
                             
@@ -3019,25 +3045,27 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
                         
                         # Buscar si alguna PO de la tarima tiene formato de color configurado
-                        color_bg = None
-                        color_fg = None
-                        texto_etiqueta = None
+                        etiquetas_configuradas = []
                         
                         if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
                             df_pos_cab = st.session_state.BD_POs_Cabecera
                             pos_tarima = det['PO'].dropna().unique().tolist()
+                            vistas = set()
                             for p in pos_tarima:
                                 p_upper = str(p).strip().upper()
                                 po_rows = df_pos_cab[df_pos_cab['PO'].astype(str).str.strip().str.upper() == p_upper]
                                 if not po_rows.empty:
                                     row = po_rows.iloc[0]
                                     if 'Color_Fondo' in df_pos_cab.columns and pd.notna(row.get('Color_Fondo')) and str(row.get('Color_Fondo')).strip():
-                                        color_bg = str(row['Color_Fondo']).strip()
-                                        color_fg = str(row.get('Color_Texto', '#FFFFFF')).strip()
-                                        texto_etiqueta = str(row.get('Texto_Etiqueta', '')).strip()
-                                        if not texto_etiqueta:
-                                            texto_etiqueta = p
-                                        break
+                                        bg = str(row['Color_Fondo']).strip()
+                                        fg = str(row.get('Color_Texto', '#FFFFFF')).strip()
+                                        txt = str(row.get('Texto_Etiqueta', '')).strip()
+                                        if not txt:
+                                            txt = p
+                                        clave = (bg, fg, txt)
+                                        if clave not in vistas:
+                                            vistas.add(clave)
+                                            etiquetas_configuradas.append({"bg": bg, "fg": fg, "text": txt})
                         
                         # =============================================================================
                         # HOJA 1: CARÁTULA DE IDENTIFICACIÓN MASIVA (NÚMERO GIGANTE)
@@ -3050,7 +3078,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
                         story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
                         
-                        if color_bg and texto_etiqueta:
+                        if etiquetas_configuradas:
                             story_l.append(Spacer(1, 0.6 * inch))
                         else:
                             story_l.append(Spacer(1, 1.5 * inch))
@@ -3068,25 +3096,35 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         ]))
                         story_l.append(tabla_base)
                         
-                        if color_bg and texto_etiqueta:
+                        if etiquetas_configuradas:
                             story_l.append(Spacer(1, 0.3 * inch))
-                            style_color_tag = ParagraphStyle(
-                                'ColorTagTextLote', 
-                                fontName="Helvetica-Bold", 
-                                fontSize=34, 
-                                leading=40, 
-                                alignment=1, 
-                                textColor=colors.HexColor(color_fg)
-                            )
-                            color_box_table = Table([[Paragraph(texto_etiqueta, style_color_tag)]], colWidths=[6.8 * inch], rowHeights=[1.0 * inch])
-                            color_box_table.setStyle(TableStyle([
-                                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor(color_bg)),
+                            total_width = 6.8 * inch
+                            num_cols = len(etiquetas_configuradas)
+                            col_width = total_width / num_cols
+                            
+                            celdas = []
+                            table_styles = [
                                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                                ('GRID', (0,0), (-1,-1), 1.5, colors.HexColor("#EAB519")),
                                 ('BOTTOMPADDING', (0,0), (-1,-1), 10),
                                 ('TOPPADDING', (0,0), (-1,-1), 10)
-                            ]))
+                            ]
+                            
+                            for idx_e, etiq in enumerate(etiquetas_configuradas):
+                                style_color_tag = ParagraphStyle(
+                                    f'ColorTagTextLote_{t_imp}_{idx_e}', 
+                                    fontName="Helvetica-Bold", 
+                                    fontSize=max(16, 34 - (num_cols * 4)), 
+                                    leading=max(18, 40 - (num_cols * 4)), 
+                                    alignment=1, 
+                                    textColor=colors.HexColor(etiq["fg"])
+                                )
+                                celdas.append(Paragraph(etiq["text"], style_color_tag))
+                                table_styles.append(('BACKGROUND', (idx_e, 0), (idx_e, 0), colors.HexColor(etiq["bg"])))
+                                table_styles.append(('GRID', (idx_e, 0), (idx_e, 0), 1.5, colors.HexColor("#EAB519")))
+                                
+                            color_box_table = Table([celdas], colWidths=[col_width] * num_cols, rowHeights=[1.0 * inch])
+                            color_box_table.setStyle(TableStyle(table_styles))
                             story_l.append(color_box_table)
                         
                         # Forzamos salto inmediato a la siguiente página
