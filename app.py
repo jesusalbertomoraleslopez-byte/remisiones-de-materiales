@@ -3306,8 +3306,13 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     
                     filas_elegidas = seleccion_df.get("selection", {}).get("rows", [])
                     
+                    pos_elegidas_nombres = []
                     if filas_elegidas:
-                        pos_elegidas_nombres = df_disponibles.iloc[filas_elegidas]["PO"].tolist()
+                        for idx in filas_elegidas:
+                            if 0 <= idx < len(df_disponibles):
+                                pos_elegidas_nombres.append(df_disponibles.iloc[idx]["PO"])
+                                
+                    if pos_elegidas_nombres:
                         if st.button("➕ Añadir POs al Grupo de Edición", use_container_width=True, key="btn_add_pos_to_active_group"):
                             for p in pos_elegidas_nombres:
                                 if p not in st.session_state.pos_en_edicion:
@@ -3481,9 +3486,13 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     
                     filas_conf_elegidas = seleccion_conf.get("selection", {}).get("rows", [])
                     
+                    pos_conf_elegidas = []
                     if filas_conf_elegidas:
-                        pos_conf_elegidas = df_conf_disp.iloc[filas_conf_elegidas]["PO"].tolist()
-                        
+                        for idx in filas_conf_elegidas:
+                            if 0 <= idx < len(df_conf_disp):
+                                pos_conf_elegidas.append(df_conf_disp.iloc[idx]["PO"])
+                                
+                    if pos_conf_elegidas:
                         col_action1, col_action2 = st.columns(2)
                         with col_action1:
                             if st.button("✏️ Editar Configuración Seleccionada", use_container_width=True, key="btn_edit_configured_pos"):
