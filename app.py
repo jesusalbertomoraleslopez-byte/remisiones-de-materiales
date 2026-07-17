@@ -3475,10 +3475,45 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     
                     df_conf_disp = pd.DataFrame(filas_conf_detalles)
                     
+                    # Generar icono de color (emoji) dinámico según el fondo hexadecimal
+                    def hex_to_emoji(hex_str):
+                        if not hex_str or not isinstance(hex_str, str) or not hex_str.startswith("#"):
+                            return "⚪"
+                        try:
+                            h = hex_str.lstrip('#')
+                            r, g, b = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+                            colors = {
+                                "🔴": (255, 0, 0),
+                                "🔵": (0, 0, 255),
+                                "🟢": (0, 255, 0),
+                                "🟡": (255, 255, 0),
+                                "🟠": (255, 165, 0),
+                                "🟣": (255, 0, 255), # Magenta / Violeta
+                                "🟤": (139, 69, 19),
+                                "⚫": (0, 0, 0),
+                                "⚪": (255, 255, 255)
+                            }
+                            closest_emoji = "⚪"
+                            min_dist = float('inf')
+                            for emoji, rgb in colors.items():
+                                dist = (r - rgb[0])**2 + (g - rgb[1])**2 + (b - rgb[2])**2
+                                if dist < min_dist:
+                                    min_dist = dist
+                                    closest_emoji = emoji
+                            return closest_emoji
+                        except Exception:
+                            return "⚪"
+                            
+                    df_conf_disp["Visual_Color"] = df_conf_disp["Fondo"].apply(hex_to_emoji)
+                    df_conf_disp["Etiqueta con Icono"] = df_conf_disp["Visual_Color"] + " " + df_conf_disp["Etiqueta"]
+                    
+                    # Ordenar por etiqueta y PO para agruparlas visualmente
+                    df_conf_disp = df_conf_disp.sort_values(by=["Etiqueta con Icono", "PO"]).reset_index(drop=True)
+                    
                     seleccion_conf = st.dataframe(
                         df_conf_disp,
                         use_container_width=True,
-                        column_order=["PO", "Proyecto", "Descripción", "Etiqueta", "Fondo", "Texto", "Cant Recibida"],
+                        column_order=["PO", "Proyecto", "Descripción", "Etiqueta con Icono", "Fondo", "Texto", "Cant Recibida"],
                         on_select="rerun",
                         selection_mode="multi-row",
                         key="po_color_configured_df_selection_unique"
