@@ -3228,173 +3228,166 @@ elif opcion_menu == "📦 Módulo Tarimas":
             if not lista_pos_disponibles:
                 st.warning("⚠️ No hay Órdenes de Compra (POs) registradas en el sistema para configurar.")
             else:
-                po_sel = st.selectbox(
-                    "📋 Seleccione la Orden de Compra (PO):",
+                pos_sel = st.multiselect(
+                    "📋 Seleccione las Órdenes de Compra (POs) a asociar:",
                     options=lista_pos_disponibles,
                     key="po_color_config_selector"
                 )
                 
-                # --- NUEVA SECCIÓN DE DATOS RELACIONADOS Y ESTADÍSTICAS DE LA PO ---
-                po_metadata = {}
-                found_meta = False
-                if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+                if pos_sel:
+                    # --- NUEVA SECCIÓN DE DATOS RELACIONADOS Y ESTADÍSTICAS EN LISTA ---
+                    filas_meta = []
+                    has_missing_header = False
+                    
                     df_pos_cab = st.session_state.BD_POs_Cabecera
-                    po_rows = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == po_sel]
-                    if not po_rows.empty:
-                        row_meta = po_rows.iloc[0]
-                        found_meta = True
-                        po_metadata = {
-                            "Fecha_Pedido": row_meta.get("Fecha_Pedido", "N/A"),
-                            "Proyecto": row_meta.get("Proyecto", "N/A"),
-                            "Solicitante": row_meta.get("Solicitante", "N/A"),
-                            "Requisicion": row_meta.get("Requisicion", "N/A"),
-                            "Destino": row_meta.get("Destino", "N/A")
+                    
+                    for p_sel in pos_sel:
+                        meta_row = {
+                            "Orden de Compra (PO)": p_sel, 
+                            "Fecha Pedido": "N/A", 
+                            "Proyecto": "N/A", 
+                            "Solicitante": "N/A", 
+                            "Requisición": "N/A", 
+                            "Destino": "N/A", 
+                            "SKUs Req": 0, 
+                            "Cant Req": 0, 
+                            "Cant Rec": 0
                         }
-                
-                # Calcular estadísticas de la PO
-                total_skus = 0
-                cant_req = 0
-                cant_rec = 0
-                
-                if "BD_Requerimientos_POs" in st.session_state and not st.session_state.BD_Requerimientos_POs.empty:
-                    df_req = st.session_state.BD_Requerimientos_POs
-                    df_req_po = df_req[df_req["PO"].astype(str).str.strip().str.upper() == po_sel]
-                    if not df_req_po.empty:
-                        total_skus = len(df_req_po["SKU"].unique())
-                        cant_req = int(df_req_po["Cantidad_Requerida"].sum())
-                
-                if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
-                    df_det = st.session_state.BD_Detalle_Tarimas
-                    df_det_po = df_det[df_det["PO"].astype(str).str.strip().str.upper() == po_sel]
-                    if not df_det_po.empty:
-                        cant_rec = int(df_det_po["Cantidad"].sum())
-                
-                if found_meta:
+                        
+                        po_rows = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == p_sel]
+                        if not po_rows.empty:
+                            r = po_rows.iloc[0]
+                            meta_row.update({
+                                "Fecha Pedido": str(r.get("Fecha_Pedido", "N/A")) if pd.notna(r.get("Fecha_Pedido")) else "N/A",
+                                "Proyecto": str(r.get("Proyecto", "N/A")) if pd.notna(r.get("Proyecto")) else "N/A",
+                                "Solicitante": str(r.get("Solicitante", "N/A")) if pd.notna(r.get("Solicitante")) else "N/A",
+                                "Requisición": str(r.get("Requisicion", "N/A")) if pd.notna(r.get("Requisicion")) else "N/A",
+                                "Destino": str(r.get("Destino", "N/A")) if pd.notna(r.get("Destino")) else "N/A"
+                            })
+                        else:
+                            has_missing_header = True
+                            
+                        # Calcular estadísticas de requerimientos
+                        if "BD_Requerimientos_POs" in st.session_state and not st.session_state.BD_Requerimientos_POs.empty:
+                            df_req = st.session_state.BD_Requerimientos_POs
+                            df_req_po = df_req[df_req["PO"].astype(str).str.strip().str.upper() == p_sel]
+                            if not df_req_po.empty:
+                                meta_row["SKUs Req"] = len(df_req_po["SKU"].unique())
+                                meta_row["Cant Req"] = int(df_req_po["Cantidad_Requerida"].sum())
+                                
+                        # Calcular estadísticas de tarimas cargadas
+                        if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                            df_det = st.session_state.BD_Detalle_Tarimas
+                            df_det_po = df_det[df_det["PO"].astype(str).str.strip().str.upper() == p_sel]
+                            if not df_det_po.empty:
+                                meta_row["Cant Rec"] = int(df_det_po["Cantidad"].sum())
+                                
+                        filas_meta.append(meta_row)
+                        
+                    df_meta_display = pd.DataFrame(filas_meta)
+                    
+                    st.write("**Datos y estadísticas de las POs seleccionadas:**")
+                    st.dataframe(df_meta_display, use_container_width=True, hide_index=True)
+                    
+                    if has_missing_header:
+                        st.info("💡 **Nota del Sistema**: Una o varias POs seleccionadas no cuentan con registro maestro en cabecera (se leyeron del inventario de tarimas). Al guardar la configuración de color, se les creará un registro de cabecera básico de forma automática.")
+                    
+                    # Valores por defecto basados en la primera PO de la selección
+                    val_text = ""
+                    val_bg = "#85A3D4" # Azul claro por defecto
+                    val_fg = "#000000" # Negro por defecto
+                    
+                    if not df_pos_cab.empty:
+                        po_first = pos_sel[0]
+                        po_first_rows = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == po_first]
+                        if not po_first_rows.empty:
+                            row = po_first_rows.iloc[0]
+                            if "Texto_Etiqueta" in df_pos_cab.columns and pd.notna(row.get("Texto_Etiqueta")):
+                                val_text = str(row["Texto_Etiqueta"]).strip()
+                            if "Color_Fondo" in df_pos_cab.columns and pd.notna(row.get("Color_Fondo")):
+                                val_bg = str(row["Color_Fondo"]).strip()
+                            if "Color_Texto" in df_pos_cab.columns and pd.notna(row.get("Color_Texto")):
+                                val_fg = str(row["Color_Texto"]).strip()
+                    
+                    col_c1, col_c2, col_c3 = st.columns([2, 1, 1])
+                    with col_c1:
+                        tag_text_input = st.text_input(
+                            "📝 Texto de la Etiqueta (Ej. LC8, Reno 6):", 
+                            value=val_text if val_text else pos_sel[0], 
+                            key="po_color_config_tag_text",
+                            max_chars=25
+                        )
+                    with col_c2:
+                        color_bg_input = st.color_picker(
+                            "🎨 Color de Fondo:", 
+                            value=val_bg, 
+                            key="po_color_config_bg_picker"
+                        )
+                    with col_c3:
+                        color_fg_input = st.color_picker(
+                            "✍️ Color del Texto:", 
+                            value=val_fg, 
+                            key="po_color_config_fg_picker"
+                        )
+                    
+                    # Vista previa visual interactiva de Streamlit
+                    st.write("**Vista previa de la etiqueta:**")
                     st.markdown(
                         f"""
-                        <div style="background-color: #F8F9FA; border: 1px solid #D2D3D5; border-radius: 4px; padding: 14px; margin-bottom: 20px;">
-                            <span style="font-weight: bold; color: #111111; font-size: 15px;">📋 Datos Maestros de la PO en Cabecera:</span>
-                            <hr style="margin: 8px 0; border: 0; border-top: 1px solid #D2D3D5;"/>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; font-size: 13.5px; color: #333333;">
-                                <div><b>📅 Fecha de Pedido:</b> {po_metadata["Fecha_Pedido"] if pd.notna(po_metadata["Fecha_Pedido"]) else "N/A"}</div>
-                                <div><b>🏗️ Proyecto:</b> {po_metadata["Proyecto"] if pd.notna(po_metadata["Proyecto"]) else "N/A"}</div>
-                                <div><b>👤 Solicitante:</b> {po_metadata["Solicitante"] if pd.notna(po_metadata["Solicitante"]) else "N/A"}</div>
-                                <div><b>📝 Requisición:</b> {po_metadata["Requisicion"] if pd.notna(po_metadata["Requisicion"]) else "N/A"}</div>
-                                <div><b>📍 Destino:</b> {po_metadata["Destino"] if pd.notna(po_metadata["Destino"]) else "N/A"}</div>
-                            </div>
-                            <hr style="margin: 10px 0; border: 0; border-top: 1px dashed #D2D3D5;"/>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; font-size: 13.5px; color: #333333;">
-                                <div><b>🔢 SKUs Requeridos:</b> {total_skus}</div>
-                                <div><b>📊 Cantidad Requerida:</b> {cant_req:,} Pzs</div>
-                                <div><b>📦 Cantidad Recibida en Tarimas:</b> {cant_rec:,} Pzs</div>
-                            </div>
+                        <div style="
+                            background-color: {color_bg_input}; 
+                            color: {color_fg_input}; 
+                            border: 2px solid #EAB519; 
+                            border-radius: 4px; 
+                            padding: 20px; 
+                            text-align: center; 
+                            font-family: Arial, sans-serif; 
+                            font-size: 28px; 
+                            font-weight: bold; 
+                            width: 100%; 
+                            max-width: 400px;
+                            margin: 10px 0;
+                        ">
+                            {tag_text_input}
                         </div>
-                        """,
+                        """, 
                         unsafe_allow_html=True
                     )
-                else:
-                    st.info(
-                        f"💡 **Nota del Sistema**: La PO **{po_sel}** no cuenta con registro en el catálogo maestro de cabecera de POs (solo ha sido detectada en el inventario/detalles de tarimas cargadas).\n\n"
-                        f"**Estatus Logístico actual:**\n"
-                        f"* 📦 **Cantidad Recibida en Tarimas:** {cant_rec:,} Pzs"
-                    )
-                # -------------------------------------------------------------------
-                
-                # Valores por defecto
-                val_text = ""
-                val_bg = "#85A3D4" # Azul claro por defecto
-                val_fg = "#000000" # Negro por defecto
-                
-                if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
-                    df_pos_cab = st.session_state.BD_POs_Cabecera
-                    po_rows = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == po_sel]
-                    if not po_rows.empty:
-                        row = po_rows.iloc[0]
-                        if "Texto_Etiqueta" in df_pos_cab.columns and pd.notna(row.get("Texto_Etiqueta")):
-                            val_text = str(row["Texto_Etiqueta"]).strip()
-                        if "Color_Fondo" in df_pos_cab.columns and pd.notna(row.get("Color_Fondo")):
-                            val_bg = str(row["Color_Fondo"]).strip()
-                        if "Color_Texto" in df_pos_cab.columns and pd.notna(row.get("Color_Texto")):
-                            val_fg = str(row["Color_Texto"]).strip()
-                
-                col_c1, col_c2, col_c3 = st.columns([2, 1, 1])
-                with col_c1:
-                    tag_text_input = st.text_input(
-                        "📝 Texto de la Etiqueta (Ej. LC8, Reno 6):", 
-                        value=val_text if val_text else po_sel, 
-                        key="po_color_config_tag_text",
-                        max_chars=15
-                    )
-                with col_c2:
-                    color_bg_input = st.color_picker(
-                        "🎨 Color de Fondo:", 
-                        value=val_bg, 
-                        key="po_color_config_bg_picker"
-                    )
-                with col_c3:
-                    color_fg_input = st.color_picker(
-                        "✍️ Color del Texto:", 
-                        value=val_fg, 
-                        key="po_color_config_fg_picker"
-                    )
-                
-                # Vista previa visual interactiva de Streamlit
-                st.write("**Vista previa de la etiqueta:**")
-                st.markdown(
-                    f"""
-                    <div style="
-                        background-color: {color_bg_input}; 
-                        color: {color_fg_input}; 
-                        border: 2px solid #EAB519; 
-                        border-radius: 4px; 
-                        padding: 20px; 
-                        text-align: center; 
-                        font-family: Arial, sans-serif; 
-                        font-size: 28px; 
-                        font-weight: bold; 
-                        width: 100%; 
-                        max-width: 400px;
-                        margin: 10px 0;
-                    ">
-                        {tag_text_input}
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
-                )
-                
-                if st.button("💾 Guardar Configuración de Color para PO", use_container_width=True, key="btn_save_po_color"):
-                    # 1. Asegurar que las columnas existen en st.session_state.BD_POs_Cabecera
-                    df_pos_cab = st.session_state.BD_POs_Cabecera
-                    for col in ["Texto_Etiqueta", "Color_Fondo", "Color_Texto"]:
-                        if col not in df_pos_cab.columns:
-                            df_pos_cab[col] = ""
                     
-                    # 2. Si la PO existe en BD_POs_Cabecera, actualizarla. Si no, agregarla.
-                    idx_po = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == po_sel].index
-                    if not idx_po.empty:
-                        df_pos_cab.loc[idx_po, "Texto_Etiqueta"] = tag_text_input
-                        df_pos_cab.loc[idx_po, "Color_Fondo"] = color_bg_input
-                        df_pos_cab.loc[idx_po, "Color_Texto"] = color_fg_input
-                    else:
-                        nueva_fila = {
-                            "PO": po_sel,
-                            "Fecha_Pedido": "",
-                            "Proyecto": "",
-                            "Solicitante": "",
-                            "Requisicion": "",
-                            "Destino": "",
-                            "Texto_Etiqueta": tag_text_input,
-                            "Color_Fondo": color_bg_input,
-                            "Color_Texto": color_fg_input
-                        }
-                        df_pos_cab = pd.concat([df_pos_cab, pd.DataFrame([nueva_fila])], ignore_index=True)
-                    
-                    st.session_state.BD_POs_Cabecera = df_pos_cab
-                    
-                    # 3. Guardar cambios en el archivo Excel y en GitHub
-                    subir_excel_a_github("BD_POs_Cabecera.xlsx", st.session_state.BD_POs_Cabecera)
-                    st.success(f"✅ ¡Configuración de color guardada y sincronizada correctamente para la PO: **{po_sel}**!")
-                    st.rerun()
+                    if st.button("💾 Guardar Configuración de Color para PO", use_container_width=True, key="btn_save_po_color"):
+                        # 1. Asegurar que las columnas existen en st.session_state.BD_POs_Cabecera
+                        df_pos_cab = st.session_state.BD_POs_Cabecera
+                        for col in ["Texto_Etiqueta", "Color_Fondo", "Color_Texto"]:
+                            if col not in df_pos_cab.columns:
+                                df_pos_cab[col] = ""
+                        
+                        # 2. Iterar sobre la lista de POs seleccionadas
+                        for p_sel in pos_sel:
+                            idx_po = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == p_sel].index
+                            if not idx_po.empty:
+                                df_pos_cab.loc[idx_po, "Texto_Etiqueta"] = tag_text_input
+                                df_pos_cab.loc[idx_po, "Color_Fondo"] = color_bg_input
+                                df_pos_cab.loc[idx_po, "Color_Texto"] = color_fg_input
+                            else:
+                                nueva_fila = {
+                                    "PO": p_sel,
+                                    "Fecha_Pedido": "",
+                                    "Proyecto": "",
+                                    "Solicitante": "",
+                                    "Requisicion": "",
+                                    "Destino": "",
+                                    "Texto_Etiqueta": tag_text_input,
+                                    "Color_Fondo": color_bg_input,
+                                    "Color_Texto": color_fg_input
+                                }
+                                df_pos_cab = pd.concat([df_pos_cab, pd.DataFrame([nueva_fila])], ignore_index=True)
+                        
+                        st.session_state.BD_POs_Cabecera = df_pos_cab
+                        
+                        # 3. Guardar cambios en el archivo Excel y en GitHub
+                        subir_excel_a_github("BD_POs_Cabecera.xlsx", st.session_state.BD_POs_Cabecera)
+                        st.success("✅ ¡Configuración de color guardada y sincronizada correctamente para las POs seleccionadas!")
+                        st.rerun()
 
 
 
