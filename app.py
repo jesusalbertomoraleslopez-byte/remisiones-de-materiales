@@ -3282,15 +3282,18 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     
                 df_pos_completo = pd.DataFrame(filas_po_todas)
                 
-                # Filtrar las POs que ya están en el grupo de edición para que desaparezcan de la primera tabla
-                df_disponibles = df_pos_completo[~df_pos_completo["PO"].isin(st.session_state.pos_en_edicion)].reset_index(drop=True)
+                # Filtrar las POs que ya están en el grupo de edición O ya tienen etiqueta configurada para que desaparezcan del Paso 1
+                df_disponibles = df_pos_completo[
+                    (~df_pos_completo["PO"].isin(st.session_state.pos_en_edicion)) &
+                    (df_pos_completo["Etiqueta Actual"] == "Sin etiqueta")
+                ].reset_index(drop=True)
                 
                 # --- PASO 1: TABLA DISPONIBLE ---
                 st.write("##### 📋 Paso 1: Seleccione Órdenes de Compra (POs) desde la Lista:")
                 st.info("💡 **Guía:** Seleccione las casillas de la izquierda en la tabla para elegir las POs que desea configurar y presione **'Añadir POs al Grupo de Edición'**.")
                 
                 if df_disponibles.empty:
-                    st.write("✨ *Todas las POs están actualmente en el grupo de edición o no hay más POs por configurar.*")
+                    st.write("✨ *Todas las POs están actualmente en el grupo de edición o ya tienen etiquetas de color asignadas.*")
                 else:
                     seleccion_df = st.dataframe(
                         df_disponibles,
@@ -3434,6 +3437,73 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         st.success("✅ ¡Configuración de color guardada y sincronizada correctamente para las POs seleccionadas!")
                         st.session_state.pos_en_edicion = [] # Limpiar el grupo de edición
                         st.rerun()
+
+                # --- SECCIÓN 3: ETIQUETAS CONFIGURADAS ---
+                df_configuradas = df_pos_completo[df_pos_completo["Etiqueta Actual"] != "Sin etiqueta"].reset_index(drop=True)
+                
+                st.write("---")
+                st.write("##### 🏷️ POs con Etiqueta de Color Configurada:")
+                
+                if df_configuradas.empty:
+                    st.write("📋 *Aún no hay POs con etiquetas de color configuradas.*")
+                else:
+                    # Mostrar tabla de configuradas con el color de fondo y de texto en columnas
+                    filas_conf_detalles = []
+                    for _, row in df_configuradas.iterrows():
+                        p_name = row["PO"]
+                        c_bg = "#FFFFFF"
+                        c_fg = "#000000"
+                        po_rows = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == p_name]
+                        if not po_rows.empty:
+                            c_bg = str(po_rows.iloc[0].get("Color_Fondo", "#FFFFFF"))
+                            c_fg = str(po_rows.iloc[0].get("Color_Texto", "#000000"))
+                        
+                        filas_conf_detalles.append({
+                            "PO": p_name,
+                            "Proyecto": row["Proyecto"],
+                            "Descripción": row["Descripción"],
+                            "Etiqueta": row["Etiqueta Actual"],
+                            "Fondo": c_bg,
+                            "Texto": c_fg,
+                            "Cant Recibida": row["Cant Recibida"]
+                        })
+                    
+                    df_conf_disp = pd.DataFrame(filas_conf_detalles)
+                    
+                    seleccion_conf = st.dataframe(
+                        df_conf_disp,
+                        use_container_width=True,
+                        column_order=["PO", "Proyecto", "Descripción", "Etiqueta", "Fondo", "Texto", "Cant Recibida"],
+                        on_select="rerun",
+                        selection_mode="multi-row",
+                        key="po_color_configured_df_selection_unique"
+                    )
+                    
+                    filas_conf_elegidas = seleccion_conf.get("selection", {}).get("rows", [])
+                    
+                    if filas_conf_elegidas:
+                        pos_conf_elegidas = df_conf_disp.iloc[filas_conf_elegidas]["PO"].tolist()
+                        
+                        col_action1, col_action2 = st.columns(2)
+                        with col_action1:
+                            if st.button("✏️ Editar Configuración Seleccionada", use_container_width=True, key="btn_edit_configured_pos"):
+                                for p in pos_conf_elegidas:
+                                    if p not in st.session_state.pos_en_edicion:
+                                        st.session_state.pos_en_edicion.append(p)
+                                st.rerun()
+                        with col_action2:
+                            if st.button("🗑️ Eliminar Configuración Seleccionada", use_container_width=True, key="btn_delete_configured_pos"):
+                                for p in pos_conf_elegidas:
+                                    idx_po = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == p].index
+                                    if not idx_po.empty:
+                                        df_pos_cab.loc[idx_po, "Texto_Etiqueta"] = ""
+                                        df_pos_cab.loc[idx_po, "Color_Fondo"] = ""
+                                        df_pos_cab.loc[idx_po, "Color_Texto"] = ""
+                                
+                                st.session_state.BD_POs_Cabecera = df_pos_cab
+                                subir_excel_a_github("BD_POs_Cabecera.xlsx", st.session_state.BD_POs_Cabecera)
+                                st.success("🗑️ ¡Configuraciones de color eliminadas correctamente!")
+                                st.rerun()
 
 
 
