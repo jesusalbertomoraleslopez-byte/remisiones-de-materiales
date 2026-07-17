@@ -3294,13 +3294,9 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     )
                 else:
                     st.info(
-                        f"""
-                        💡 **Nota del Sistema**: La PO **{po_sel}** no cuenta con registro en el catálogo maestro de cabecera de POs (solo ha sido detectada en el inventario/detalles de tarimas cargadas).
-                        <br/>
-                        <b>Estatus Logístico actual:</b>
-                        * 📦 **Cantidad Recibida en Tarimas:** {cant_rec:,} Pzs
-                        """,
-                        unsafe_allow_html=True
+                        f"💡 **Nota del Sistema**: La PO **{po_sel}** no cuenta con registro en el catálogo maestro de cabecera de POs (solo ha sido detectada en el inventario/detalles de tarimas cargadas).\n\n"
+                        f"**Estatus Logístico actual:**\n"
+                        f"* 📦 **Cantidad Recibida en Tarimas:** {cant_rec:,} Pzs"
                     )
                 # -------------------------------------------------------------------
                 
