@@ -3228,77 +3228,108 @@ elif opcion_menu == "📦 Módulo Tarimas":
             if not lista_pos_disponibles:
                 st.warning("⚠️ No hay Órdenes de Compra (POs) registradas en el sistema para configurar.")
             else:
-                pos_sel = st.multiselect(
-                    "📋 Seleccione las Órdenes de Compra (POs) a asociar:",
-                    options=lista_pos_disponibles,
-                    key="po_color_config_selector"
-                )
+                # Inicializar el estado de la sesión para las POs en edición activa
+                if "pos_en_edicion" not in st.session_state:
+                    st.session_state.pos_en_edicion = []
+
+                # Construir la lista completa de detalles de todas las POs del sistema
+                filas_po_todas = []
+                df_pos_cab = st.session_state.BD_POs_Cabecera
                 
-                if pos_sel:
-                    # --- NUEVA SECCIÓN DE DATOS RELACIONADOS Y ESTADÍSTICAS EN LISTA ---
-                    filas_meta = []
-                    has_missing_header = False
+                for p_name in lista_pos_disponibles:
+                    meta = {
+                        "PO": p_name, 
+                        "Proyecto": "N/A", 
+                        "Solicitante": "N/A", 
+                        "Destino": "N/A", 
+                        "Cant Recibida": 0,
+                        "Etiqueta Actual": "Sin etiqueta"
+                    }
                     
-                    df_pos_cab = st.session_state.BD_POs_Cabecera
+                    po_rows = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == p_name]
+                    if not po_rows.empty:
+                        r = po_rows.iloc[0]
+                        meta.update({
+                            "Proyecto": str(r.get("Proyecto", "N/A")) if pd.notna(r.get("Proyecto")) else "N/A",
+                            "Solicitante": str(r.get("Solicitante", "N/A")) if pd.notna(r.get("Solicitante")) else "N/A",
+                            "Destino": str(r.get("Destino", "N/A")) if pd.notna(r.get("Destino")) else "N/A"
+                        })
+                        if "Texto_Etiqueta" in df_pos_cab.columns and pd.notna(r.get("Texto_Etiqueta")) and str(r.get("Texto_Etiqueta")).strip():
+                            meta["Etiqueta Actual"] = str(r["Texto_Etiqueta"]).strip()
                     
-                    for p_sel in pos_sel:
-                        meta_row = {
-                            "Orden de Compra (PO)": p_sel, 
-                            "Fecha Pedido": "N/A", 
-                            "Proyecto": "N/A", 
-                            "Solicitante": "N/A", 
-                            "Requisición": "N/A", 
-                            "Destino": "N/A", 
-                            "SKUs Req": 0, 
-                            "Cant Req": 0, 
-                            "Cant Rec": 0
-                        }
-                        
-                        po_rows = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == p_sel]
-                        if not po_rows.empty:
-                            r = po_rows.iloc[0]
-                            meta_row.update({
-                                "Fecha Pedido": str(r.get("Fecha_Pedido", "N/A")) if pd.notna(r.get("Fecha_Pedido")) else "N/A",
-                                "Proyecto": str(r.get("Proyecto", "N/A")) if pd.notna(r.get("Proyecto")) else "N/A",
-                                "Solicitante": str(r.get("Solicitante", "N/A")) if pd.notna(r.get("Solicitante")) else "N/A",
-                                "Requisición": str(r.get("Requisicion", "N/A")) if pd.notna(r.get("Requisicion")) else "N/A",
-                                "Destino": str(r.get("Destino", "N/A")) if pd.notna(r.get("Destino")) else "N/A"
-                            })
-                        else:
-                            has_missing_header = True
+                    if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                        df_det = st.session_state.BD_Detalle_Tarimas
+                        df_det_po = df_det[df_det["PO"].astype(str).str.strip().str.upper() == p_name]
+                        if not df_det_po.empty:
+                            meta["Cant Recibida"] = int(df_det_po["Cantidad"].sum())
+                    
+                    filas_po_todas.append(meta)
+                    
+                df_pos_completo = pd.DataFrame(filas_po_todas)
+                
+                # Filtrar las POs que ya están en el grupo de edición para que desaparezcan de la primera tabla
+                df_disponibles = df_pos_completo[~df_pos_completo["PO"].isin(st.session_state.pos_en_edicion)].reset_index(drop=True)
+                
+                # --- PASO 1: TABLA DISPONIBLE ---
+                st.write("##### 📋 Paso 1: Seleccione Órdenes de Compra (POs) desde la Lista:")
+                st.info("💡 **Guía:** Seleccione las casillas de la izquierda en la tabla para elegir las POs que desea configurar y presione **'Añadir POs al Grupo de Edición'**.")
+                
+                if df_disponibles.empty:
+                    st.write("✨ *Todas las POs están actualmente en el grupo de edición o no hay más POs por configurar.*")
+                else:
+                    seleccion_df = st.dataframe(
+                        df_disponibles,
+                        use_container_width=True,
+                        column_order=["PO", "Proyecto", "Solicitante", "Destino", "Cant Recibida", "Etiqueta Actual"],
+                        on_select="rerun",
+                        selection_mode="multi-row",
+                        key="po_color_step1_df_selection_unique"
+                    )
+                    
+                    filas_elegidas = seleccion_df.get("selection", {}).get("rows", [])
+                    
+                    if filas_elegidas:
+                        pos_elegidas_nombres = df_disponibles.iloc[filas_elegidas]["PO"].tolist()
+                        if st.button("➕ Añadir POs al Grupo de Edición", use_container_width=True, key="btn_add_pos_to_active_group"):
+                            for p in pos_elegidas_nombres:
+                                if p not in st.session_state.pos_en_edicion:
+                                    st.session_state.pos_en_edicion.append(p)
+                            st.rerun()
                             
-                        # Calcular estadísticas de requerimientos
-                        if "BD_Requerimientos_POs" in st.session_state and not st.session_state.BD_Requerimientos_POs.empty:
-                            df_req = st.session_state.BD_Requerimientos_POs
-                            df_req_po = df_req[df_req["PO"].astype(str).str.strip().str.upper() == p_sel]
-                            if not df_req_po.empty:
-                                meta_row["SKUs Req"] = len(df_req_po["SKU"].unique())
-                                meta_row["Cant Req"] = int(df_req_po["Cantidad_Requerida"].sum())
-                                
-                        # Calcular estadísticas de tarimas cargadas
-                        if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
-                            df_det = st.session_state.BD_Detalle_Tarimas
-                            df_det_po = df_det[df_det["PO"].astype(str).str.strip().str.upper() == p_sel]
-                            if not df_det_po.empty:
-                                meta_row["Cant Rec"] = int(df_det_po["Cantidad"].sum())
-                                
-                        filas_meta.append(meta_row)
-                        
-                    df_meta_display = pd.DataFrame(filas_meta)
+                # --- PASO 2: EDICIÓN DEL GRUPO ---
+                if st.session_state.pos_en_edicion:
+                    st.write("---")
+                    st.write("##### 🎨 Paso 2: Configurar Texto y Colores para el Grupo Seleccionado")
                     
-                    st.write("**Datos y estadísticas de las POs seleccionadas:**")
-                    st.dataframe(df_meta_display, use_container_width=True, hide_index=True)
+                    col_clear1, col_clear2 = st.columns([5, 1])
+                    with col_clear1:
+                        st.success(f"📦 **POs activas en este grupo de etiqueta:** {', '.join(st.session_state.pos_en_edicion)}")
+                    with col_clear2:
+                        if st.button("🗑️ Limpiar Grupo", use_container_width=True, key="btn_clear_active_po_group"):
+                            st.session_state.pos_en_edicion = []
+                            st.rerun()
+                            
+                    # Selector adicional en el Paso 2 para agregar más POs directamente
+                    pos_adicionales_opciones = [p for p in lista_pos_disponibles if p not in st.session_state.pos_en_edicion]
                     
-                    if has_missing_header:
-                        st.info("💡 **Nota del Sistema**: Una o varias POs seleccionadas no cuentan con registro maestro en cabecera (se leyeron del inventario de tarimas). Al guardar la configuración de color, se les creará un registro de cabecera básico de forma automática.")
+                    pos_adicionales = st.multiselect(
+                        "➕ Seleccione POs adicionales para agregar a este mismo grupo:",
+                        options=pos_adicionales_opciones,
+                        key="po_color_step2_add_more_selector"
+                    )
                     
-                    # Valores por defecto basados en la primera PO de la selección
+                    if pos_adicionales:
+                        if st.button("➕ Agregar POs adicionales", key="btn_add_more_pos_step2"):
+                            st.session_state.pos_en_edicion.extend(pos_adicionales)
+                            st.rerun()
+                            
+                    # Valores por defecto para pre-poblar basados en la primera PO
                     val_text = ""
                     val_bg = "#85A3D4" # Azul claro por defecto
                     val_fg = "#000000" # Negro por defecto
                     
                     if not df_pos_cab.empty:
-                        po_first = pos_sel[0]
+                        po_first = st.session_state.pos_en_edicion[0]
                         po_first_rows = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == po_first]
                         if not po_first_rows.empty:
                             row = po_first_rows.iloc[0]
@@ -3308,12 +3339,12 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                 val_bg = str(row["Color_Fondo"]).strip()
                             if "Color_Texto" in df_pos_cab.columns and pd.notna(row.get("Color_Texto")):
                                 val_fg = str(row["Color_Texto"]).strip()
-                    
+                                
                     col_c1, col_c2, col_c3 = st.columns([2, 1, 1])
                     with col_c1:
                         tag_text_input = st.text_input(
                             "📝 Texto de la Etiqueta (Ej. LC8, Reno 6):", 
-                            value=val_text if val_text else pos_sel[0], 
+                            value=val_text if val_text else st.session_state.pos_en_edicion[0], 
                             key="po_color_config_tag_text",
                             max_chars=25
                         )
@@ -3329,8 +3360,8 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             value=val_fg, 
                             key="po_color_config_fg_picker"
                         )
-                    
-                    # Vista previa visual interactiva de Streamlit
+                        
+                    # Vista previa visual interactiva
                     st.write("**Vista previa de la etiqueta:**")
                     st.markdown(
                         f"""
@@ -3356,13 +3387,12 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     
                     if st.button("💾 Guardar Configuración de Color para PO", use_container_width=True, key="btn_save_po_color"):
                         # 1. Asegurar que las columnas existen en st.session_state.BD_POs_Cabecera
-                        df_pos_cab = st.session_state.BD_POs_Cabecera
                         for col in ["Texto_Etiqueta", "Color_Fondo", "Color_Texto"]:
                             if col not in df_pos_cab.columns:
                                 df_pos_cab[col] = ""
-                        
-                        # 2. Iterar sobre la lista de POs seleccionadas
-                        for p_sel in pos_sel:
+                                
+                        # 2. Guardar para todas las POs del grupo activo
+                        for p_sel in st.session_state.pos_en_edicion:
                             idx_po = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == p_sel].index
                             if not idx_po.empty:
                                 df_pos_cab.loc[idx_po, "Texto_Etiqueta"] = tag_text_input
@@ -3381,12 +3411,13 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                     "Color_Texto": color_fg_input
                                 }
                                 df_pos_cab = pd.concat([df_pos_cab, pd.DataFrame([nueva_fila])], ignore_index=True)
-                        
+                                
                         st.session_state.BD_POs_Cabecera = df_pos_cab
                         
                         # 3. Guardar cambios en el archivo Excel y en GitHub
                         subir_excel_a_github("BD_POs_Cabecera.xlsx", st.session_state.BD_POs_Cabecera)
                         st.success("✅ ¡Configuración de color guardada y sincronizada correctamente para las POs seleccionadas!")
+                        st.session_state.pos_en_edicion = [] # Limpiar el grupo de edición
                         st.rerun()
 
 
