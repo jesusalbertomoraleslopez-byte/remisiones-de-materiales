@@ -3018,6 +3018,27 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         op_nom = t_info.iloc[0]['Creado_Por'] if not t_info.empty else "N/A"
                         fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
                         
+                        # Buscar si alguna PO de la tarima tiene formato de color configurado
+                        color_bg = None
+                        color_fg = None
+                        texto_etiqueta = None
+                        
+                        if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+                            df_pos_cab = st.session_state.BD_POs_Cabecera
+                            pos_tarima = det['PO'].dropna().unique().tolist()
+                            for p in pos_tarima:
+                                p_upper = str(p).strip().upper()
+                                po_rows = df_pos_cab[df_pos_cab['PO'].astype(str).str.strip().str.upper() == p_upper]
+                                if not po_rows.empty:
+                                    row = po_rows.iloc[0]
+                                    if 'Color_Fondo' in df_pos_cab.columns and pd.notna(row.get('Color_Fondo')) and str(row.get('Color_Fondo')).strip():
+                                        color_bg = str(row['Color_Fondo']).strip()
+                                        color_fg = str(row.get('Color_Texto', '#FFFFFF')).strip()
+                                        texto_etiqueta = str(row.get('Texto_Etiqueta', '')).strip()
+                                        if not texto_etiqueta:
+                                            texto_etiqueta = p
+                                        break
+                        
                         # =============================================================================
                         # HOJA 1: CARÁTULA DE IDENTIFICACIÓN MASIVA (NÚMERO GIGANTE)
                         # =============================================================================
@@ -3029,7 +3050,10 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
                         story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
                         
-                        story_l.append(Spacer(1, 1.5 * inch))
+                        if color_bg and texto_etiqueta:
+                            story_l.append(Spacer(1, 0.6 * inch))
+                        else:
+                            story_l.append(Spacer(1, 1.5 * inch))
                         
                         # Mini panel inferior de trazabilidad en la carátula
                         tabla_base = Table([
@@ -3043,6 +3067,27 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             ('BOTTOMPADDING', (0,0), (-1,-1), 6)
                         ]))
                         story_l.append(tabla_base)
+                        
+                        if color_bg and texto_etiqueta:
+                            story_l.append(Spacer(1, 0.3 * inch))
+                            style_color_tag = ParagraphStyle(
+                                'ColorTagTextLote', 
+                                fontName="Helvetica-Bold", 
+                                fontSize=34, 
+                                leading=40, 
+                                alignment=1, 
+                                textColor=colors.HexColor(color_fg)
+                            )
+                            color_box_table = Table([[Paragraph(texto_etiqueta, style_color_tag)]], colWidths=[6.8 * inch], rowHeights=[1.0 * inch])
+                            color_box_table.setStyle(TableStyle([
+                                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor(color_bg)),
+                                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                                ('GRID', (0,0), (-1,-1), 1.5, colors.HexColor("#EAB519")),
+                                ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+                                ('TOPPADDING', (0,0), (-1,-1), 10)
+                            ]))
+                            story_l.append(color_box_table)
                         
                         # Forzamos salto inmediato a la siguiente página
                         story_l.append(PageBreak())
