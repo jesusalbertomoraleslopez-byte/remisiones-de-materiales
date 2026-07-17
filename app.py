@@ -1862,9 +1862,59 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         else:
             desc_cell_flowables = desc_paragraph
             
+        # Construir celda de PO con posible badge de color
+        po_val = str(row['PO'])
+        po_upper = po_val.strip().upper()
+        po_cell_flowable = Paragraph(po_val, style_normal_text)
+        
+        if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+            df_pos_cab = st.session_state.BD_POs_Cabecera
+            po_rows = df_pos_cab[df_pos_cab['PO'].astype(str).str.strip().str.upper() == po_upper]
+            if not po_rows.empty:
+                row_cab = po_rows.iloc[0]
+                if 'Color_Fondo' in df_pos_cab.columns and pd.notna(row_cab.get('Color_Fondo')) and str(row_cab.get('Color_Fondo')).strip():
+                    bg = str(row_cab['Color_Fondo']).strip()
+                    fg = str(row_cab.get('Color_Texto', '#FFFFFF')).strip()
+                    txt = str(row_cab.get('Texto_Etiqueta', '')).strip()
+                    if not txt:
+                        txt = po_val
+                    
+                    style_badge = ParagraphStyle(
+                        f'RemBadge_{row.name}',
+                        fontName="Helvetica-Bold",
+                        fontSize=7,
+                        leading=8,
+                        alignment=1,
+                        textColor=colors.HexColor(fg)
+                    )
+                    badge_p = Paragraph(txt, style_badge)
+                    badge_table = Table([[badge_p]], colWidths=[1.1 * inch], rowHeights=[0.18 * inch])
+                    badge_table.setStyle(TableStyle([
+                        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor(bg)),
+                        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                        ('GRID', (0,0), (-1,-1), 1.0, colors.HexColor("#EAB519")),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 1),
+                        ('TOPPADDING', (0,0), (-1,-1), 1)
+                    ]))
+                    
+                    po_cell_table = Table([
+                        [Paragraph(po_val, style_normal_text)],
+                        [badge_table]
+                    ], colWidths=[1.2 * inch])
+                    po_cell_table.setStyle(TableStyle([
+                        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                        ('LEFTPADDING', (0,0), (-1,-1), 0),
+                        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                        ('TOPPADDING', (0,0), (-1,-1), 2),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 2)
+                    ]))
+                    po_cell_flowable = po_cell_table
+                    
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
-            Paragraph(str(row['PO']), style_normal_text),
+            po_cell_flowable,
             Paragraph(str(row['Proyecto']), style_normal_text),
             desc_cell_flowables,
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
