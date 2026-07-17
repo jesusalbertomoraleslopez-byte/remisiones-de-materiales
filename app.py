@@ -1098,6 +1098,27 @@ def generar_pdf_etiqueta(t_imp):
     op_nom = t_info.iloc[0]['Creado_Por'] if not t_info.empty else "N/A"
     fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
 
+    # Buscar si alguna PO de la tarima tiene formato de color configurado
+    color_bg = None
+    color_fg = None
+    texto_etiqueta = None
+    
+    if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+        df_pos_cab = st.session_state.BD_POs_Cabecera
+        pos_tarima = det['PO'].dropna().unique().tolist()
+        for p in pos_tarima:
+            p_upper = str(p).strip().upper()
+            po_rows = df_pos_cab[df_pos_cab['PO'].astype(str).str.strip().str.upper() == p_upper]
+            if not po_rows.empty:
+                row = po_rows.iloc[0]
+                if 'Color_Fondo' in df_pos_cab.columns and pd.notna(row.get('Color_Fondo')) and str(row.get('Color_Fondo')).strip():
+                    color_bg = str(row['Color_Fondo']).strip()
+                    color_fg = str(row.get('Color_Texto', '#FFFFFF')).strip()
+                    texto_etiqueta = str(row.get('Texto_Etiqueta', '')).strip()
+                    if not texto_etiqueta:
+                        texto_etiqueta = p
+                    break
+
     # HOJA 1: CARÁTULA DE IDENTIFICACIÓN
     story_l.append(Spacer(1, 1.2 * inch))
     story_l.append(Paragraph("TARIMA", style_sub_titulo))
@@ -1105,7 +1126,11 @@ def generar_pdf_etiqueta(t_imp):
 
     num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
     story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
-    story_l.append(Spacer(1, 1.5 * inch))
+    
+    if color_bg and texto_etiqueta:
+        story_l.append(Spacer(1, 0.6 * inch))
+    else:
+        story_l.append(Spacer(1, 1.5 * inch))
 
     tabla_base = Table([
         [Paragraph("CÓDIGO DE IDENTIFICACIÓN:", style_normal_bold), Paragraph(str(t_imp), style_normal_text)],
@@ -1118,6 +1143,28 @@ def generar_pdf_etiqueta(t_imp):
         ('BOTTOMPADDING', (0,0), (-1,-1), 6)
     ]))
     story_l.append(tabla_base)
+
+    if color_bg and texto_etiqueta:
+        story_l.append(Spacer(1, 0.3 * inch))
+        style_color_tag = ParagraphStyle(
+            'ColorTagText', 
+            fontName="Helvetica-Bold", 
+            fontSize=34, 
+            leading=40, 
+            alignment=1, 
+            textColor=colors.HexColor(color_fg)
+        )
+        color_box_table = Table([[Paragraph(texto_etiqueta, style_color_tag)]], colWidths=[6.8 * inch], rowHeights=[1.0 * inch])
+        color_box_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor(color_bg)),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('GRID', (0,0), (-1,-1), 1.5, colors.HexColor("#EAB519")),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+            ('TOPPADDING', (0,0), (-1,-1), 10)
+        ]))
+        story_l.append(color_box_table)
+
     story_l.append(PageBreak())
 
     # HOJA 2: DETALLE DE MATERIALES ASOCIADOS
@@ -2767,6 +2814,27 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             op_nom = t_info.iloc[0]['Creado_Por'] if not t_info.empty else "N/A"
                             fe_cre = t_info.iloc[0]['Fecha_Creacion'] if not t_info.empty else "N/A"
                             
+                            # Buscar si alguna PO de la tarima tiene formato de color configurado
+                            color_bg = None
+                            color_fg = None
+                            texto_etiqueta = None
+                            
+                            if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+                                df_pos_cab = st.session_state.BD_POs_Cabecera
+                                pos_tarima = det['PO'].dropna().unique().tolist()
+                                for p in pos_tarima:
+                                    p_upper = str(p).strip().upper()
+                                    po_rows = df_pos_cab[df_pos_cab['PO'].astype(str).str.strip().str.upper() == p_upper]
+                                    if not po_rows.empty:
+                                        row = po_rows.iloc[0]
+                                        if 'Color_Fondo' in df_pos_cab.columns and pd.notna(row.get('Color_Fondo')) and str(row.get('Color_Fondo')).strip():
+                                            color_bg = str(row['Color_Fondo']).strip()
+                                            color_fg = str(row.get('Color_Texto', '#FFFFFF')).strip()
+                                            texto_etiqueta = str(row.get('Texto_Etiqueta', '')).strip()
+                                            if not texto_etiqueta:
+                                                texto_etiqueta = p
+                                            break
+
                             # HOJA 1: CARÁTULA DE IDENTIFICACIÓN
                             story_l.append(Spacer(1, 1.2 * inch))
                             story_l.append(Paragraph("TARIMA", style_sub_titulo))
@@ -2774,7 +2842,11 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             
                             num_limpio = str(t_imp).split('-')[-1] if '-' in str(t_imp) else str(t_imp)
                             story_l.append(Paragraph(f"#{num_limpio}", style_tarima_titulo))
-                            story_l.append(Spacer(1, 1.5 * inch))
+                            
+                            if color_bg and texto_etiqueta:
+                                story_l.append(Spacer(1, 0.6 * inch))
+                            else:
+                                story_l.append(Spacer(1, 1.5 * inch))
                             
                             tabla_base = Table([
                                 [Paragraph("CÓDIGO DE IDENTIFICACIÓN:", style_normal_bold), Paragraph(str(t_imp), style_normal_text)],
@@ -2787,6 +2859,28 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                 ('BOTTOMPADDING', (0,0), (-1,-1), 6)
                             ]))
                             story_l.append(tabla_base)
+
+                            if color_bg and texto_etiqueta:
+                                story_l.append(Spacer(1, 0.3 * inch))
+                                style_color_tag = ParagraphStyle(
+                                    'ColorTagText', 
+                                    fontName="Helvetica-Bold", 
+                                    fontSize=34, 
+                                    leading=40, 
+                                    alignment=1, 
+                                    textColor=colors.HexColor(color_fg)
+                                )
+                                color_box_table = Table([[Paragraph(texto_etiqueta, style_color_tag)]], colWidths=[6.8 * inch], rowHeights=[1.0 * inch])
+                                color_box_table.setStyle(TableStyle([
+                                    ('BACKGROUND', (0,0), (-1,-1), colors.HexColor(color_bg)),
+                                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                                    ('GRID', (0,0), (-1,-1), 1.5, colors.HexColor("#EAB519")),
+                                    ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+                                    ('TOPPADDING', (0,0), (-1,-1), 10)
+                                ]))
+                                story_l.append(color_box_table)
+
                             story_l.append(PageBreak())
                             
                             # HOJA 2: DETALLE DE MATERIALES ASOCIADOS
@@ -3114,6 +3208,127 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     st.error("❌ Error de sistema: No se encuentra cargada la Base de Datos granular de Detalles de Tarimas.")
         else:
             st.warning("⚠️ No existen tarimas registradas en el sistema para realizar consultas de contenido.")
+
+        # =============================================================================
+        # NUEVA SECCIÓN: CONFIGURACIÓN DE ETIQUETAS DE COLOR POR PO
+        # =============================================================================
+        st.write("---")
+        with st.expander("🎨 Configuración de Etiquetas de Color por Orden de Compra (PO)"):
+            st.info("💡 **Guía de uso:** Seleccione una PO para definir o modificar el color de fondo, color de texto y la descripción sencilla que aparecerá impresa en la portada de la etiqueta de la tarima.")
+            
+            # Obtener todas las POs de cabecera y del detalle de tarimas para asegurar que listamos todas
+            all_pos = set()
+            if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+                all_pos.update(st.session_state.BD_POs_Cabecera["PO"].dropna().astype(str).str.strip().str.upper().unique().tolist())
+            if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                all_pos.update(st.session_state.BD_Detalle_Tarimas["PO"].dropna().astype(str).str.strip().str.upper().unique().tolist())
+            
+            lista_pos_disponibles = sorted(list(all_pos))
+            
+            if not lista_pos_disponibles:
+                st.warning("⚠️ No hay Órdenes de Compra (POs) registradas en el sistema para configurar.")
+            else:
+                po_sel = st.selectbox(
+                    "📋 Seleccione la Orden de Compra (PO):",
+                    options=lista_pos_disponibles,
+                    key="po_color_config_selector"
+                )
+                
+                # Valores por defecto
+                val_text = ""
+                val_bg = "#85A3D4" # Azul claro por defecto
+                val_fg = "#000000" # Negro por defecto
+                
+                if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+                    df_pos_cab = st.session_state.BD_POs_Cabecera
+                    po_rows = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == po_sel]
+                    if not po_rows.empty:
+                        row = po_rows.iloc[0]
+                        if "Texto_Etiqueta" in df_pos_cab.columns and pd.notna(row.get("Texto_Etiqueta")):
+                            val_text = str(row["Texto_Etiqueta"]).strip()
+                        if "Color_Fondo" in df_pos_cab.columns and pd.notna(row.get("Color_Fondo")):
+                            val_bg = str(row["Color_Fondo"]).strip()
+                        if "Color_Texto" in df_pos_cab.columns and pd.notna(row.get("Color_Texto")):
+                            val_fg = str(row["Color_Texto"]).strip()
+                
+                col_c1, col_c2, col_c3 = st.columns([2, 1, 1])
+                with col_c1:
+                    tag_text_input = st.text_input(
+                        "📝 Texto de la Etiqueta (Ej. LC8, Reno 6):", 
+                        value=val_text if val_text else po_sel, 
+                        key="po_color_config_tag_text",
+                        max_chars=15
+                    )
+                with col_c2:
+                    color_bg_input = st.color_picker(
+                        "🎨 Color de Fondo:", 
+                        value=val_bg, 
+                        key="po_color_config_bg_picker"
+                    )
+                with col_c3:
+                    color_fg_input = st.color_picker(
+                        "✍️ Color del Texto:", 
+                        value=val_fg, 
+                        key="po_color_config_fg_picker"
+                    )
+                
+                # Vista previa visual interactiva de Streamlit
+                st.write("**Vista previa de la etiqueta:**")
+                st.markdown(
+                    f"""
+                    <div style="
+                        background-color: {color_bg_input}; 
+                        color: {color_fg_input}; 
+                        border: 2px solid #EAB519; 
+                        border-radius: 4px; 
+                        padding: 20px; 
+                        text-align: center; 
+                        font-family: Arial, sans-serif; 
+                        font-size: 28px; 
+                        font-weight: bold; 
+                        width: 100%; 
+                        max-width: 400px;
+                        margin: 10px 0;
+                    ">
+                        {tag_text_input}
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+                
+                if st.button("💾 Guardar Configuración de Color para PO", use_container_width=True, key="btn_save_po_color"):
+                    # 1. Asegurar que las columnas existen en st.session_state.BD_POs_Cabecera
+                    df_pos_cab = st.session_state.BD_POs_Cabecera
+                    for col in ["Texto_Etiqueta", "Color_Fondo", "Color_Texto"]:
+                        if col not in df_pos_cab.columns:
+                            df_pos_cab[col] = ""
+                    
+                    # 2. Si la PO existe en BD_POs_Cabecera, actualizarla. Si no, agregarla.
+                    idx_po = df_pos_cab[df_pos_cab["PO"].astype(str).str.strip().str.upper() == po_sel].index
+                    if not idx_po.empty:
+                        df_pos_cab.loc[idx_po, "Texto_Etiqueta"] = tag_text_input
+                        df_pos_cab.loc[idx_po, "Color_Fondo"] = color_bg_input
+                        df_pos_cab.loc[idx_po, "Color_Texto"] = color_fg_input
+                    else:
+                        nueva_fila = {
+                            "PO": po_sel,
+                            "Fecha_Pedido": "",
+                            "Proyecto": "",
+                            "Solicitante": "",
+                            "Requisicion": "",
+                            "Destino": "",
+                            "Texto_Etiqueta": tag_text_input,
+                            "Color_Fondo": color_bg_input,
+                            "Color_Texto": color_fg_input
+                        }
+                        df_pos_cab = pd.concat([df_pos_cab, pd.DataFrame([nueva_fila])], ignore_index=True)
+                    
+                    st.session_state.BD_POs_Cabecera = df_pos_cab
+                    
+                    # 3. Guardar cambios en el archivo Excel y en GitHub
+                    subir_excel_a_github("BD_POs_Cabecera.xlsx", st.session_state.BD_POs_Cabecera)
+                    st.success(f"✅ ¡Configuración de color guardada y sincronizada correctamente para la PO: **{po_sel}**!")
+                    st.rerun()
 
 
 
