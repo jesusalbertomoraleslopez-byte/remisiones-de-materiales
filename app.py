@@ -22,7 +22,7 @@ from email import encoders
 st.set_page_config(
     page_title="Remisiones de Materiales",
     layout="wide",
-    page_icon="favicon.png" if os.path.exists("favicon.png") else "📦"
+    page_icon="📦"
 )
 
 # Inyectar CSS de Imagen Corporativa Oficial (Industria SIGRAMA)
@@ -197,6 +197,13 @@ st.markdown("""
         margin-bottom: 20px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
+
+    /* Ocultar elementos predeterminados de Streamlit (footer, main menu, deploy button, etc.) */
+    footer {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    .stAppDeployButton {display: none !important;}
+    [data-testid="stViewerBadge"] {display: none !important;}
 </style>
 """, unsafe_allow_html=True)
 
