@@ -3237,9 +3237,24 @@ elif opcion_menu == "📦 Módulo Tarimas":
                 df_pos_cab = st.session_state.BD_POs_Cabecera
                 
                 for p_name in lista_pos_disponibles:
+                    # Buscar descripción en detalles de tarimas
+                    descs = []
+                    if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                        df_det_temp = st.session_state.BD_Detalle_Tarimas
+                        df_det_po = df_det_temp[df_det_temp["PO"].astype(str).str.strip().str.upper() == p_name]
+                        if not df_det_po.empty:
+                            raw_descs = df_det_po["Descripcion"].dropna().astype(str).str.strip().unique()
+                            # Filtrar descripciones poco informativas
+                            filtered_descs = [d for d in raw_descs if d.lower() not in ["proyecto", "proyecto ", ""]]
+                            if filtered_descs:
+                                descs = filtered_descs
+                            else:
+                                descs = list(raw_descs)
+                                
                     meta = {
                         "PO": p_name, 
                         "Proyecto": "N/A", 
+                        "Descripción": ", ".join(descs) if descs else "N/A",
                         "Solicitante": "N/A", 
                         "Destino": "N/A", 
                         "Cant Recibida": 0,
@@ -3280,7 +3295,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     seleccion_df = st.dataframe(
                         df_disponibles,
                         use_container_width=True,
-                        column_order=["PO", "Proyecto", "Solicitante", "Destino", "Cant Recibida", "Etiqueta Actual"],
+                        column_order=["PO", "Proyecto", "Descripción", "Solicitante", "Destino", "Cant Recibida", "Etiqueta Actual"],
                         on_select="rerun",
                         selection_mode="multi-row",
                         key="po_color_step1_df_selection_unique"
