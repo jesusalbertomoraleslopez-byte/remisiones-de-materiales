@@ -2798,6 +2798,120 @@ elif opcion_menu == "📦 Módulo Tarimas":
             
     if True:
         st.write("---")
+        
+        # --- DEFINICIÓN DE LA FUNCIÓN DE EXCEL RESUMEN DE TARIMAS ---
+        def generar_excel_resumen_tarimas(lista_tarimas):
+            import io
+            import pandas as pd
+            from openpyxl.styles import Font, PatternFill, Alignment
+            from openpyxl.utils import get_column_letter
+            
+            buffer = io.BytesIO()
+            writer = pd.ExcelWriter(buffer, engine='openpyxl')
+            
+            # 1. Obtener detalles de las tarimas seleccionadas
+            df_det = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(lista_tarimas)].copy()
+            
+            if df_det.empty:
+                df_empty = pd.DataFrame([{"MENSAJE": "No hay artículos registrados para las tarimas seleccionadas"}])
+                df_empty.to_excel(writer, index=False, sheet_name='Sin Datos')
+                writer.close()
+                buffer.seek(0)
+                return buffer
+            
+            # Enriquecer con Nombre del Catálogo de Artículos
+            if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                df_art = st.session_state.BD_Articulos[['SKU', 'Nombre']].copy()
+                df_art['SKU'] = df_art['SKU'].astype(str).str.strip()
+                df_det['SKU'] = df_det['SKU'].astype(str).str.strip()
+                df_det = pd.merge(df_det, df_art, on='SKU', how='left')
+                df_det['Nombre'] = df_det['Nombre'].fillna("Articulo No Registrado")
+            else:
+                df_det['Nombre'] = "Articulo No Registrado"
+                
+            # Crear Sheet 1: Resumen Consolidado (Agrupado por SKU y PO)
+            df_group = df_det.groupby(['SKU', 'PO', 'Nombre']).agg(
+                Cantidad_Total=('Cantidad', 'sum'),
+                Num_Tarimas=('ID_Tarima', 'nunique')
+            ).reset_index()
+            
+            df_group.columns = ["SKU / PRODUCTO", "PO / ORDEN COMPRA", "DESCRIPCIÓN", "CANTIDAD TOTAL", "CANTIDAD TARIMAS"]
+            total_group = {
+                "SKU / PRODUCTO": "TOTALES",
+                "PO / ORDEN COMPRA": "",
+                "DESCRIPCIÓN": "",
+                "CANTIDAD TOTAL": df_group["CANTIDAD TOTAL"].sum(),
+                "CANTIDAD TARIMAS": ""
+            }
+            df_group_export = pd.concat([df_group, pd.DataFrame([total_group])], ignore_index=True)
+            df_group_export.to_excel(writer, index=False, sheet_name='Resumen Consolidado', startrow=0)
+            
+            # Crear Sheet 2: Detalle por Tarima
+            df_detail = df_det[['ID_Tarima', 'PO', 'Proyecto', 'SKU', 'Nombre', 'Cantidad', 'Parcialidad']].copy()
+            df_detail.columns = ["ID TARIMA", "ORDEN COMPRA (PO)", "PROYECTO", "SKU", "DESCRIPCION", "CANTIDAD", "PARCIALIDAD"]
+            total_detail = {
+                "ID TARIMA": "TOTALES",
+                "ORDEN COMPRA (PO)": "",
+                "PROYECTO": "",
+                "SKU": "",
+                "DESCRIPCION": "",
+                "CANTIDAD": df_detail["CANTIDAD"].sum(),
+                "PARCIALIDAD": ""
+            }
+            df_detail_export = pd.concat([df_detail, pd.DataFrame([total_detail])], ignore_index=True)
+            df_detail_export.to_excel(writer, index=False, sheet_name='Detalle por Tarima', startrow=0)
+            
+            # 2. Formatear con OpenPyXL
+            workbook = writer.book
+            
+            fill_header = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
+            font_white_bold = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+            font_bold = Font(name="Calibri", size=11, bold=True)
+            font_normal = Font(name="Calibri", size=11)
+            center_align = Alignment(horizontal="center", vertical="center")
+            left_align = Alignment(horizontal="left", vertical="center")
+            
+            for ws_name in ['Resumen Consolidado', 'Detalle por Tarima']:
+                ws = workbook[ws_name]
+                
+                for cell in ws[1]:
+                    cell.fill = fill_header
+                    cell.font = font_white_bold
+                    cell.alignment = center_align
+                    
+                for row in ws.iter_rows(min_row=2):
+                    for cell in row:
+                        cell.font = font_normal
+                        if cell.column_letter in ['C', 'E'] and ws_name == 'Detalle por Tarima':
+                            cell.alignment = left_align
+                        elif cell.column_letter == 'C' and ws_name == 'Resumen Consolidado':
+                            cell.alignment = left_align
+                        else:
+                            cell.alignment = center_align
+                            
+                last_row = ws.max_row
+                for cell in ws[last_row]:
+                    cell.font = font_bold
+                    cell.fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+                    
+                for col in ws.columns:
+                    max_len = 0
+                    col_letter = col[0].column_letter
+                    for cell in col:
+                        try:
+                            if len(str(cell.value)) > max_len:
+                                max_len = len(str(cell.value))
+                        except:
+                            pass
+                    ws.column_dimensions[col_letter].width = max(max_len + 4, 15)
+                    
+                ws.auto_filter.ref = ws.dimensions
+                ws.freeze_panes = "A2"
+                
+            writer.close()
+            buffer.seek(0)
+            return buffer
+
         st.subheader("🖨️ Panel de Impresión Masiva de Tarimas")
         
         # Ordenar las tarimas consecutivamente de manera descendente por ID_Tarima
@@ -2824,6 +2938,20 @@ elif opcion_menu == "📦 Módulo Tarimas":
         # =============================================================================
         if filas_seleccionadas:
             elegidas = df_tarimas_sorted.iloc[filas_seleccionadas]['ID_Tarima'].tolist()
+            
+            # --- DESCARGA DE EXCEL DE RESUMEN DE PIEZAS DE LOTE ---
+            try:
+                excel_resumen_bytes = generar_excel_resumen_tarimas(elegidas)
+                st.download_button(
+                    label="📊 Descargar Resumen de Lote en Excel (.xlsx)",
+                    data=excel_resumen_bytes,
+                    file_name=f"RESUMEN_Lote_Tarimas_{datetime.datetime.now().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_download_excel_resumen_lote_tarimas_v3"
+                )
+            except Exception as e:
+                st.error(f"⚠️ Error al generar el resumen de Excel: {e}")
+                
             if len(elegidas) == 1:
                 id_tarima_limpio = str(elegidas[0]).strip()  # Extracción nativa perfecta
         
