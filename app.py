@@ -5075,7 +5075,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     set_skus_aut = set(st.session_state.BD_SKUs_Autorizados['SKU'].astype(str).str.strip().unique()) if "BD_SKUs_Autorizados" in st.session_state and not st.session_state.BD_SKUs_Autorizados.empty else set()
                     skus_validos_sistema = set_skus_art | set_skus_aut
                     
-                    skus_sin_registro = sorted(list(skus_en_tarimas - skus_validos_sistema))
+                    skus_sin_registro = sorted(list(skus_en_tarimas - set_skus_art))
                     skus_sin_registro = [s for s in skus_sin_registro if s and s.upper() not in ["TODOS", "SELECCIONE UN SKU..."]]
                     
                     if len(skus_sin_registro) > 0:
@@ -5122,7 +5122,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     if "BD_Requerimientos_POs" in st.session_state and not st.session_state.BD_Requerimientos_POs.empty:
                         skus_en_pos = set(st.session_state.BD_Requerimientos_POs['SKU'].astype(str).str.strip().dropna().unique())
                         
-                    skus_sin_registro_pos = sorted(list(skus_en_pos - skus_validos_sistema))
+                    skus_sin_registro_pos = sorted(list(skus_en_pos - set_skus_art))
                     skus_sin_registro_pos = [s for s in skus_sin_registro_pos if s and s.upper() not in ["TODOS", "SELECCIONE UN SKU..."]]
                     
                     if len(skus_sin_registro_pos) > 0:
