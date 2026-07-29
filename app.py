@@ -1,4 +1,4 @@
-﻿import streamlit as st
+import streamlit as st
 import streamlit.components.v1 as components
 import os
 import pandas as pd
@@ -4986,8 +4986,9 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                                     t_list = []
                                 for t in t_list:
                                     tarimas_afectadas.append(t)
-                            st.info(f"Se eliminar\u00e1n las remisiones: **{\", \".join(map(str, ids_rem_eliminar))}** y se liberar\u00e1n **{len(tarimas_afectadas)}** tarimas asociadas.")
-                            if st.button("Eliminar Remisiones Seleccionadas", key="btn_eliminar_remisiones_purga"):
+                            ids_str = ', '.join(map(str, ids_rem_eliminar))
+                            st.info(f"🗑️ Se eliminarán las remisiones: **{ids_str}** y se liberarán **{len(tarimas_afectadas)}** tarimas asociadas.")
+                            if st.button("🗑️ Eliminar Remisiones Seleccionadas", key="btn_eliminar_remisiones_purga"):
                                 if tarimas_afectadas:
                                     st.session_state.BD_Tarimas.loc[
                                         st.session_state.BD_Tarimas['ID_Tarima'].isin(tarimas_afectadas), 'Estatus'
@@ -4997,12 +4998,12 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                                     ~st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].isin(ids_rem_eliminar)
                                 ]
                                 subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-                                st.success(f"\u2705 Remisiones eliminadas y {len(tarimas_afectadas)} tarimas reactivadas como 'Disponible'.")
-                                st.success(f"Remisiones eliminadas y {len(tarimas_afectadas)} tarimas reactivadas como Disponible.")
+                                st.success(f"✅ Remisiones eliminadas y {len(tarimas_afectadas)} tarimas reactivadas como 'Disponible'.")
+                                st.rerun()
                         else:
-                            st.warning("\u26a0\ufe0f Los \u00edndices seleccionados ya no son v\u00e1lidos. Vuelve a seleccionar.")
+                            st.warning("⚠️ Los índices seleccionados ya no son válidos. Vuelve a seleccionar.")
                     else:
-                        st.info("\u261d\ufe0f Selecciona una o m\u00e1s remisiones para habilitar el bot\u00f3n de eliminar.")
+                        st.info("☝️ Selecciona una o más remisiones para habilitar el botón de eliminar.")
                 else:
                     st.write("No hay remisiones registradas.")
 
