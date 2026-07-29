@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import streamlit.components.v1 as components
 import os
 import pandas as pd
@@ -4968,7 +4968,6 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     sel_remisiones = st.dataframe(df_rem_purga, use_container_width=True, on_select="rerun", selection_mode="multi-row", key="tabla_purga_remisiones_final_f")
                     filas_rem = sel_remisiones.get("selection", {}).get("rows", [])
                     if filas_rem:
-                        # Filtrar índices válidos para evitar errores de desfase de Streamlit en la recarga
                         filas_rem_validas = [i for i in filas_rem if i < len(st.session_state.BD_Datos_Generales_Remision)]
                         if filas_rem_validas:
                             ids_rem_eliminar = st.session_state.BD_Datos_Generales_Remision.iloc[filas_rem_validas]['Folio_Remision'].tolist()
@@ -4986,8 +4985,27 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                                 else:
                                     t_list = []
                                 for t in t_list:
-                                                 st.write("---")
-                                                 
+                                    tarimas_afectadas.append(t)
+                            st.info(f"Se eliminar\u00e1n las remisiones: **{\", \".join(map(str, ids_rem_eliminar))}** y se liberar\u00e1n **{len(tarimas_afectadas)}** tarimas asociadas.")
+                            if st.button("Eliminar Remisiones Seleccionadas", key="btn_eliminar_remisiones_purga"):
+                                if tarimas_afectadas:
+                                    st.session_state.BD_Tarimas.loc[
+                                        st.session_state.BD_Tarimas['ID_Tarima'].isin(tarimas_afectadas), 'Estatus'
+                                    ] = 'Disponible'
+                                    subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+                                st.session_state.BD_Datos_Generales_Remision = st.session_state.BD_Datos_Generales_Remision[
+                                    ~st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].isin(ids_rem_eliminar)
+                                ]
+                                subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
+                                st.success(f"\u2705 Remisiones eliminadas y {len(tarimas_afectadas)} tarimas reactivadas como 'Disponible'.")
+                                st.success(f"Remisiones eliminadas y {len(tarimas_afectadas)} tarimas reactivadas como Disponible.")
+                        else:
+                            st.warning("\u26a0\ufe0f Los \u00edndices seleccionados ya no son v\u00e1lidos. Vuelve a seleccionar.")
+                    else:
+                        st.info("\u261d\ufe0f Selecciona una o m\u00e1s remisiones para habilitar el bot\u00f3n de eliminar.")
+                else:
+                    st.write("No hay remisiones registradas.")
+
                 st.write("---")
                 st.markdown("### 📋 3. Eliminar Órdenes de Compra (POs) y Requerimientos")
                 if not st.session_state.BD_POs_Cabecera.empty:
