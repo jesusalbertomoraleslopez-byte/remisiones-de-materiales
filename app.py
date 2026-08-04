@@ -1309,6 +1309,21 @@ if "BD_Tarimas" not in st.session_state:
     else:
         st.session_state.BD_Tarimas = pd.DataFrame(columns=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus", "Es_Nueva"])
 
+# --- RESTAURACION DE TARIMAS ELIMINADAS ACCIDENTALMENTE ---
+_tarimas_recuperar = [
+    {"ID_Tarima": "TPM-0375", "Tarima_Origen_Excel": "Bulto_13", "Fecha_Creacion": "23/07/2026", "Ubicacion_Actual": "Metales", "Creado_Por": "Jesus Morales", "Tipo_Tarima": "Cuadrada", "Estatus": "Disponible", "Es_Nueva": 0},
+    {"ID_Tarima": "TPM-0376", "Tarima_Origen_Excel": "Bulto_14", "Fecha_Creacion": "23/07/2026", "Ubicacion_Actual": "Metales", "Creado_Por": "Jesus Morales", "Tipo_Tarima": "Cuadrada", "Estatus": "Disponible", "Es_Nueva": 0},
+    {"ID_Tarima": "TPM-0377", "Tarima_Origen_Excel": "Bulto_15", "Fecha_Creacion": "23/07/2026", "Ubicacion_Actual": "Metales", "Creado_Por": "Jesus Morales", "Tipo_Tarima": "Cuadrada", "Estatus": "Disponible", "Es_Nueva": 0},
+]
+_ids_existentes = st.session_state.BD_Tarimas["ID_Tarima"].astype(str).tolist() if "ID_Tarima" in st.session_state.BD_Tarimas.columns else []
+_tarimas_a_insertar = [t for t in _tarimas_recuperar if t["ID_Tarima"] not in _ids_existentes]
+if _tarimas_a_insertar:
+    _df_recuperar = pd.DataFrame(_tarimas_a_insertar)
+    st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, _df_recuperar], ignore_index=True)
+    subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
+# --- FIN RESTAURACION ---
+
+
 # --- Detalle Granular de Contenido por Tarima ---
 if "BD_Detalle_Tarimas" not in st.session_state or st.session_state.get("BD_Detalle_Tarimas") is None:
     df_git_detalles = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
