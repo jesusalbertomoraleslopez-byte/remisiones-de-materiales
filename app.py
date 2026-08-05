@@ -25,6 +25,18 @@ st.set_page_config(
     page_icon="📦"
 )
 
+# --- HELPER DE LECTURA SEGURA DE SECRETS ---
+def obtener_secret(key, default=None):
+    try:
+        if hasattr(st, 'secrets') and st.secrets is not None:
+            if key in st.secrets:
+                val = st.secrets[key]
+                return val if val is not None else default
+    except Exception:
+        pass
+    return default
+
+
 # Inyectar CSS de Imagen Corporativa Oficial (Industria SIGRAMA)
 st.markdown("""
 <style>
@@ -293,8 +305,8 @@ def cargar_excel_desde_github(file_name):
     try:
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}?ref={BRANCH}"
         headers = {}
-        if "github_token" in st.secrets:
-            headers["Authorization"] = f"token {st.secrets['github_token']}"
+        if obtener_secret("github_token"):
+            headers["Authorization"] = f"token {obtener_secret("github_token")}"
             headers["Accept"] = "application/vnd.github.v3+json"
             
         res = requests.get(url, headers=headers)
@@ -320,12 +332,12 @@ def subir_excel_a_github(file_name, dataframe_to_save):
         st.error(f"⚠️ Error al guardar archivo localmente {file_name}: {e}")
         
     # 2. Sincronizar con GitHub si el token está disponible
-    if "github_token" not in st.secrets or not st.secrets["github_token"]:
+    if not obtener_secret("github_token"):
         # Modo local puro sin token, retornamos True ya que se guardó localmente
         return True
         
     try:
-        GITHUB_TOKEN = st.secrets["github_token"]
+        GITHUB_TOKEN = obtener_secret("github_token")
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
 
@@ -370,9 +382,9 @@ def obtener_skus_con_imagen():
                 skus.add(sku)
                 
     # 2. Escaneo remoto (GitHub)
-    if "github_token" in st.secrets and st.secrets["github_token"]:
+    if obtener_secret("github_token"):
         try:
-            GITHUB_TOKEN = st.secrets["github_token"]
+            GITHUB_TOKEN = obtener_secret("github_token")
             url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
             headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
             res = requests.get(url_list, headers=headers)
@@ -397,9 +409,9 @@ def renderizar_explorador_imagenes():
 
     # Botón de sincronización con GitHub
     if st.button("🔄 Sincronizar Imágenes con GitHub", use_container_width=True, key="btn_sync_images_explorer"):
-        if "github_token" in st.secrets and st.secrets["github_token"]:
+        if obtener_secret("github_token"):
             try:
-                GITHUB_TOKEN = st.secrets["github_token"]
+                GITHUB_TOKEN = obtener_secret("github_token")
                 url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
                 headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
                 res_list = requests.get(url_list, headers=headers)
@@ -587,9 +599,9 @@ def generar_pdf_catalogo_articulos(df_articulos):
     
     # Pre-cargar lista remota si es necesario para evitar múltiples llamadas en bucle
     github_items = []
-    if "github_token" in st.secrets and st.secrets["github_token"]:
+    if obtener_secret("github_token"):
         try:
-            GITHUB_TOKEN = st.secrets["github_token"]
+            GITHUB_TOKEN = obtener_secret("github_token")
             url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
             headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
             res_list = requests.get(url_list, headers=headers)
@@ -665,13 +677,13 @@ def subir_imagen_a_github(file_path):
     import urllib.parse
     if not os.path.exists(file_path):
         return False
-    if "github_token" not in st.secrets or not st.secrets["github_token"]:
+    if not obtener_secret("github_token"):
         return True
     try:
         with open(file_path, "rb") as f:
             base64_content = base64.b64encode(f.read()).decode("utf-8")
         
-        GITHUB_TOKEN = st.secrets["github_token"]
+        GITHUB_TOKEN = obtener_secret("github_token")
         quoted_path = urllib.parse.quote(file_path.replace("\\", "/"))
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
@@ -700,12 +712,12 @@ def descargar_imagen_desde_github(file_path):
     import urllib.parse
     if os.path.exists(file_path):
         return True
-    if "github_token" not in st.secrets or not st.secrets["github_token"]:
+    if not obtener_secret("github_token"):
         return False
     try:
         quoted_path = urllib.parse.quote(file_path.replace("\\", "/"))
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}?ref={BRANCH}"
-        headers = {"Authorization": f"token {st.secrets['github_token']}", "Accept": "application/vnd.github.v3+json"}
+        headers = {"Authorization": f"token {obtener_secret("github_token")}", "Accept": "application/vnd.github.v3+json"}
         
         res = requests.get(url, headers=headers)
         if res.status_code == 200:
@@ -730,10 +742,10 @@ def eliminar_imagen_de_github(file_path):
         except Exception as e:
             st.error(f"⚠️ Error al borrar imagen local {file_path}: {e}")
             
-    if "github_token" not in st.secrets or not st.secrets["github_token"]:
+    if not obtener_secret("github_token"):
         return True
     try:
-        GITHUB_TOKEN = st.secrets["github_token"]
+        GITHUB_TOKEN = obtener_secret("github_token")
         quoted_path = urllib.parse.quote(file_path.replace("\\", "/"))
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
@@ -960,9 +972,9 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
 def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
     # Obtener listado de imágenes desde GitHub una sola vez para no saturar la API
     github_items = []
-    if "github_token" in st.secrets and st.secrets["github_token"]:
+    if obtener_secret("github_token"):
         try:
-            GITHUB_TOKEN = st.secrets["github_token"]
+            GITHUB_TOKEN = obtener_secret("github_token")
             url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
             headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
             res_list = requests.get(url_list, headers=headers)
@@ -1212,9 +1224,9 @@ def generar_pdf_etiqueta(t_imp):
         if matching_imgs:
             img_encontrada = matching_imgs[0]
         else:
-            if "github_token" in st.secrets and st.secrets["github_token"]:
+            if obtener_secret("github_token"):
                 try:
-                    GITHUB_TOKEN = st.secrets["github_token"]
+                    GITHUB_TOKEN = obtener_secret("github_token")
                     url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
                     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
                     res_list = requests.get(url_list, headers=headers)
@@ -1654,9 +1666,9 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
         if matching_imgs:
             img_encontrada = matching_imgs[0]
         else:
-            if "github_token" in st.secrets and st.secrets["github_token"]:
+            if obtener_secret("github_token"):
                 try:
-                    GITHUB_TOKEN = st.secrets["github_token"]
+                    GITHUB_TOKEN = obtener_secret("github_token")
                     url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
                     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
                     res_list = requests.get(url_list, headers=headers)
@@ -1838,9 +1850,9 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         if matching_imgs:
             img_encontrada = matching_imgs[0]
         else:
-            if "github_token" in st.secrets and st.secrets["github_token"]:
+            if obtener_secret("github_token"):
                 try:
-                    GITHUB_TOKEN = st.secrets["github_token"]
+                    GITHUB_TOKEN = obtener_secret("github_token")
                     url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
                     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
                     res_list = requests.get(url_list, headers=headers)
@@ -2129,8 +2141,8 @@ def mostrar_pantalla_login():
                 
                 # Obtener contraseña de admin configurada o usar la de respaldo
                 admin_pwd = "SigramaMetales2026"
-                if "admin_password" in st.secrets:
-                    admin_pwd = st.secrets["admin_password"]
+                if obtener_secret("admin_password"):
+                    admin_pwd = obtener_secret("admin_password", "Sigrama123!")
                     
                 # Verificar si es Administrador con múltiples contraseñas de respaldo para evitar cualquier bloqueo
                 contrasenas_permitidas = [admin_pwd, "SigramaMetales2026", "SigramaMetales2025", "Admin2025"]
@@ -3120,9 +3132,9 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                 if matching_imgs:
                                     img_encontrada = matching_imgs[0]
                                 else:
-                                    if "github_token" in st.secrets and st.secrets["github_token"]:
+                                    if obtener_secret("github_token"):
                                         try:
-                                            GITHUB_TOKEN = st.secrets["github_token"]
+                                            GITHUB_TOKEN = obtener_secret("github_token")
                                             url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
                                             headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
                                             res_list = requests.get(url_list, headers=headers)
@@ -3363,9 +3375,9 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             if matching_imgs:
                                 img_encontrada = matching_imgs[0]
                             else:
-                                if "github_token" in st.secrets and st.secrets["github_token"]:
+                                if obtener_secret("github_token"):
                                     try:
-                                        GITHUB_TOKEN = st.secrets["github_token"]
+                                        GITHUB_TOKEN = obtener_secret("github_token")
                                         url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
                                         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
                                         res_list = requests.get(url_list, headers=headers)
@@ -4348,9 +4360,9 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                 imagen_final_path = matching_files_local[0]
             else:
                 # Buscar en GitHub si el token está disponible
-                if "github_token" in st.secrets and st.secrets["github_token"]:
+                if obtener_secret("github_token"):
                     try:
-                        GITHUB_TOKEN = st.secrets["github_token"]
+                        GITHUB_TOKEN = obtener_secret("github_token")
                         url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
                         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
                         res_list = requests.get(url_list, headers=headers)
@@ -4438,11 +4450,15 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                 
                 file_uploaded = st.file_uploader("Subir archivo de imagen (PNG, JPG, JPEG):", type=["png", "jpg", "jpeg"], key=f"file_uploader_{sku_sel}")
                 
-                from streamlit_paste_button import paste_image_button as pbutton
-                paste_result = pbutton(
-                    "📋 Pegar captura de pantalla desde el portapapeles",
-                    key=f"paste_button_{sku_sel}"
-                )
+                paste_result = None
+                try:
+                    from streamlit_paste_button import paste_image_button as pbutton
+                    paste_result = pbutton(
+                        "📋 Pegar captura de pantalla desde el portapapeles",
+                        key=f"paste_button_{sku_sel}"
+                    )
+                except Exception:
+                    paste_result = None
                 
                 nueva_imagen_data = None
                 img_ext = ".png"
@@ -4452,7 +4468,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                     _, ext = os.path.splitext(file_uploaded.name)
                     if ext.lower() in [".png", ".jpg", ".jpeg"]:
                         img_ext = ext.lower()
-                elif paste_result.image_data is not None:
+                elif paste_result is not None and getattr(paste_result, 'image_data', None) is not None:
                     nueva_imagen_data = paste_result.image_data
                     img_ext = ".png"
                     
