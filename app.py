@@ -306,7 +306,7 @@ def cargar_excel_desde_github(file_name):
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}?ref={BRANCH}"
         headers = {}
         if obtener_secret("github_token"):
-            headers["Authorization"] = f"token {obtener_secret("github_token")}"
+            headers["Authorization"] = f"token {obtener_secret('github_token')}"
             headers["Accept"] = "application/vnd.github.v3+json"
             
         res = requests.get(url, headers=headers)
@@ -717,7 +717,7 @@ def descargar_imagen_desde_github(file_path):
     try:
         quoted_path = urllib.parse.quote(file_path.replace("\\", "/"))
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}?ref={BRANCH}"
-        headers = {"Authorization": f"token {obtener_secret("github_token")}", "Accept": "application/vnd.github.v3+json"}
+        headers = {"Authorization": f"token {obtener_secret('github_token')}", "Accept": "application/vnd.github.v3+json"}
         
         res = requests.get(url, headers=headers)
         if res.status_code == 200:
