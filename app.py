@@ -18,7 +18,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-# 1. CONFIGURACIÓN E INTERFAZ BASE RESPONSIVA
+# 1. CONFIGURACIÓN E INTERFAZ BASE RESPONSIVA (Build 2026.08.05-v2)
 st.set_page_config(
     page_title="Remisiones de Materiales",
     layout="wide",
