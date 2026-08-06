@@ -810,6 +810,64 @@ def guardar_emails_config(to_str, cc_str):
         st.error(f"Error al guardar configuración de correos: {e}")
         return False
 
+def resolver_img_tag_html(sku, width=60, height=60):
+    """
+    Busca la imagen de un SKU en disco local (imagenes_articulos) o GitHub y la convierte a Data URI Base64.
+    Esto permite que la imagen se renderice directamente en correos y borradores Outlook (.eml) sin ser bloqueada.
+    """
+    import os
+    import base64
+    import requests
+    import urllib.parse
+
+    if not sku or str(sku).strip().upper() in ["N/A", "NONE", ""]:
+        return "N/A"
+
+    sku_clean = str(sku).strip().lower()
+    img_dir = "imagenes_articulos"
+    
+    # 1. Búsqueda local primaria
+    if os.path.exists(img_dir):
+        for f in os.listdir(img_dir):
+            f_lower = f.lower()
+            if f_lower.startswith(f"{sku_clean}(") or f_lower.startswith(f"{sku_clean}."):
+                full_path = os.path.join(img_dir, f)
+                try:
+                    with open(full_path, "rb") as img_file:
+                        b64_data = base64.b64encode(img_file.read()).decode("utf-8")
+                    ext = "png" if f_lower.endswith(".png") else "jpeg"
+                    return f'<img src="data:image/{ext};base64,{b64_data}" width="{width}" style="border-radius:4px; border: 1px solid #ccc; max-height:{height}px; object-fit:contain;">'
+                except Exception:
+                    pass
+
+    # 2. Búsqueda remota mediante GitHub API / Raw si no existe en local
+    try:
+        url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+        headers = {}
+        if obtener_secret("github_token"):
+            headers["Authorization"] = f"token {obtener_secret('github_token')}"
+            headers["Accept"] = "application/vnd.github.v3+json"
+        
+        res = requests.get(url_list, headers=headers, timeout=5)
+        if res.status_code == 200:
+            for item in res.json():
+                item_name_lower = item.get("name", "").lower()
+                if item_name_lower.startswith(f"{sku_clean}(") or item_name_lower.startswith(f"{sku_clean}."):
+                    raw_url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/imagenes_articulos/{urllib.parse.quote(item['name'])}"
+                    try:
+                        res_img = requests.get(raw_url, timeout=5)
+                        if res_img.status_code == 200:
+                            b64_data = base64.b64encode(res_img.content).decode("utf-8")
+                            ext = "png" if item_name_lower.endswith(".png") else "jpeg"
+                            return f'<img src="data:image/{ext};base64,{b64_data}" width="{width}" style="border-radius:4px; border: 1px solid #ccc; max-height:{height}px; object-fit:contain;">'
+                    except Exception:
+                        pass
+                    return f'<img src="{raw_url}" width="{width}" style="border-radius:4px; border: 1px solid #ccc; max-height:{height}px; object-fit:contain;">'
+    except Exception:
+        pass
+
+    return "N/A"
+
 def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
     """
     Genera un archivo EML en memoria como borrador de Outlook.
@@ -922,20 +980,9 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
         if is_summary:
             html += '<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;"></td>'
         else:
-            # Buscar imagen local
-            import glob
-            import os
-            img_filename = None
-            matching_local = glob.glob(f"imagenes_articulos/{sku}*.*")
-            if matching_local:
-                img_filename = os.path.basename(matching_local[0])
-                
-            img_tag = ""
-            if img_filename:
-                import urllib.parse
-                img_filename_encoded = urllib.parse.quote(img_filename)
-                img_url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/imagenes_articulos/{img_filename_encoded}"
-                img_tag = f'<img src="{img_url}" width="80" height="80" style="border-radius: 4px; border: 1px solid #ccc; max-width: 80px; height: auto; display: block; margin: 0 auto;">'
+            img_tag = resolver_img_tag_html(sku, width=80, height=80)
+            if img_tag == "N/A":
+                img_tag = ""
             html += f'<td style="padding: 6px; border: 1px solid #dcdcdc; text-align: center;">{img_tag}</td>'
             
         # Detalle Tarimas
@@ -977,19 +1024,6 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
     return html
 
 def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
-    # Obtener listado de imágenes desde GitHub una sola vez para no saturar la API
-    github_items = []
-    if obtener_secret("github_token"):
-        try:
-            GITHUB_TOKEN = obtener_secret("github_token")
-            url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-            res_list = requests.get(url_list, headers=headers)
-            if res_list.status_code == 200:
-                github_items = res_list.json()
-        except Exception:
-            pass
-
     # Generar tabla HTML de piezas
     filas_html = ""
     for idx_row, row in enumerate(df_det.iterrows()):
@@ -1000,17 +1034,8 @@ def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
         po = row_data.get("PO", "N/A")
         id_tarima = row_data.get("ID_Tarima", "N/A")
         
-        # Intentar obtener la URL de la imagen de GitHub o dejar texto
-        img_tag = "N/A"
-        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-            match = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku]
-            if not match.empty:
-                for git_item in github_items:
-                    if git_item.get("name", "").startswith(f"{sku}("):
-                        # URL raw de github
-                        img_url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/imagenes_articulos/{git_item['name']}"
-                        img_tag = f'<img src="{img_url}" width="60" style="border-radius:4px; border: 1px solid #ccc;">'
-                        break
+        # Resolver etiqueta img en Base64 o URL remota de forma garantizada
+        img_tag = resolver_img_tag_html(sku, width=60, height=60)
 
         bg_color = "#ffffff" if idx_row % 2 == 0 else "#f9f9f9"
         filas_html += f"""
