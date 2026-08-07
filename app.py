@@ -1167,6 +1167,149 @@ def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
     """
     return html
 
+def generar_cuerpo_correo_tarimas_dia_html(df_tarimas_dia, df_detalle_dia, fecha_display):
+    """Genera el cuerpo del correo en HTML para el Reporte Diario de Tarimas."""
+    total_tarimas = len(df_tarimas_dia)
+    total_pzs = int(df_detalle_dia['Cantidad'].sum()) if not df_detalle_dia.empty and 'Cantidad' in df_detalle_dia.columns else 0
+    skus_unicos = df_detalle_dia['SKU'].nunique() if not df_detalle_dia.empty and 'SKU' in df_detalle_dia.columns else 0
+
+    # Tabla resumen por Tarima
+    filas_tarimas_html = ""
+    for idx_row, (_, t_row) in enumerate(df_tarimas_dia.iterrows()):
+        id_t = t_row.get("ID_Tarima", "N/A")
+        ubic = t_row.get("Ubicacion_Actual", "N/A")
+        creado = t_row.get("Creado_Por", "N/A")
+        estatus = t_row.get("Estatus", "N/A")
+
+        # Detalle de la tarima
+        df_sub = df_detalle_dia[df_detalle_dia["ID_Tarima"] == id_t] if not df_detalle_dia.empty else pd.DataFrame()
+        pos_list = list(set(df_sub["PO"].dropna().astype(str).tolist())) if not df_sub.empty and "PO" in df_sub.columns else []
+        pos_str = ", ".join(pos_list) if pos_list else "N/A"
+        
+        skus_list = list(set(df_sub["SKU"].dropna().astype(str).tolist())) if not df_sub.empty and "SKU" in df_sub.columns else []
+        skus_str = ", ".join(skus_list[:5]) + (f" (+{len(skus_list)-5} más)" if len(skus_list) > 5 else "") if skus_list else "N/A"
+
+        pzs_tarima = int(df_sub["Cantidad"].sum()) if not df_sub.empty and "Cantidad" in df_sub.columns else 0
+
+        bg_color = "#ffffff" if idx_row % 2 == 0 else "#f9f9f9"
+        filas_tarimas_html += f"""
+        <tr style="background-color: {bg_color};">
+            <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; font-size: 13px; text-align: center;">{id_t}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; font-size: 13px;">{pos_str}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; font-size: 13px;">{skus_str}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 13px; font-weight: bold; color: #0056b3;">{pzs_tarima}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; font-size: 13px;">{ubic}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; font-size: 13px; text-align: center;">{creado}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 12px; font-weight: bold; color: #2e7d32;">{estatus}</td>
+        </tr>
+        """
+
+    # Tabla de piezas/desglose completo (con imágenes)
+    filas_piezas_html = ""
+    if not df_detalle_dia.empty:
+        for idx_row, (_, row_data) in enumerate(df_detalle_dia.iterrows()):
+            sku = row_data.get("SKU", "N/A")
+            desc = row_data.get("Descripcion", "N/A")
+            cant = row_data.get("Cantidad", 0)
+            po = row_data.get("PO", "N/A")
+            id_tarima = row_data.get("ID_Tarima", "N/A")
+            
+            img_tag = resolver_img_tag_html(sku, width=50, height=50)
+            bg_color = "#ffffff" if idx_row % 2 == 0 else "#f9f9f9"
+
+            filas_piezas_html += f"""
+            <tr style="background-color: {bg_color};">
+                <td style="padding: 8px 10px; border: 1px solid #ddd; font-size: 12.5px; font-weight: bold;">{sku}</td>
+                <td style="padding: 8px 10px; border: 1px solid #ddd; font-size: 12.5px;">{desc}</td>
+                <td style="padding: 8px 10px; border: 1px solid #ddd; text-align: center; font-size: 12.5px; font-weight: bold;">{int(cant) if isinstance(cant, (int, float)) else cant}</td>
+                <td style="padding: 8px 10px; border: 1px solid #ddd; text-align: center; font-size: 12.5px; font-weight: bold; color: #d32f2f;">{id_tarima}</td>
+                <td style="padding: 8px 10px; border: 1px solid #ddd; font-size: 12.5px;">{po}</td>
+                <td style="padding: 6px 10px; border: 1px solid #ddd; text-align: center;">{img_tag}</td>
+            </tr>
+            """
+
+    html = f"""
+    <html>
+    <head>
+        <link href="https://fonts.googleapis.com/css2?family=Questrial&display=swap" rel="stylesheet">
+    </head>
+    <body style="font-family: 'Questrial', 'Segoe UI', Arial, sans-serif; color: #000000; line-height: 1.6; padding: 20px; background-color: #ffffff;">
+        <!-- Encabezado con Logotipo Corporativo -->
+        <div style="padding-bottom: 15px; border-bottom: 4px solid #EC2024; margin-bottom: 20px;">
+            <img src="https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/logo_sigrama.png" width="160" alt="Industria Sigrama" style="display: block; border: 0;">
+        </div>
+
+        <p style="font-size: 15px; margin-bottom: 15px;">Buen día a todos,</p>
+        <p style="font-size: 14px; margin-bottom: 15px;">Se comparte el <b>Reporte Diario de Tarimas Preparadas y Registradas</b> del día <b>{fecha_display}</b> en <b>PLANTA METALES DIAGONAL</b>. Se adjunta el archivo comprimido ZIP con las etiquetas oficiales en formato PDF de cada tarima creada para su respaldo e impresión.</p>
+
+        <!-- Resumen de Métricas -->
+        <div style="border-left: 4px solid #EC2024; background-color: #F8F9FA; padding: 15px; margin: 20px 0; border-radius: 0 4px 4px 0;">
+            <h4 style="margin: 0 0 10px 0; color: #EC2024; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">📊 Resumen Global del Día ({fecha_display})</h4>
+            <ul style="margin: 0; padding-left: 20px; font-size: 13.5px; color: #333333; line-height: 1.6;">
+                <li><b>Total de Tarimas Registradas:</b> <span style="color: #EC2024; font-weight: bold;">{total_tarimas} tarimas</span></li>
+                <li><b>Total de Piezas Empacadas:</b> <span style="color: #0056b3; font-weight: bold;">{total_pzs} piezas</span></li>
+                <li><b>SKUs Únicos Procesados:</b> <b>{skus_unicos} SKUs</b></li>
+            </ul>
+        </div>
+
+        <!-- Tabla Resumen de Tarimas -->
+        <h4 style="color: #333; margin-top: 25px; margin-bottom: 10px; font-size: 14.5px;">📦 Resumen por Tarima:</h4>
+        <table style="border-collapse: collapse; width: 100%; max-width: 950px; margin-bottom: 25px; border: 1px solid #ddd; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <thead>
+                <tr style="background-color: #EC2024; color: #ffffff;">
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 13px;">ID Tarima</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 13px;">Orden(es) PO</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 13px;">SKUs Contenidos</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 13px;">Piezas</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 13px;">Ubicación</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 13px;">Creado Por</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 13px;">Estatus</th>
+                </tr>
+            </thead>
+            <tbody>
+                {filas_tarimas_html}
+            </tbody>
+        </table>
+
+        <!-- Tabla Detallada de Piezas -->
+        <h4 style="color: #333; margin-top: 20px; margin-bottom: 10px; font-size: 14.5px;">📋 Detalle Granular de Piezas y SKUs del Día:</h4>
+        <table style="border-collapse: collapse; width: 100%; max-width: 950px; margin-bottom: 25px; border: 1px solid #ddd; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <thead>
+                <tr style="background-color: #333333; color: #ffffff;">
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 13px;">SKU</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 13px;">Descripción</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 13px;">Cantidad</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 13px;">Tarima</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 13px;">PO</th>
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: center; font-size: 13px;">Imagen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {filas_piezas_html}
+            </tbody>
+        </table>
+
+        <p style="font-size: 14px; margin-bottom: 5px;">Quedamos a la orden para cualquier duda o aclaración.</p>
+
+        <!-- Firma Corporativa -->
+        <div style="margin-top: 40px; border-top: 1px solid #E0E0E0; padding-top: 20px;">
+            <p style="font-style: italic; font-weight: bold; color: #EC2024; margin: 0 0 8px 0; font-size: 15px;">Ingeniería que da resultados!!</p>
+            <p style="margin: 0; font-size: 13px; color: #000000; font-weight: bold;">Industria Sigrama S.A. de C.V.</p>
+            <p style="margin: 3px 0; font-size: 12px; color: #555555;">Automatización y Control de Procesos</p>
+            <p style="margin: 3px 0; font-size: 11px; color: #777777;">C. Juan Escutia No. 50, Col. Abastos, C.P. 27020, Torreón, Coah. | Tel: (871) 722 3132</p>
+            <p style="margin: 3px 0; font-size: 11px; color: #777777;"><a href="https://www.sigrama.com.mx" style="color: #EC2024; text-decoration: none; font-weight: bold;">www.sigrama.com.mx</a></p>
+        </div>
+
+        <!-- Aviso de Privacidad Obligatorio -->
+        <div style="margin-top: 25px; font-size: 9px; color: #888888; line-height: 1.35; font-style: italic; border-top: 1px dashed #DDDDDD; padding-top: 12px; text-align: justify;">
+            <b>Aviso de confidencialidad:</b> Este correo electrónico y/o el material adjunto es para uso exclusivo de la persona o entidad a la que expresamente se le ha enviado, y puede contener información confidencial o material privilegiado. Si usted no es el destinatario legítimo del mismo, por favor repórtelo inmediatamente al remitente del correo y bórrelo. Cualquier revisión, retransmisión, difusión o cualquier otro uso de este correo, por personas o entidades distintas a las del destinatario legítimo, queda expresamente prohibido.<br/><br/>
+            Así mismo, los Datos Personales que usted proporcione a través de este medio, están debidamente tratados y protegidos conforme a la "Ley Federal de Protección de Datos Personales en Posesión de los Particulares" para más información lo invitamos a conocer nuestra "Política de Privacidad" disponible en <a href="https://www.sigrama.com.mx" style="color: #888888; text-decoration: underline;">https://www.sigrama.com.mx</a>.
+        </div>
+    </body>
+    </html>
+    """
+    return html
+
 def generar_pdf_etiqueta(t_imp):
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=90, bottomMargin=60)
@@ -3895,6 +4038,109 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                 subir_excel_a_github("BD_POs_Cabecera.xlsx", st.session_state.BD_POs_Cabecera)
                                 st.success("🗑️ ¡Configuraciones de color eliminadas correctamente!")
                                 st.rerun()
+
+    # -------------------------------------------------------------------------
+    # REPORTE DIARIO DE TARIMAS (CONTRAMEDIA DE RESPALDO)
+    # -------------------------------------------------------------------------
+    st.write("---")
+    st.subheader("📩 Reporte Diario de Tarimas (Contramedia de Respaldo)")
+    st.info("💡 **Función de Respaldo Diario:** Genere un borrador de correo (.eml) con el resumen completo de todas las tarimas registradas en una fecha determinada y sus etiquetas individuales adjuntas en un archivo ZIP.")
+    
+    col_rep_f1, col_rep_f2 = st.columns([1, 2])
+    with col_rep_f1:
+        fecha_rep = st.date_input("Fecha para el Reporte Diario:", value=datetime.date.today(), key="fecha_rep_diario_tarimas_input")
+    
+    fecha_str_rep = fecha_rep.strftime("%Y-%m-%d")
+    fecha_disp_rep = fecha_rep.strftime("%d/%m/%Y")
+    
+    if "BD_Tarimas" in st.session_state and not st.session_state.BD_Tarimas.empty:
+        df_tar_all = st.session_state.BD_Tarimas.copy()
+        df_tar_all["Fecha_Str"] = df_tar_all["Fecha_Creacion"].astype(str).str.split(" ").str[0].str.strip()
+        df_tar_dia = df_tar_all[df_tar_all["Fecha_Str"] == fecha_str_rep]
+        
+        if df_tar_dia.empty:
+            st.warning(f"⚠️ No se encontraron tarimas registradas con fecha de creación: **{fecha_disp_rep}**.")
+        else:
+            ids_tar_dia = df_tar_dia["ID_Tarima"].tolist()
+            df_det_all = st.session_state.BD_Detalle_Tarimas if "BD_Detalle_Tarimas" in st.session_state else pd.DataFrame()
+            if not df_det_all.empty:
+                df_det_dia = df_det_all[df_det_all["ID_Tarima"].isin(ids_tar_dia)]
+            else:
+                df_det_dia = pd.DataFrame()
+                
+            n_tarimas_dia = len(df_tar_dia)
+            n_pzs_dia = int(df_det_dia["Cantidad"].sum()) if not df_det_dia.empty and "Cantidad" in df_det_dia.columns else 0
+            n_skus_dia = df_det_dia["SKU"].nunique() if not df_det_dia.empty and "SKU" in df_det_dia.columns else 0
+            
+            # Métricas
+            m1, m2, m3 = st.columns(3)
+            m1.metric("📦 Tarimas Registradas", n_tarimas_dia)
+            m2.metric("🧩 Piezas Empacadas", f"{n_pzs_dia:,}")
+            m3.metric("📋 SKUs Únicos", n_skus_dia)
+            
+            with st.expander(f"👁️ Ver Vista Previa de Tarimas del Día ({fecha_disp_rep})", expanded=False):
+                st.dataframe(df_tar_dia.drop(columns=["Fecha_Str"], errors="ignore"), use_container_width=True, hide_index=True)
+                if not df_det_dia.empty:
+                    st.write("**Detalle de Piezas y SKUs:**")
+                    st.dataframe(df_det_dia, use_container_width=True, hide_index=True)
+            
+            # Configuración de correos destinatarios
+            cfg_emails_rep = obtener_emails_config()
+            col_em1, col_em2 = st.columns(2)
+            with col_em1:
+                eml_rep_to = st.text_input("Para:", value=cfg_emails_rep.get("dest_to", ""), key="eml_rep_tar_to")
+            with col_em2:
+                eml_rep_cc = st.text_input("CC:", value=cfg_emails_rep.get("dest_cc", ""), key="eml_rep_tar_cc")
+                
+            if st.button("🔄 Generar Borrador de Correo Diario (.eml)", use_container_width=True, key="btn_gen_eml_tarimas_dia"):
+                with st.spinner("Generando etiquetas PDF y comprimiendo en ZIP..."):
+                    try:
+                        import zipfile
+                        # 1. Generar etiquetas PDF en ZIP
+                        label_pdfs_dia = {}
+                        for idx_t in ids_tar_dia:
+                            try:
+                                pdf_b = generar_pdf_etiqueta(idx_t).getvalue()
+                                label_pdfs_dia[f"Etiqueta_{idx_t}.pdf"] = pdf_b
+                            except Exception as e_pdf:
+                                st.warning(f"⚠️ No se pudo generar PDF para tarima {idx_t}: {e_pdf}")
+                        
+                        adj_dict_rep = {}
+                        if label_pdfs_dia:
+                            zip_buf_rep = io.BytesIO()
+                            with zipfile.ZipFile(zip_buf_rep, 'w', zipfile.ZIP_DEFLATED) as zip_f:
+                                for fname, fbytes in label_pdfs_dia.items():
+                                    zip_f.writestr(fname, fbytes)
+                            zip_buf_rep.seek(0)
+                            adj_dict_rep[f"Etiquetas_Tarimas_{fecha_str_rep}.zip"] = zip_buf_rep
+                            
+                        # 2. Generar cuerpo HTML del correo
+                        html_cuerpo_rep = generar_cuerpo_correo_tarimas_dia_html(df_tar_dia, df_det_dia, fecha_disp_rep)
+                        eml_subj_rep = f"Reporte Diario de Tarimas — {fecha_disp_rep} — Planta Metales Diagonal"
+                        eml_bytes_rep = generar_archivo_eml(eml_rep_to, eml_rep_cc, eml_subj_rep, html_cuerpo_rep, adj_dict_rep)
+                        
+                        st.session_state["eml_tarimas_dia_bytes"] = eml_bytes_rep
+                        st.session_state["eml_tarimas_dia_filename"] = f"Reporte_Diario_Tarimas_{fecha_str_rep}.eml"
+                        st.success("✅ ¡Borrador de correo generado exitosamente con etiquetas adjuntas!")
+                    except Exception as e_eml:
+                        st.error(f"❌ Error al generar borrador de correo: {e_eml}")
+            
+            if "eml_tarimas_dia_bytes" in st.session_state:
+                st.download_button(
+                    label="📩 Descargar Borrador de Correo (.eml)",
+                    data=st.session_state["eml_tarimas_dia_bytes"],
+                    file_name=st.session_state.get("eml_tarimas_dia_filename", f"Reporte_Diario_Tarimas_{fecha_str_rep}.eml"),
+                    mime="message/rfc822",
+                    use_container_width=True,
+                    key="btn_download_eml_tarimas_dia"
+                )
+    else:
+        st.warning("⚠️ No existen tarimas registradas en el sistema.")
+
+
+# =============================================================================
+# 12. MÓDULO DE DESPACHOS LOGÍSTICOS: EMISIÓN DE REMISIONES DE SALIDA
+# =============================================================================
 
 
 
