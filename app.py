@@ -868,6 +868,39 @@ def resolver_img_tag_html(sku, width=60, height=60):
 
     return "N/A"
 
+def obtener_siguiente_folio_remision(df_remisiones=None):
+    """
+    Calcula el siguiente folio de remisión único de forma secuencial (ej. E0093, E0094, E0095...).
+    Inspecciona todos los folios existentes en la BD, obtiene el número máximo registrado y le suma 1.
+    Garantiza que NUNCA se repita ni sobreescriba un folio existente.
+    """
+    import re
+    if df_remisiones is None:
+        if "BD_Datos_Generales_Remision" in st.session_state:
+            df_remisiones = st.session_state.BD_Datos_Generales_Remision
+        else:
+            df_remisiones = pd.DataFrame()
+            
+    numeros_existentes = []
+    if not df_remisiones.empty and "Folio_Remision" in df_remisiones.columns:
+        for fol in df_remisiones["Folio_Remision"].dropna():
+            match = re.search(r'\d+', str(fol))
+            if match:
+                numeros_existentes.append(int(match.group()))
+                
+    max_num = max(numeros_existentes) if numeros_existentes else 0
+    siguiente_num = max_num + 1
+    
+    nuevo_folio = f"E{siguiente_num:04d}"
+    
+    # Prevenir colisión si el folio ya existiera por alguna razón
+    folios_existentes = set(df_remisiones["Folio_Remision"].astype(str).str.upper().tolist()) if not df_remisiones.empty and "Folio_Remision" in df_remisiones.columns else set()
+    while nuevo_folio.upper() in folios_existentes:
+        siguiente_num += 1
+        nuevo_folio = f"E{siguiente_num:04d}"
+        
+    return nuevo_folio
+
 def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
     """
     Genera un archivo EML en memoria como borrador de Outlook.
@@ -3905,15 +3938,39 @@ elif opcion_menu == "🚚 Módulo Remisiones":
         if not is_admin: st.error("🔒 Operación Bloqueada: Se requiere contraseña de Administrador.")
         else:
             if st.button("🚀 Confirmar Salida y Generar Nueva Remisión"):
-                if not t_sel or not nom_r: st.error("Complete los campos obligatorios.")
+                if not t_sel or not nom_r:
+                    st.error("Complete los campos obligatorios.")
                 else:
-                    fol = f"E00{27 + len(st.session_state.BD_Datos_Generales_Remision)}"
-                    reg = {"ID_Remision": len(st.session_state.BD_Datos_Generales_Remision)+1, "Folio_Remision": fol, "Fecha_Hora_Salida": datetime.datetime.now().strftime("%d/%m/%Y"), "Nombre_Emisor": nom_e, "Direccion_Emisor": dir_e, "Nombre_Receptor": nom_r, "Direccion_Receptor": dir_r, "Tarimas_Asociadas": str(t_sel)}
+                    # 1. Sincronizar la versión más reciente de la BD desde GitHub para evitar folios desfasados
+                    df_fresca_rem = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
+                    if df_fresca_rem is not None:
+                        st.session_state.BD_Datos_Generales_Remision = df_fresca_rem
+                        
+                    fol = obtener_siguiente_folio_remision(st.session_state.BD_Datos_Generales_Remision)
+                    
+                    id_rem_nuevo = 1
+                    if not st.session_state.BD_Datos_Generales_Remision.empty and "ID_Remision" in st.session_state.BD_Datos_Generales_Remision.columns:
+                        try:
+                            id_rem_nuevo = int(st.session_state.BD_Datos_Generales_Remision['ID_Remision'].max()) + 1
+                        except Exception:
+                            id_rem_nuevo = len(st.session_state.BD_Datos_Generales_Remision) + 1
+
+                    reg = {
+                        "ID_Remision": id_rem_nuevo,
+                        "Folio_Remision": fol,
+                        "Fecha_Hora_Salida": datetime.datetime.now().strftime("%d/%m/%Y"),
+                        "Nombre_Emisor": nom_e,
+                        "Direccion_Emisor": dir_e,
+                        "Nombre_Receptor": nom_r,
+                        "Direccion_Receptor": dir_r,
+                        "Tarimas_Asociadas": str(t_sel)
+                    }
                     st.session_state.BD_Datos_Generales_Remision = pd.concat([st.session_state.BD_Datos_Generales_Remision, pd.DataFrame([reg])], ignore_index=True)
                     st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(t_sel), 'Estatus'] = 'Remesada'
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
-                    st.success(f"✅ ¡Remisión {fol} Generada y Guardada de Forma Permanente!"); st.rerun()
+                    st.success(f"✅ ¡Remisión {fol} Generada y Guardada de Forma Permanente!")
+                    st.rerun()
                     
         # =============================================================================
     # INTERFAZ DE DESCARGA DE REMISIONES CORREGIDA Y GARANTIZADA (FO-MET-10)
