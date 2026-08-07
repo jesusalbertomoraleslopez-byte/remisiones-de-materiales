@@ -5348,14 +5348,21 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                                 
             st.write("##### ✏️ Edición Directa, Alta y Baja del Catálogo Maestro Detallado")
             if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                # Agregar columna de número consecutivo para facilitar el conteo
+                df_con_num = st.session_state.BD_Articulos.copy().reset_index(drop=True)
+                df_con_num.insert(0, "#", range(1, len(df_con_num) + 1))
+                
+                st.caption(f"📦 **Total de artículos registrados: {len(df_con_num)}**")
+                
                 df_art_editable = st.data_editor(
-                    st.session_state.BD_Articulos,
+                    df_con_num,
                     use_container_width=True,
-                    disabled=["SKU"],
+                    disabled=["#", "SKU"],
                     hide_index=True,
                     num_rows="dynamic",
                     key="editor_mantenimiento_articulos_directo_v3",
                     column_config={
+                        "#": st.column_config.NumberColumn("#", width="small"),
                         "SKU": st.column_config.TextColumn("SKU (Bloqueado/Llave)"),
                         "Nombre": st.column_config.TextColumn("Descripción Comercial"),
                         "Calibre_Espesor": st.column_config.SelectboxColumn("Calibre / Espesor", options=["10GA", "12GA", "14GA", "16GA", "10GACR", "12GACR", "14GACR", "16GACR", "125AL", "250AL", "188AL"]),
@@ -5364,16 +5371,17 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     }
                 )
                 if st.button("💾 Guardar Cambios del Catálogo Maestro en GitHub", use_container_width=True):
-                    df_art_final = df_art_editable.dropna(subset=["SKU"])
+                    # Remover la columna # antes de guardar (es solo visual)
+                    df_art_final = df_art_editable.drop(columns=["#"], errors="ignore").dropna(subset=["SKU"])
                     df_art_final["SKU"] = df_art_final["SKU"].astype(str).str.strip().str.upper()
+                    # Recalcular # correctamente antes de guardar
+                    df_art_final = df_art_final.reset_index(drop=True)
                     st.session_state.BD_Articulos = df_art_final
                     if subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos):
-                        st.success("💥 Modificaciones de catálogo maestro sincronizadas.")
+                        st.success(f"✅ Catálogo maestro sincronizado en GitHub. Total: **{len(df_art_final)} artículos**.")
                         st.rerun()
                     else:
                         st.error("❌ Error de comunicación con GitHub.")
-            else:
-                st.warning("⚠️ No existen registros activos en el catálogo detallado.")
                 
         with sub_tab2:
             st.markdown("#### 📋 Lista de SKUs Autorizados (Nombres de SKU)")
