@@ -5305,33 +5305,46 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                                 df_art_excel = pd.read_excel(arch_articulos)
                                 columnas_requeridas = ["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
                                 
-                                columnas_correctas = True
-                                for col in columnas_requeridas:
-                                    if col not in df_art_excel.columns:
-                                        columnas_correctas = False
-                                        
+                                columnas_correctas = all(col in df_art_excel.columns for col in columnas_requeridas)
+                                    
                                 if not columnas_correctas:
-                                    st.error("❌ Error: Columnas incompatibles. Use la estructura oficial de 5 columnas.")
+                                    st.error(f"❌ Error: Columnas incompatibles. Se necesitan: {columnas_requeridas}. Archivo subido tiene: {df_art_excel.columns.tolist()}")
                                 else:
                                     df_art_excel = df_art_excel.dropna(subset=["SKU"])
                                     df_art_excel["SKU"] = df_art_excel["SKU"].astype(str).str.strip().str.upper()
+                                    n_nuevos = len(df_art_excel)
                                     
-                                    # Conserva anteriores y actualiza los nuevos
-                                    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                                        df_anterior = st.session_state.BD_Articulos.copy()
-                                        df_anterior["SKU"] = df_anterior["SKU"].astype(str).str.strip().str.upper()
-                                        df_anterior = df_anterior[~df_anterior["SKU"].isin(df_art_excel["SKU"])]
-                                        st.session_state.BD_Articulos = pd.concat([df_anterior, df_art_excel], ignore_index=True)
+                                    # CRÍTICO: Siempre leer la versión más reciente de GitHub antes de hacer el merge
+                                    # para evitar perder artículos que otros usuarios hayan subido
+                                    with st.spinner("🔄 Sincronizando con la base de datos más reciente en GitHub..."):
+                                        df_base_github = cargar_excel_desde_github("BD_Articulos.xlsx")
+                                    
+                                    if df_base_github is not None and not df_base_github.empty:
+                                        df_base_github["SKU"] = df_base_github["SKU"].astype(str).str.strip().str.upper()
+                                        n_anterior = len(df_base_github)
+                                        # Quitar del anterior los que vienen en el nuevo (para actualizar)
+                                        df_base_sin_nuevos = df_base_github[~df_base_github["SKU"].isin(df_art_excel["SKU"])]
+                                        df_final = pd.concat([df_base_sin_nuevos, df_art_excel], ignore_index=True)
                                     else:
-                                        st.session_state.BD_Articulos = df_art_excel
-                                        
-                                    if subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos):
-                                        st.success("✅ ¡Catálogo maestro actualizado en GitHub!")
+                                        n_anterior = 0
+                                        df_final = df_art_excel
+                                    
+                                    n_final = len(df_final)
+                                    
+                                    # Guardar en GitHub y sólo actualizar session_state si fue exitoso
+                                    with st.spinner("💾 Guardando catálogo en GitHub..."):
+                                        exito = subir_excel_a_github("BD_Articulos.xlsx", df_final)
+                                    
+                                    if exito:
+                                        st.session_state.BD_Articulos = df_final
+                                        st.success(f"✅ ¡Catálogo maestro actualizado en GitHub!\n\n📊 Antes: **{n_anterior}** artículos → Nuevos integrados: **{n_nuevos}** → Total final: **{n_final}** artículos.")
                                         st.rerun()
                                     else:
-                                        st.error("❌ Error al guardar en GitHub.")
+                                        st.error("❌ Error al guardar en GitHub. Los datos NO se guardaron. Intente nuevamente.")
                             except Exception as e:
-                                st.error(f"Error: {e}")
+                                st.error(f"❌ Error inesperado al procesar el archivo: {e}")
+                                import traceback
+                                st.code(traceback.format_exc())
                                 
             st.write("##### ✏️ Edición Directa, Alta y Baja del Catálogo Maestro Detallado")
             if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
