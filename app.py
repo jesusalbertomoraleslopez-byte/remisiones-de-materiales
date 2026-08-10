@@ -322,6 +322,29 @@ def cargar_excel_desde_github(file_name):
         pass
     return None
 
+def leer_github_fresco(file_name):
+    """
+    SIEMPRE lee el archivo directamente desde la API de GitHub, IGNORANDO cualquier
+    copia local o cache. Usar exclusivamente para pre-sync antes de escrituras criticas.
+    """
+    try:
+        token = obtener_secret("github_token")
+        if not token:
+            return None
+        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}?ref={BRANCH}&ts={int(__import__('time').time())}"
+        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3.raw", "Cache-Control": "no-cache"}
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            datos_json = res.json()
+            archivo_bytes = base64.b64decode(datos_json["content"])
+            try:
+                return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name='Datos_Sistema')
+            except Exception:
+                return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name=0)
+    except Exception:
+        pass
+    return None
+
 def subir_excel_a_github(file_name, dataframe_to_save):
     """Guarda el archivo localmente y luego intenta sincronizarlo con GitHub si hay token disponible."""
     # 1. Guardar localmente siempre
@@ -869,8 +892,10 @@ def resolver_img_tag_html(sku, width=60, height=60):
     return "N/A"
 
 def cargar_log_actividad():
-    """Carga BD_Actividad_Log.xlsx desde disco local o GitHub."""
-    df_log = cargar_excel_desde_github("BD_Actividad_Log.xlsx")
+    """Carga BD_Actividad_Log.xlsx siempre fresco desde GitHub (sin cache local)."""
+    df_log = leer_github_fresco("BD_Actividad_Log.xlsx")
+    if df_log is None or df_log.empty:
+        df_log = cargar_excel_desde_github("BD_Actividad_Log.xlsx")  # fallback
     if df_log is None or df_log.empty:
         df_log = pd.DataFrame(columns=["ID_Log", "Fecha", "Hora", "Tipo_Evento", "Descripcion", "Usuario", "ID_Referencia", "Cantidad_Piezas", "PO", "Receptor"])
     return df_log
@@ -3042,12 +3067,12 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         st.stop()
                             
                     # --- PRE-SYNC ANTI RACE CONDITION ---
-                    # Leer la version mas fresca de Tarimas y Detalle desde GitHub antes de agregar
-                    # para evitar que sesiones paralelas se sobreescriban entre si.
-                    df_fresca_tar = cargar_excel_desde_github("BD_Tarimas.xlsx")
+                    # Leer la version mas fresca de Tarimas y Detalle DIRECTAMENTE desde GitHub API
+                    # (ignorando archivo local para evitar que sesiones paralelas se sobreescriban)
+                    df_fresca_tar = leer_github_fresco("BD_Tarimas.xlsx")
                     if df_fresca_tar is not None and not df_fresca_tar.empty:
                         st.session_state.BD_Tarimas = df_fresca_tar
-                    df_fresca_det = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
+                    df_fresca_det = leer_github_fresco("BD_Detalle_Tarimas.xlsx")
                     if df_fresca_det is not None and not df_fresca_det.empty:
                         st.session_state.BD_Detalle_Tarimas = df_fresca_det
 
@@ -4298,14 +4323,25 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                     }
                     st.session_state.BD_Datos_Generales_Remision = pd.concat([st.session_state.BD_Datos_Generales_Remision, pd.DataFrame([reg])], ignore_index=True)
 
-                    # PRE-SYNC ANTI RACE CONDITION: releer BD_Tarimas fresca antes de cambiar estatus
-                    df_tar_fresca_rem = cargar_excel_desde_github("BD_Tarimas.xlsx")
+                    # PRE-SYNC ANTI RACE CONDITION: releer BD_Tarimas DIRECTO desde GitHub antes de cambiar estatus
+                    df_tar_fresca_rem = leer_github_fresco("BD_Tarimas.xlsx")
                     if df_tar_fresca_rem is not None and not df_tar_fresca_rem.empty:
                         # Aplicar el cambio de estatus sobre la BD fresca
                         df_tar_fresca_rem.loc[df_tar_fresca_rem['ID_Tarima'].isin(t_sel), 'Estatus'] = 'Remesada'
                         st.session_state.BD_Tarimas = df_tar_fresca_rem
                     else:
                         st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(t_sel), 'Estatus'] = 'Remesada'
+
+                    # PRE-SYNC para Remisiones: leer version fresca de GitHub antes de agregar la nueva
+                    df_rem_fresca = leer_github_fresco("BD_Datos_Generales_Remision.xlsx")
+                    if df_rem_fresca is not None and not df_rem_fresca.empty:
+                        # Recalcular folio con la BD mas reciente para evitar colisiones
+                        fol_verificado = obtener_siguiente_folio_remision(df_rem_fresca)
+                        reg["Folio_Remision"] = fol_verificado
+                        df_rem_fresca = pd.concat([df_rem_fresca, pd.DataFrame([reg])], ignore_index=True)
+                        st.session_state.BD_Datos_Generales_Remision = df_rem_fresca
+                    else:
+                        pass  # Usar la version ya en session_state (ya tiene la nueva remision)
 
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
