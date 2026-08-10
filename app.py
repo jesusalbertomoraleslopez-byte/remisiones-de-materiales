@@ -2993,25 +2993,47 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         st.error(f"❌ Error de Validación: Los siguientes SKUs no están registrados en el Catálogo de Artículos ni en la Lista de SKUs Autorizados: {sorted(list(skus_no_validos))}. Por favor, regístrelos primero para poder cargarlos.")
                         st.stop()
                             
+                    # --- PRE-SYNC ANTI RACE CONDITION ---
+                    # Leer la version mas fresca de Tarimas y Detalle desde GitHub antes de agregar
+                    # para evitar que sesiones paralelas se sobreescriban entre si.
+                    df_fresca_tar = cargar_excel_desde_github("BD_Tarimas.xlsx")
+                    if df_fresca_tar is not None and not df_fresca_tar.empty:
+                        st.session_state.BD_Tarimas = df_fresca_tar
+                    df_fresca_det = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
+                    if df_fresca_det is not None and not df_fresca_det.empty:
+                        st.session_state.BD_Detalle_Tarimas = df_fresca_det
+
                     if not st.session_state.BD_Tarimas.empty: st.session_state.BD_Tarimas["Es_Nueva"] = False
+
+                    # Recalcular siguiente consecutivo TPM con la BD fresca de GitHub
+                    st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
+
+                    nuevas_tarimas_lista = []
+                    nuevos_detalles_lista = []
+                    id_det_base = 1
+                    if not st.session_state.BD_Detalle_Tarimas.empty and "ID_Detalle" in st.session_state.BD_Detalle_Tarimas.columns:
+                        try:
+                            id_det_base = int(st.session_state.BD_Detalle_Tarimas['ID_Detalle'].max()) + 1
+                        except Exception:
+                            id_det_base = len(st.session_state.BD_Detalle_Tarimas) + 1
+
                     for t_orig in df_ex['Tarima'].unique():
-                        # 1. Leer el consecutivo manual configurado, si no existe usa el conteo base
-                        if "siguiente_numero_tpm" not in st.session_state or st.session_state["siguiente_numero_tpm"] is None:
-                            st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
-            
                         num_actual = st.session_state["siguiente_numero_tpm"]
-                        nuevo_id_tpm = f"TPM-{num_actual:04d}"  #<-- AQUÍ USA TU CONTADOR MANUAL (Ejemplo: TPM-0056)
-                        
-                        # 2. Registramos los datos de la nueva tarima
+                        nuevo_id_tpm = f"TPM-{num_actual:04d}"
                         n_t = {"ID_Tarima": nuevo_id_tpm, "Tarima_Origen_Excel": t_orig, "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"), "Ubicacion_Actual": "Metales", "Creado_Por": oper, "Tipo_Tarima": tipo_t, "Estatus": "Disponible", "Es_Nueva": True}
-                        st.session_state.BD_Tarimas = pd.concat([st.session_state.BD_Tarimas, pd.DataFrame([n_t])], ignore_index=True)
-                        
-                        # 3. Incrementamos el contador en +1 para la siguiente tarima de la lista
+                        nuevas_tarimas_lista.append(n_t)
                         st.session_state["siguiente_numero_tpm"] += 1
 
                         items = df_ex[df_ex['Tarima'] == t_orig]
                         for _, item in items.iterrows():
-                            st.session_state.BD_Detalle_Tarimas = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame([{"ID_Detalle": len(st.session_state.BD_Detalle_Tarimas) + 1, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": clean_po_val(item['PO']), "Proyecto": clean_project_val(item['Proyecto']), "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']}])], ignore_index=True)
+                            nuevos_detalles_lista.append({"ID_Detalle": id_det_base, "ID_Tarima": nuevo_id_tpm, "SKU": item['Producto/SKU'], "PO": clean_po_val(item['PO']), "Proyecto": clean_project_val(item['Proyecto']), "Parcialidad": item['Parcialidad'], "Descripcion": item['Descripcion'], "Cantidad": item['Cantidad']})
+                            id_det_base += 1
+
+                    # Merge con BD fresca y guardar en un solo escritura
+                    df_tar_merged = pd.concat([st.session_state.BD_Tarimas, pd.DataFrame(nuevas_tarimas_lista)], ignore_index=True)
+                    df_det_merged = pd.concat([st.session_state.BD_Detalle_Tarimas, pd.DataFrame(nuevos_detalles_lista)], ignore_index=True)
+                    st.session_state.BD_Tarimas = df_tar_merged
+                    st.session_state.BD_Detalle_Tarimas = df_det_merged
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
                     # Eliminamos el archivo de override si existe, ya que ha sido consumido
@@ -4212,7 +4234,16 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                         "Tarimas_Asociadas": str(t_sel)
                     }
                     st.session_state.BD_Datos_Generales_Remision = pd.concat([st.session_state.BD_Datos_Generales_Remision, pd.DataFrame([reg])], ignore_index=True)
-                    st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(t_sel), 'Estatus'] = 'Remesada'
+
+                    # PRE-SYNC ANTI RACE CONDITION: releer BD_Tarimas fresca antes de cambiar estatus
+                    df_tar_fresca_rem = cargar_excel_desde_github("BD_Tarimas.xlsx")
+                    if df_tar_fresca_rem is not None and not df_tar_fresca_rem.empty:
+                        # Aplicar el cambio de estatus sobre la BD fresca
+                        df_tar_fresca_rem.loc[df_tar_fresca_rem['ID_Tarima'].isin(t_sel), 'Estatus'] = 'Remesada'
+                        st.session_state.BD_Tarimas = df_tar_fresca_rem
+                    else:
+                        st.session_state.BD_Tarimas.loc[st.session_state.BD_Tarimas['ID_Tarima'].isin(t_sel), 'Estatus'] = 'Remesada'
+
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
                     st.success(f"✅ ¡Remisión {fol} Generada y Guardada de Forma Permanente!")
