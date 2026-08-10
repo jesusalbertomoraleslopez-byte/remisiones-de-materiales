@@ -4369,6 +4369,29 @@ elif opcion_menu == "🚚 Módulo Remisiones":
 
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Datos_Generales_Remision.xlsx", st.session_state.BD_Datos_Generales_Remision)
+
+                    # REGISTRO EN LOG DE ACTIVIDAD
+                    pzs_rem = 0
+                    if not st.session_state.BD_Detalle_Tarimas.empty and "ID_Tarima" in st.session_state.BD_Detalle_Tarimas.columns:
+                        pzs_rem = int(st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas["ID_Tarima"].isin(t_sel)]["Cantidad"].sum())
+
+                    registrar_evento_log(
+                        tipo_evento="REMISION_NUEVA",
+                        descripcion=f"Remisión {fol} generada con {len(t_sel)} tarima(s) y {pzs_rem} piezas hacia {nom_r}",
+                        usuario=st.session_state.get("usuario_actual", nom_e),
+                        id_referencia=fol,
+                        cantidad_piezas=pzs_rem,
+                        receptor=nom_r
+                    )
+                    for t_rem_id in t_sel:
+                        registrar_evento_log(
+                            tipo_evento="TARIMA_REMESADA",
+                            descripcion=f"Tarima {t_rem_id} marcada como Remesada en {fol} hacia {nom_r}",
+                            usuario=st.session_state.get("usuario_actual", nom_e),
+                            id_referencia=t_rem_id,
+                            receptor=nom_r
+                        )
+
                     st.success(f"✅ ¡Remisión {fol} Generada y Guardada de Forma Permanente!")
                     st.rerun()
                     
@@ -7276,6 +7299,50 @@ elif opcion_menu == "\U0001f4c5 Movimientos del D\u00eda":
                 subir_excel_a_github("BD_Actividad_Log.xlsx", df_log_mv)
                 st.session_state["BD_Actividad_Log"] = df_log_mv
                 st.success(f"\u2705 Log hist\u00f3rico construido con {len(df_log_mv)} eventos desde las bases de datos.")
+
+    # ---- RECONCILIACION AUTOMATICA DE REMISIONES FALTANTES EN EL LOG ----
+    if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
+        df_rem_check = st.session_state.BD_Datos_Generales_Remision.copy()
+        refs_existentes = set(df_log_mv["ID_Referencia"].dropna().astype(str).tolist()) if not df_log_mv.empty and "ID_Referencia" in df_log_mv.columns else set()
+        
+        rem_faltantes = df_rem_check[~df_rem_check["Folio_Remision"].astype(str).isin(refs_existentes)]
+        if not rem_faltantes.empty:
+            nuevos_logs_sync = []
+            id_log_sync = int(df_log_mv["ID_Log"].max()) + 1 if not df_log_mv.empty and "ID_Log" in df_log_mv.columns else 1
+            for _, r_row in rem_faltantes.iterrows():
+                folio_f = str(r_row.get("Folio_Remision", ""))
+                fecha_f_raw = str(r_row.get("Fecha_Hora_Salida", "")).strip()
+                fecha_f_norm = ""
+                for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y"]:
+                    try:
+                        fecha_f_norm = datetime.datetime.strptime(fecha_f_raw.split(" ")[0], fmt).strftime("%Y-%m-%d")
+                        break
+                    except Exception:
+                        pass
+                if not fecha_f_norm:
+                    fecha_f_norm = datetime.datetime.now().strftime("%Y-%m-%d")
+                    
+                receptor_f = str(r_row.get("Nombre_Receptor", ""))
+                emisor_f = str(r_row.get("Nombre_Emisor", "Sistema"))
+                
+                nuevos_logs_sync.append({
+                    "ID_Log": id_log_sync,
+                    "Fecha": fecha_f_norm,
+                    "Hora": datetime.datetime.now().strftime("%H:%M:%S"),
+                    "Tipo_Evento": "REMISION_NUEVA",
+                    "Descripcion": f"Remisi\u00f3n {folio_f} generada hacia {receptor_f}",
+                    "Usuario": emisor_f,
+                    "ID_Referencia": folio_f,
+                    "Cantidad_Piezas": 0,
+                    "PO": "",
+                    "Receptor": receptor_f
+                })
+                id_log_sync += 1
+                
+            if nuevos_logs_sync:
+                df_log_mv = pd.concat([df_log_mv, pd.DataFrame(nuevos_logs_sync)], ignore_index=True)
+                subir_excel_a_github("BD_Actividad_Log.xlsx", df_log_mv)
+                st.session_state["BD_Actividad_Log"] = df_log_mv
 
     # ---- NORMALIZAR FECHAS DEL LOG ----
     if not df_log_mv.empty and "Fecha" in df_log_mv.columns:
