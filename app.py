@@ -289,9 +289,27 @@ def clean_po_val(val):
     return val_str
 
 def cargar_excel_desde_github(file_name):
-    """Carga el archivo Excel: primero busca en disco local (modo offline), luego en GitHub API."""
+    """Carga el archivo Excel: intenta GitHub API primero para tener la versión más reciente, luego fallback a local."""
     import os
-    # 1. Intentar cargar localmente primero
+    # 1. Intentar GitHub API primero
+    try:
+        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}?ref={BRANCH}&ts={int(__import__('time').time())}"
+        headers = {"Cache-Control": "no-cache", "Accept": "application/vnd.github.v3.raw"}
+        token = obtener_secret("github_token")
+        if token:
+            headers["Authorization"] = f"token {token}"
+            
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            archivo_bytes = res.content
+            try:
+                return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name='Datos_Sistema')
+            except Exception:
+                return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name=0)
+    except Exception:
+        pass
+
+    # 2. Fallback a disco local si GitHub no respondió
     if os.path.exists(file_name):
         try:
             try:
@@ -301,25 +319,6 @@ def cargar_excel_desde_github(file_name):
         except Exception as e:
             st.warning(f"⚠️ Error al leer archivo local {file_name}: {e}")
             
-    # 2. Si no existe localmente, intentar GitHub
-    try:
-        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}?ref={BRANCH}"
-        headers = {}
-        if obtener_secret("github_token"):
-            headers["Authorization"] = f"token {obtener_secret('github_token')}"
-            headers["Accept"] = "application/vnd.github.v3+json"
-            
-        res = requests.get(url, headers=headers)
-        if res.status_code == 200:
-            datos_json = res.json()
-            contenido_base64 = datos_json["content"]
-            archivo_bytes = base64.b64decode(contenido_base64)
-            try:
-                return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name='Datos_Sistema')
-            except Exception:
-                return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name=0)
-    except Exception:
-        pass
     return None
 
 def leer_github_fresco(file_name):
@@ -328,20 +327,20 @@ def leer_github_fresco(file_name):
     copia local o cache. Usar exclusivamente para pre-sync antes de escrituras criticas.
     """
     try:
-        token = obtener_secret("github_token")
-        if not token:
-            return None
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}?ref={BRANCH}&ts={int(__import__('time').time())}"
-        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3.raw", "Cache-Control": "no-cache"}
+        headers = {"Cache-Control": "no-cache", "Accept": "application/vnd.github.v3.raw"}
+        token = obtener_secret("github_token")
+        if token:
+            headers["Authorization"] = f"token {token}"
+            
         res = requests.get(url, headers=headers)
         if res.status_code == 200:
-            datos_json = res.json()
-            archivo_bytes = base64.b64decode(datos_json["content"])
+            archivo_bytes = res.content
             try:
                 return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name='Datos_Sistema')
             except Exception:
                 return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name=0)
-    except Exception:
+    except Exception as e:
         pass
     return None
 
@@ -355,14 +354,14 @@ def subir_excel_a_github(file_name, dataframe_to_save):
         st.error(f"⚠️ Error al guardar archivo localmente {file_name}: {e}")
         
     # 2. Sincronizar con GitHub si el token está disponible
-    if not obtener_secret("github_token"):
-        # Modo local puro sin token, retornamos True ya que se guardó localmente
-        return True
+    token = obtener_secret("github_token")
+    if not token:
+        st.error(f"⚠️ ALERTA DE PERSISTENCIA: No hay un token de GitHub configurado (`github_token` en Secrets). Los datos de {file_name} se guardaron localmente en esta sesión pero SE PERDERÁN al reiniciar el servidor.")
+        return False
         
     try:
-        GITHUB_TOKEN = obtener_secret("github_token")
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
 
         # Convertir DataFrame a bytes de Excel en memoria
         buffer_git = io.BytesIO()
@@ -384,10 +383,14 @@ def subir_excel_a_github(file_name, dataframe_to_save):
             payload["sha"] = sha
 
         res_put = requests.put(url, json=payload, headers=headers)
-        return res_put.status_code in [200, 201]
+        if res_put.status_code in [200, 201]:
+            return True
+        else:
+            st.error(f"⚠️ Error al guardar {file_name} en GitHub (HTTP {res_put.status_code}): {res_put.text}")
+            return False
 
     except Exception as e:
-        st.warning(f"⚠️ No se pudo sincronizar con GitHub: {e}")
+        st.error(f"⚠️ No se pudo sincronizar {file_name} con GitHub: {e}")
         return False
 
 @st.cache_data(ttl=60)
@@ -2467,7 +2470,7 @@ if os.path.exists("logo_sigrama.png"):
     st.sidebar.image("logo_sigrama.png", use_container_width=True)
 
 st.sidebar.markdown(f"""
-<div style="background-color: #1E293B; border: 1px solid #334155; padding: 12px; border-radius: 6px; margin-bottom: 15px; margin-top: 10px;">
+<div style="background-color: #1E293B; border: 1px solid #334155; padding: 12px; border-radius: 6px; margin-bottom: 10px; margin-top: 10px;">
     <p style="margin: 0; color: #FFFFFF; font-family: 'Questrial', sans-serif; font-size: 13px;">
         👤 Usuario: <b>{st.session_state.usuario_actual}</b>
     </p>
@@ -2476,6 +2479,27 @@ st.sidebar.markdown(f"""
     </p>
 </div>
 """, unsafe_allow_html=True)
+
+# Indicador de Estado de Sincronización GitHub
+if obtener_secret("github_token"):
+    st.sidebar.markdown("""
+    <div style="background-color: #064E3B; border: 1px solid #10B981; padding: 6px 10px; border-radius: 6px; margin-bottom: 12px;">
+        <p style="margin: 0; color: #A7F3D0; font-family: 'Questrial', sans-serif; font-size: 11px; font-weight: bold;">
+            🟢 GitHub Sync: ACTIVO
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.sidebar.markdown("""
+    <div style="background-color: #7F1D1D; border: 1px solid #EF4444; padding: 10px; border-radius: 6px; margin-bottom: 12px;">
+        <p style="margin: 0; color: #FCA5A5; font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: bold;">
+            🔴 ALERTA: Sin Token de GitHub
+        </p>
+        <p style="margin: 3px 0 0 0; color: #FEE2E2; font-family: 'Questrial', sans-serif; font-size: 10px;">
+            Los datos NO se guardan en la nube. Configura <code>github_token</code> en Streamlit Secrets.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True, key="btn_logout_sidebar"):
     st.session_state.logged_in = False
