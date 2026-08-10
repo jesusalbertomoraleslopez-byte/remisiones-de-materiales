@@ -868,6 +868,53 @@ def resolver_img_tag_html(sku, width=60, height=60):
 
     return "N/A"
 
+def cargar_log_actividad():
+    """Carga BD_Actividad_Log.xlsx desde disco local o GitHub."""
+    df_log = cargar_excel_desde_github("BD_Actividad_Log.xlsx")
+    if df_log is None or df_log.empty:
+        df_log = pd.DataFrame(columns=["ID_Log", "Fecha", "Hora", "Tipo_Evento", "Descripcion", "Usuario", "ID_Referencia", "Cantidad_Piezas", "PO", "Receptor"])
+    return df_log
+
+def registrar_evento_log(tipo_evento, descripcion, usuario="Sistema", id_referencia="", cantidad_piezas=0, po="", receptor=""):
+    """
+    Registra un evento de actividad en BD_Actividad_Log.xlsx.
+    Implementa pre-sync anti-race-condition: siempre lee fresco desde GitHub antes de escribir.
+    """
+    try:
+        # 1. Leer el log fresco desde GitHub (anti-race-condition)
+        df_log = cargar_log_actividad()
+        
+        # 2. Calcular nuevo ID
+        nuevo_id = 1
+        if not df_log.empty and "ID_Log" in df_log.columns:
+            try:
+                nuevo_id = int(df_log["ID_Log"].max()) + 1
+            except Exception:
+                nuevo_id = len(df_log) + 1
+        
+        ahora = datetime.datetime.now()
+        nueva_fila = {
+            "ID_Log": nuevo_id,
+            "Fecha": ahora.strftime("%Y-%m-%d"),
+            "Hora": ahora.strftime("%H:%M:%S"),
+            "Tipo_Evento": tipo_evento,
+            "Descripcion": descripcion,
+            "Usuario": str(usuario),
+            "ID_Referencia": str(id_referencia),
+            "Cantidad_Piezas": int(cantidad_piezas) if cantidad_piezas else 0,
+            "PO": str(po),
+            "Receptor": str(receptor)
+        }
+        df_log = pd.concat([df_log, pd.DataFrame([nueva_fila])], ignore_index=True)
+        
+        # 3. Guardar a GitHub (silencioso — no muestra mensajes de error al usuario)
+        subir_excel_a_github("BD_Actividad_Log.xlsx", df_log)
+        
+        # 4. Actualizar session_state
+        st.session_state["BD_Actividad_Log"] = df_log
+    except Exception:
+        pass  # El log nunca debe interrumpir la operación principal
+
 def obtener_siguiente_folio_remision(df_remisiones=None):
     """
     Calcula el siguiente folio de remisión único de forma secuencial (ej. E0093, E0094, E0095...).
@@ -2424,7 +2471,8 @@ if is_super:
 
 st.sidebar.title("🧭 Navegación")
 lista_modulos = [
-    "📊 Dashboard e Históricos", 
+    "📊 Dashboard e Históricos",
+    "📅 Movimientos del Día",
     "🔍 Centro de Consultas", 
     "📦 Módulo Tarimas", 
     "🚚 Módulo Remisiones",
@@ -3036,6 +3084,21 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     st.session_state.BD_Detalle_Tarimas = df_det_merged
                     subir_excel_a_github("BD_Tarimas.xlsx", st.session_state.BD_Tarimas)
                     subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
+
+                    # REGISTRO EN LOG DE ACTIVIDAD
+                    total_pzs_cargadas = sum(d.get("Cantidad", 0) for d in nuevos_detalles_lista)
+                    pos_cargadas = list(set(d.get("PO", "") for d in nuevos_detalles_lista if d.get("PO", "")))
+                    for n_t_item in nuevas_tarimas_lista:
+                        pzs_t = sum(d.get("Cantidad", 0) for d in nuevos_detalles_lista if d.get("ID_Tarima") == n_t_item["ID_Tarima"])
+                        registrar_evento_log(
+                            tipo_evento="TARIMA_NUEVA",
+                            descripcion=f"Nueva tarima {n_t_item['ID_Tarima']} cargada con {pzs_t} piezas ({tipo_t})",
+                            usuario=oper,
+                            id_referencia=n_t_item["ID_Tarima"],
+                            cantidad_piezas=pzs_t,
+                            po="; ".join(pos_cargadas[:3])
+                        )
+
                     # Eliminamos el archivo de override si existe, ya que ha sido consumido
                     import os
                     if os.path.exists("consecutivo_override.txt"):
@@ -3044,7 +3107,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                         except Exception:
                             pass
                     st.session_state["siguiente_numero_tpm"] = obtener_siguiente_consecutivo_tpm()
-                    st.success("¡Inventario respaldado con éxito!"); st.rerun()
+                    st.success("\u00a1Inventario respaldado con \u00e9xito!"); st.rerun()
             except Exception as e: st.error(f"Error: {e}")
             
     if True:
@@ -7079,3 +7142,273 @@ elif opcion_menu == "📋 Consulta por Lote SKU":
             st.error(f"❌ Ocurrió un error al procesar la consulta por lote: {e}")
 
     
+
+# =============================================================================
+# 18. DASHBOARD DE MOVIMIENTOS DEL DIA
+# =============================================================================
+elif opcion_menu == "\U0001f4c5 Movimientos del D\u00eda":
+    import re as _re
+    st.title("\U0001f4c5 Movimientos del D\u00eda")
+    st.markdown("**Auditor\u00eda en tiempo real de toda la actividad registrada en el sistema.** Filtra por fecha para ver el detalle, o revisa la actividad acumulada hist\u00f3rica.")
+
+    # ---- CARGAR LOG + RECONSTRUIR HISTORICO DESDE BDs SI EL LOG ESTA VACIO ----
+    df_log_mv = cargar_log_actividad()
+
+    # Si el log est\u00e1 vac\u00edo o muy peque\u00f1o, retroalimentar con datos hist\u00f3ricos de las BDs existentes
+    if df_log_mv.empty or len(df_log_mv) < 5:
+        with st.spinner("Construyendo historial de actividad desde las bases de datos existentes..."):
+            registros_historicos = []
+            id_log = 1
+
+            # Tarimas hist\u00f3ricas
+            if "BD_Tarimas" in st.session_state and not st.session_state.BD_Tarimas.empty:
+                df_tar_h = st.session_state.BD_Tarimas.copy()
+                for _, t_row in df_tar_h.iterrows():
+                    fecha_raw = str(t_row.get("Fecha_Creacion", "")).strip()
+                    # Normalizar fecha a YYYY-MM-DD
+                    fecha_norm = ""
+                    for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y"]:
+                        try:
+                            fecha_norm = datetime.datetime.strptime(fecha_raw.split(" ")[0], fmt).strftime("%Y-%m-%d")
+                            break
+                        except Exception:
+                            pass
+                    if not fecha_norm:
+                        continue
+                    estatus = t_row.get("Estatus", "Disponible")
+                    tipo_ev = "TARIMA_REMESADA" if estatus == "Remesada" else "TARIMA_NUEVA"
+                    registros_historicos.append({
+                        "ID_Log": id_log, "Fecha": fecha_norm, "Hora": "00:00:00",
+                        "Tipo_Evento": tipo_ev,
+                        "Descripcion": f"[Hist\u00f3rico] Tarima {t_row.get('ID_Tarima', '')} ({estatus})",
+                        "Usuario": str(t_row.get("Creado_Por", "Sistema")),
+                        "ID_Referencia": str(t_row.get("ID_Tarima", "")),
+                        "Cantidad_Piezas": 0, "PO": "", "Receptor": ""
+                    })
+                    id_log += 1
+
+            # Remisiones hist\u00f3ricas
+            if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
+                df_rem_h = st.session_state.BD_Datos_Generales_Remision.copy()
+                for _, r_row in df_rem_h.iterrows():
+                    fecha_raw = str(r_row.get("Fecha_Hora_Salida", "")).strip()
+                    fecha_norm = ""
+                    for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y"]:
+                        try:
+                            fecha_norm = datetime.datetime.strptime(fecha_raw.split(" ")[0], fmt).strftime("%Y-%m-%d")
+                            break
+                        except Exception:
+                            pass
+                    if not fecha_norm:
+                        continue
+                    registros_historicos.append({
+                        "ID_Log": id_log, "Fecha": fecha_norm, "Hora": "00:00:00",
+                        "Tipo_Evento": "REMISION_NUEVA",
+                        "Descripcion": f"[Hist\u00f3rico] {r_row.get('Folio_Remision', '')} hacia {r_row.get('Nombre_Receptor', '')}",
+                        "Usuario": str(r_row.get("Nombre_Emisor", "Sistema")),
+                        "ID_Referencia": str(r_row.get("Folio_Remision", "")),
+                        "Cantidad_Piezas": 0, "PO": "", "Receptor": str(r_row.get("Nombre_Receptor", ""))
+                    })
+                    id_log += 1
+
+            if registros_historicos:
+                df_log_mv = pd.DataFrame(registros_historicos)
+                subir_excel_a_github("BD_Actividad_Log.xlsx", df_log_mv)
+                st.session_state["BD_Actividad_Log"] = df_log_mv
+                st.success(f"\u2705 Log hist\u00f3rico construido con {len(df_log_mv)} eventos desde las bases de datos.")
+
+    # ---- NORMALIZAR FECHAS DEL LOG ----
+    if not df_log_mv.empty and "Fecha" in df_log_mv.columns:
+        def parse_fecha_log(f):
+            f = str(f).strip().split(" ")[0]
+            for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"]:
+                try:
+                    return datetime.datetime.strptime(f, fmt).date()
+                except Exception:
+                    pass
+            return None
+        df_log_mv["Fecha_dt"] = df_log_mv["Fecha"].apply(parse_fecha_log)
+        df_log_mv = df_log_mv.dropna(subset=["Fecha_dt"])
+    else:
+        df_log_mv["Fecha_dt"] = pd.Series(dtype="object")
+
+    # ---- SELECTOR DE FECHA Y MODO ----
+    st.write("---")
+    col_filt1, col_filt2, col_filt3 = st.columns([1.2, 1.2, 2])
+    with col_filt1:
+        fecha_sel = st.date_input("\U0001f5d3\ufe0f Fecha a consultar:", value=datetime.date.today(), key="mv_fecha_input")
+    with col_filt2:
+        modo_vista = st.selectbox("Vista:", ["Solo el d\u00eda", "\u00daltima semana", "\u00daltimo mes", "Historial completo"], key="mv_modo_vista")
+    with col_filt3:
+        tipos_disponibles = sorted(df_log_mv["Tipo_Evento"].dropna().unique().tolist()) if not df_log_mv.empty else []
+        tipos_sel = st.multiselect("Filtrar por tipo de evento:", options=tipos_disponibles, default=tipos_disponibles, key="mv_tipos_sel")
+
+    # Aplicar filtro de rango de fecha
+    hoy = datetime.date.today()
+    if modo_vista == "Solo el d\u00eda":
+        df_filtrado = df_log_mv[df_log_mv["Fecha_dt"] == fecha_sel]
+    elif modo_vista == "\u00daltima semana":
+        df_filtrado = df_log_mv[df_log_mv["Fecha_dt"] >= (hoy - datetime.timedelta(days=7))]
+    elif modo_vista == "\u00daltimo mes":
+        df_filtrado = df_log_mv[df_log_mv["Fecha_dt"] >= (hoy - datetime.timedelta(days=30))]
+    else:
+        df_filtrado = df_log_mv.copy()
+
+    # Filtro por tipo
+    if tipos_sel:
+        df_filtrado = df_filtrado[df_filtrado["Tipo_Evento"].isin(tipos_sel)]
+
+    # ---- METRICAS DEL DIA SELECCIONADO (SIEMPRE MUESTRA HOY EN LAS METRICAS) ----
+    df_hoy = df_log_mv[df_log_mv["Fecha_dt"] == fecha_sel] if not df_log_mv.empty else pd.DataFrame()
+
+    n_tarimas_hoy = len(df_hoy[df_hoy["Tipo_Evento"] == "TARIMA_NUEVA"]) if not df_hoy.empty else 0
+    n_remisiones_hoy = len(df_hoy[df_hoy["Tipo_Evento"] == "REMISION_NUEVA"]) if not df_hoy.empty else 0
+    n_piezas_hoy = int(df_hoy[df_hoy["Tipo_Evento"] == "TARIMA_NUEVA"]["Cantidad_Piezas"].sum()) if not df_hoy.empty else 0
+    n_eventos_hoy = len(df_hoy)
+
+    st.subheader(f"\U0001f4ca Resumen del D\u00eda: {fecha_sel.strftime('%d/%m/%Y')}")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("\U0001f4e6 Tarimas Nuevas", n_tarimas_hoy)
+    m2.metric("\U0001f69a Remisiones", n_remisiones_hoy)
+    m3.metric("\U0001f9e9 Piezas Cargadas", f"{n_piezas_hoy:,}")
+    m4.metric("\U0001f4cb Total Eventos", n_eventos_hoy)
+
+    if n_eventos_hoy == 0:
+        st.warning(f"\u26a0\ufe0f No se registr\u00f3 actividad el d\u00eda {fecha_sel.strftime('%d/%m/%Y')}. Revisa si el sistema estuvo en operaci\u00f3n o si los registros a\u00fan no se han guardado.")
+    else:
+        st.success(f"\u2705 Se registraron **{n_eventos_hoy} eventos** el {fecha_sel.strftime('%d/%m/%Y')}.")
+
+    st.write("---")
+
+    # ---- MAPA DE CALOR DE ACTIVIDAD (TIPO GITHUB) ----
+    st.subheader("\U0001f5d3\ufe0f Mapa de Actividad Hist\u00f3rica")
+    if not df_log_mv.empty:
+        try:
+            import plotly.graph_objects as go
+
+            # Contar eventos por fecha
+            df_cal = df_log_mv.groupby("Fecha_dt").size().reset_index(name="n_eventos")
+            df_cal["Fecha_dt"] = pd.to_datetime(df_cal["Fecha_dt"])
+            df_cal["Semana"] = df_cal["Fecha_dt"].dt.isocalendar().week.astype(int)
+            df_cal["DiaSemana"] = df_cal["Fecha_dt"].dt.dayofweek  # 0=Lunes
+            df_cal["Fecha_str"] = df_cal["Fecha_dt"].dt.strftime("%d/%m/%Y")
+            df_cal["Mes"] = df_cal["Fecha_dt"].dt.strftime("%b %Y")
+
+            dias_nombres = ["Lun", "Mar", "Mi\u00e9", "Jue", "Vie", "S\u00e1b", "Dom"]
+
+            fig_cal = go.Figure(go.Scatter(
+                x=df_cal["Fecha_dt"],
+                y=[1] * len(df_cal),
+                mode="markers",
+                marker=dict(
+                    size=df_cal["n_eventos"].apply(lambda x: min(8 + x * 3, 35)),
+                    color=df_cal["n_eventos"],
+                    colorscale=[[0, "#E3F2FD"], [0.3, "#42A5F5"], [0.7, "#EC2024"], [1.0, "#7B0000"]],
+                    showscale=True,
+                    colorbar=dict(title="Eventos"),
+                    line=dict(width=1, color="#fff")
+                ),
+                text=df_cal["Fecha_str"] + "<br>" + df_cal["n_eventos"].astype(str) + " eventos",
+                hoverinfo="text"
+            ))
+            fig_cal.update_layout(
+                title="Actividad diaria del sistema (tama\u00f1o = cantidad de eventos)",
+                xaxis=dict(title="Fecha", showgrid=False),
+                yaxis=dict(visible=False),
+                height=220,
+                plot_bgcolor="#0F172A",
+                paper_bgcolor="#0F172A",
+                font=dict(color="#E2E8F0"),
+                margin=dict(l=10, r=10, t=40, b=10)
+            )
+            st.plotly_chart(fig_cal, use_container_width=True)
+        except ImportError:
+            st.info("\U0001f4ca Instalar plotly para visualizar el mapa de actividad.")
+    else:
+        st.info("A\u00fan no hay actividad registrada. Los eventos comenzar\u00e1n a aparecer aqu\u00ed desde hoy.")
+
+    # ---- GRAFICA DE BARRAS ACUMULADA POR DIA ----
+    if not df_log_mv.empty:
+        st.subheader("\U0001f4c8 Actividad Acumulada por D\u00eda")
+        try:
+            import plotly.express as px
+
+            df_barras = df_log_mv.groupby(["Fecha_dt", "Tipo_Evento"]).size().reset_index(name="n")
+            df_barras["Fecha_dt"] = pd.to_datetime(df_barras["Fecha_dt"])
+            df_barras = df_barras.sort_values("Fecha_dt")
+
+            colores_tipo = {
+                "TARIMA_NUEVA": "#42A5F5",
+                "TARIMA_REMESADA": "#26C6DA",
+                "REMISION_NUEVA": "#EC2024",
+                "TARIMA_ELIMINADA": "#EF5350",
+                "ARTICULO_NUEVO": "#66BB6A",
+                "PURGA": "#FFA726"
+            }
+
+            fig_bar = px.bar(
+                df_barras,
+                x="Fecha_dt",
+                y="n",
+                color="Tipo_Evento",
+                color_discrete_map=colores_tipo,
+                labels={"n": "Eventos", "Fecha_dt": "Fecha", "Tipo_Evento": "Tipo"},
+                title="Eventos diarios por tipo",
+                template="plotly_dark"
+            )
+            fig_bar.update_layout(
+                height=380,
+                plot_bgcolor="#0F172A",
+                paper_bgcolor="#0F172A",
+                font=dict(color="#E2E8F0"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                margin=dict(l=10, r=10, t=50, b=10)
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+        except ImportError:
+            pass
+
+    # ---- TABLA DETALLE DEL PERIODO FILTRADO ----
+    st.write("---")
+    st.subheader(f"\U0001f4cb Log de Eventos ({modo_vista})")
+
+    if df_filtrado.empty:
+        st.info("No hay eventos en el per\u00edodo seleccionado.")
+    else:
+        cols_show = [c for c in ["Fecha", "Hora", "Tipo_Evento", "Descripcion", "Usuario", "ID_Referencia", "Cantidad_Piezas", "Receptor"] if c in df_filtrado.columns]
+        df_show = df_filtrado[cols_show].copy().sort_values(["Fecha", "Hora"], ascending=[False, False])
+
+        # Colorear tipo de evento
+        def color_tipo(val):
+            colores = {
+                "TARIMA_NUEVA": "background-color: #1E3A5F; color: #90CAF9;",
+                "TARIMA_REMESADA": "background-color: #1B3A3E; color: #80DEEA;",
+                "REMISION_NUEVA": "background-color: #3E1E1E; color: #EF9A9A;",
+                "TARIMA_ELIMINADA": "background-color: #4E2020; color: #FFCDD2;",
+                "ARTICULO_NUEVO": "background-color: #1B3A1E; color: #A5D6A7;",
+                "PURGA": "background-color: #3E2E0E; color: #FFCC80;"
+            }
+            return colores.get(val, "")
+
+        if "Tipo_Evento" in df_show.columns:
+            st.dataframe(
+                df_show.style.applymap(color_tipo, subset=["Tipo_Evento"]),
+                use_container_width=True,
+                hide_index=True,
+                height=400
+            )
+        else:
+            st.dataframe(df_show, use_container_width=True, hide_index=True, height=400)
+
+        # Exportar log
+        buf_log = io.BytesIO()
+        with pd.ExcelWriter(buf_log, engine="openpyxl") as w:
+            df_show.to_excel(w, index=False, sheet_name="Log_Actividad")
+        buf_log.seek(0)
+        st.download_button(
+            label="\U0001f4e5 Descargar Log de Actividad (.xlsx)",
+            data=buf_log.getvalue(),
+            file_name=f"Log_Movimientos_{fecha_sel.strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="btn_dl_log_mvdia"
+        )
