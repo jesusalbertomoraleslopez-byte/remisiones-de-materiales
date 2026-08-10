@@ -7425,8 +7425,12 @@ elif opcion_menu == "\U0001f4c5 Movimientos del D\u00eda":
                 margin=dict(l=10, r=10, t=50, b=10)
             )
             st.plotly_chart(fig_bar, use_container_width=True)
-        except ImportError:
-            pass
+        except Exception:
+            try:
+                df_pivot = df_log_mv.groupby(["Fecha_dt", "Tipo_Evento"]).size().unstack(fill_value=0)
+                st.bar_chart(df_pivot)
+            except Exception:
+                pass
 
     # ---- TABLA DETALLE DEL PERIODO FILTRADO ----
     st.write("---")
@@ -7451,12 +7455,22 @@ elif opcion_menu == "\U0001f4c5 Movimientos del D\u00eda":
             return colores.get(val, "")
 
         if "Tipo_Evento" in df_show.columns:
-            st.dataframe(
-                df_show.style.applymap(color_tipo, subset=["Tipo_Evento"]),
-                use_container_width=True,
-                hide_index=True,
-                height=400
-            )
+            styler = None
+            if hasattr(df_show.style, "map"):
+                try:
+                    styler = df_show.style.map(color_tipo, subset=["Tipo_Evento"])
+                except Exception:
+                    pass
+            if styler is None and hasattr(df_show.style, "applymap"):
+                try:
+                    styler = df_show.style.applymap(color_tipo, subset=["Tipo_Evento"])
+                except Exception:
+                    pass
+            
+            if styler is not None:
+                st.dataframe(styler, use_container_width=True, hide_index=True, height=400)
+            else:
+                st.dataframe(df_show, use_container_width=True, hide_index=True, height=400)
         else:
             st.dataframe(df_show, use_container_width=True, hide_index=True, height=400)
 
