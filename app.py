@@ -1195,9 +1195,9 @@ def generar_cuerpo_correo_cierre_proyecto_html(nombre_proyecto, summary_dict, ta
     return html
 
 def generar_pdf_matriz_cierre_horizontal(nombre_proyecto, summary_dict, df_matriz, tarimas_info):
-    """Genera documento PDF de la Matriz de Cierre en orientación Horizontal (Landscape) con columnas maximizadas."""
+    """Genera documento PDF de la Matriz de Cierre en orientación Horizontal (Landscape) dividida en páginas legibles con SKUs siempre visibles."""
     from reportlab.lib.pagesizes import letter, landscape
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image as RLImage
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
     import glob
@@ -1205,127 +1205,139 @@ def generar_pdf_matriz_cierre_horizontal(nombre_proyecto, summary_dict, df_matri
     def draw_cierre_landscape_decorations(canvas, doc):
         canvas.saveState()
         canvas.setFillColor(colors.HexColor("#D32F2F"))
-        canvas.rect(20, 580, 752, 4, fill=1, stroke=0)
+        canvas.rect(25, 580, 742, 4, fill=1, stroke=0)
 
         canvas.setFont("Helvetica-Bold", 12)
         canvas.drawCentredString(396, 592, f"REPORTE MATRICIAL DE EMBARQUES — PROYECTO: {nombre_proyecto}")
 
         canvas.setFont("Helvetica-Bold", 8)
-        canvas.drawString(20, 568, "INDUSTRIA SIGRAMA S.A. DE C.V. | METALES & ESTRUCTURAS")
-        canvas.drawRightString(772, 568, f"FECHA EMISION: {datetime.date.today().strftime('%d/%m/%Y')}")
+        canvas.drawString(25, 568, "INDUSTRIA SIGRAMA S.A. DE C.V. | METALES & ESTRUCTURAS")
+        canvas.drawRightString(767, 568, f"FECHA EMISION: {datetime.date.today().strftime('%d/%m/%Y')}")
         canvas.restoreState()
 
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), leftMargin=20, rightMargin=20, topMargin=50, bottomMargin=30)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), leftMargin=25, rightMargin=25, topMargin=50, bottomMargin=30)
     story, styles = [], getSampleStyleSheet()
 
-    num_tarimas = len(tarimas_info)
-    f_sz = 6.0 if num_tarimas > 15 else (6.5 if num_tarimas > 8 else 7.5)
-    f_leading = f_sz + 1.2
+    f_sz = 7.5
+    f_leading = 9.0
+    style_hdr_top = ParagraphStyle('HdrTopC', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.white, alignment=1)
+    style_hdr_main = ParagraphStyle('HdrMainC', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.white, alignment=1)
+    style_cell_sku = ParagraphStyle('CellSkuC', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#1E293B"), alignment=0)
+    style_cell_val = ParagraphStyle('CellValC', fontName="Helvetica", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#0F172A"), alignment=1)
+    style_cell_tot = ParagraphStyle('CellTotC', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#0F172A"), alignment=1)
 
-    style_hdr_top = ParagraphStyle('HdrTopM', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.white, alignment=1)
-    style_hdr_main = ParagraphStyle('HdrMainM', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.white, alignment=1)
-    style_cell_sku = ParagraphStyle('CellSkuM', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#1E293B"), alignment=0)
-    style_cell_val = ParagraphStyle('CellValM', fontName="Helvetica", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#0F172A"), alignment=1)
-    style_cell_tot = ParagraphStyle('CellTotM', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#0F172A"), alignment=1)
+    CHUNK_SIZE = 11
+    chunks_tarimas = [tarimas_info[i:i + CHUNK_SIZE] for i in range(0, len(tarimas_info), CHUNK_SIZE)]
 
     folios_unicos = sorted(list(set(t['folio'] for t in tarimas_info if t['folio'] not in ['Pendiente', 'N/A'])))
-    receptores_unicos = sorted(list(set(t['receptor'] for t in tarimas_info if t['receptor'] not in ['N/A', ''])))
+    gran_total = summary_dict.get('gran_total', 0)
 
-    t_summary = Table([
-        [Paragraph(f"<b>PROYECTO:</b> {nombre_proyecto}", style_cell_sku),
-         Paragraph(f"<b>TARIMAS:</b> {len(tarimas_info)}", style_cell_sku),
-         Paragraph(f"<b>REMISIONES:</b> {len(folios_unicos)} ({', '.join(folios_unicos[:4])}{'...' if len(folios_unicos)>4 else ''})", style_cell_sku),
-         Paragraph(f"<b>PIEZAS TOTALES:</b> {summary_dict.get('gran_total', 0):,} PZS", style_cell_sku),
-         Paragraph(f"<b>RECEPTOR:</b> {', '.join(receptores_unicos[:2])}", style_cell_sku)]
-    ], colWidths=[140, 90, 200, 130, 192])
+    for chunk_idx, chunk in enumerate(chunks_tarimas, start=1):
+        if chunk_idx > 1:
+            story.append(PageBreak())
 
-    t_summary.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F1F5F9")),
-        ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E1")),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('TOPPADDING', (0,0), (-1,-1), 4),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4)
-    ]))
-    story.append(t_summary)
-    story.append(Spacer(1, 8))
+        t_summary = Table([
+            [Paragraph(f"<b>PROYECTO:</b> {nombre_proyecto}", style_cell_sku),
+             Paragraph(f"<b>PÁGINA:</b> {chunk_idx} de {len(chunks_tarimas)}", style_cell_sku),
+             Paragraph(f"<b>TARIMAS EN PÁGINA:</b> {len(chunk)} (de {len(tarimas_info)})", style_cell_sku),
+             Paragraph(f"<b>PIEZAS TOTALES:</b> {gran_total:,} PZS", style_cell_sku)]
+        ], colWidths=[160, 140, 220, 222])
 
-    tabla_data = []
+        t_summary.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F1F5F9")),
+            ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E1")),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3)
+        ]))
+        story.append(t_summary)
+        story.append(Spacer(1, 6))
 
-    # Fila 1: Remision
-    row_rem = [Paragraph("<b>Remisión</b>", style_hdr_top), Paragraph("", style_hdr_top)]
-    for t_info in tarimas_info:
-        row_rem.append(Paragraph(t_info['folio'], style_hdr_top))
-    row_rem.append(Paragraph("TOTAL", style_hdr_top))
-    tabla_data.append(row_rem)
+        tabla_data = []
 
-    # Fila 2: Fecha Envio
-    row_fec = [Paragraph("<b>Fecha Envío</b>", style_hdr_top), Paragraph("", style_hdr_top)]
-    for t_info in tarimas_info:
-        row_fec.append(Paragraph(t_info['fecha'], style_hdr_top))
-    row_fec.append(Paragraph("-", style_hdr_top))
-    tabla_data.append(row_fec)
+        # Fila 1: Remisión
+        row_rem = [Paragraph("<b>Remisión</b>", style_hdr_top), Paragraph("", style_hdr_top)]
+        for t_info in chunk:
+            row_rem.append(Paragraph(t_info['folio'], style_hdr_top))
+        row_rem.append(Paragraph("TOTAL PROY" if chunk_idx == len(chunks_tarimas) else "SUBTOTAL", style_hdr_top))
+        tabla_data.append(row_rem)
 
-    # Fila 3: Headers
-    row_hdr = [Paragraph("SKU / PRODUCTO", style_hdr_main), Paragraph("Imagen", style_hdr_main)]
-    for t_info in tarimas_info:
-        row_hdr.append(Paragraph(t_info['tarima'], style_hdr_main))
-    row_hdr.append(Paragraph("TOTAL", style_hdr_main))
-    tabla_data.append(row_hdr)
+        # Fila 2: Fecha Envío
+        row_fec = [Paragraph("<b>Fecha Envío</b>", style_hdr_top), Paragraph("", style_hdr_top)]
+        for t_info in chunk:
+            row_fec.append(Paragraph(t_info['fecha'], style_hdr_top))
+        row_fec.append(Paragraph("-", style_hdr_top))
+        tabla_data.append(row_fec)
 
-    # Filas de SKUs
-    skus_rows = df_matriz[df_matriz['SKU'] != 'TOTALES']
-    for _, r_data in skus_rows.iterrows():
-        sku = str(r_data['SKU'])
+        # Fila 3: Headers
+        row_hdr = [Paragraph("SKU / PRODUCTO", style_hdr_main), Paragraph("Imagen", style_hdr_main)]
+        for t_info in chunk:
+            row_hdr.append(Paragraph(t_info['tarima'], style_hdr_main))
+        row_hdr.append(Paragraph("TOTAL PROY" if chunk_idx == len(chunks_tarimas) else "SUBTOTAL", style_hdr_main))
+        tabla_data.append(row_hdr)
 
-        img_flow = Paragraph("", style_cell_val)
-        matching_imgs = glob.glob(f"imagenes_articulos/{sku}(*.*")
-        if matching_imgs and os.path.exists(matching_imgs[0]):
-            try:
-                img_flow = RLImage(matching_imgs[0], width=18, height=18, hAlign='CENTER')
-            except Exception:
-                pass
+        # Filas SKUs
+        skus_rows = df_matriz[df_matriz['SKU'] != 'TOTALES']
+        for _, r_data in skus_rows.iterrows():
+            sku = str(r_data['SKU'])
 
-        row_cells = [Paragraph(sku, style_cell_sku), img_flow]
-        for t_info in tarimas_info:
+            img_flow = Paragraph("", style_cell_val)
+            matching_imgs = glob.glob(f"imagenes_articulos/{sku}(*.*")
+            if matching_imgs and os.path.exists(matching_imgs[0]):
+                try:
+                    img_flow = RLImage(matching_imgs[0], width=18, height=18, hAlign='CENTER')
+                except Exception:
+                    pass
+
+            row_cells = [Paragraph(sku, style_cell_sku), img_flow]
+            subtotal_chunk_sku = 0
+            for t_info in chunk:
+                t_id = t_info['tarima']
+                val = r_data.get(t_id, "")
+                if isinstance(val, int):
+                    subtotal_chunk_sku += val
+                val_str = str(val) if val != "" else ""
+                row_cells.append(Paragraph(val_str, style_cell_val))
+
+            val_tot_show = r_data.get('TOTAL', 0) if chunk_idx == len(chunks_tarimas) else subtotal_chunk_sku
+            row_cells.append(Paragraph(str(val_tot_show), style_cell_tot))
+            tabla_data.append(row_cells)
+
+        # Fila Totales
+        tot_data_row = df_matriz[df_matriz['SKU'] == 'TOTALES'].iloc[0]
+        row_tot_cells = [Paragraph("TOTALES", style_cell_tot), Paragraph("", style_cell_tot)]
+        subtotal_chunk_piezas = 0
+        for t_info in chunk:
             t_id = t_info['tarima']
-            val = r_data.get(t_id, "")
-            val_str = str(val) if val != "" else ""
-            row_cells.append(Paragraph(val_str, style_cell_val))
+            c_tot = tot_data_row.get(t_id, 0)
+            subtotal_chunk_piezas += int(c_tot) if isinstance(c_tot, (int, float)) else 0
+            row_tot_cells.append(Paragraph(str(c_tot), style_cell_tot))
 
-        row_cells.append(Paragraph(str(r_data.get('TOTAL', 0)), style_cell_tot))
-        tabla_data.append(row_cells)
+        val_tot_final = f"<b>{gran_total:,}</b>" if chunk_idx == len(chunks_tarimas) else f"<b>{subtotal_chunk_piezas:,}</b>"
+        row_tot_cells.append(Paragraph(val_tot_final, style_cell_tot))
+        tabla_data.append(row_tot_cells)
 
-    # Fila Totales
-    tot_data_row = df_matriz[df_matriz['SKU'] == 'TOTALES'].iloc[0]
-    row_tot_cells = [Paragraph("TOTALES", style_cell_tot), Paragraph("", style_cell_tot)]
-    for t_info in tarimas_info:
-        t_id = t_info['tarima']
-        row_tot_cells.append(Paragraph(str(tot_data_row.get(t_id, 0)), style_cell_tot))
-    row_tot_cells.append(Paragraph(f"<b>{summary_dict.get('gran_total', 0):,}</b>", style_cell_tot))
-    tabla_data.append(row_tot_cells)
+        w_sku = 110.0
+        w_img = 32.0
+        w_tot = 60.0
+        w_tar = (742.0 - w_sku - w_img - w_tot) / max(len(chunk), 1)
 
-    usable_width = 752.0
-    w_sku = 95.0
-    w_img = 26.0
-    w_tot = 38.0
-    w_tar = max((usable_width - w_sku - w_img - w_tot) / max(num_tarimas, 1), 22.0)
+        col_widths = [w_sku, w_img] + [w_tar] * len(chunk) + [w_tot]
 
-    col_widths = [w_sku, w_img] + [w_tar] * num_tarimas + [w_tot]
-
-    t_mat = Table(tabla_data, colWidths=col_widths, repeatRows=3)
-    t_mat.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,1), colors.HexColor("#334155")),
-        ('BACKGROUND', (0,2), (-1,2), colors.HexColor("#1E293B")),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('TOPPADDING', (0,0), (-1,-1), 2),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
-        ('LEFTPADDING', (0,0), (-1,-1), 1),
-        ('RIGHTPADDING', (0,0), (-1,-1), 1),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#D9E1F2")),
-    ]))
-    story.append(t_mat)
+        t_mat = Table(tabla_data, colWidths=col_widths, repeatRows=3)
+        t_mat.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,1), colors.HexColor("#334155")),
+            ('BACKGROUND', (0,2), (-1,2), colors.HexColor("#1E293B")),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('LEFTPADDING', (0,0), (-1,-1), 2),
+            ('RIGHTPADDING', (0,0), (-1,-1), 2),
+            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#D9E1F2")),
+        ]))
+        story.append(t_mat)
 
     doc.build(story, onFirstPage=draw_cierre_landscape_decorations, onLaterPages=draw_cierre_landscape_decorations)
     buffer.seek(0)
