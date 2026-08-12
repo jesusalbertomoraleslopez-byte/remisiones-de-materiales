@@ -1195,39 +1195,41 @@ def generar_cuerpo_correo_cierre_proyecto_html(nombre_proyecto, summary_dict, ta
     return html
 
 def generar_pdf_matriz_cierre_horizontal(nombre_proyecto, summary_dict, df_matriz, tarimas_info):
-    """Genera documento PDF de la Matriz de Cierre en orientación Horizontal (Landscape) dividida en páginas legibles con SKUs siempre visibles."""
+    """Genera documento PDF de la Matriz de Cierre en tamaño Tabloide Horizontal (17x11 in) con escala reducida para minimizar número de hojas."""
     from reportlab.lib.pagesizes import letter, landscape
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image as RLImage
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
     import glob
 
-    def draw_cierre_landscape_decorations(canvas, doc):
+    TABLOID_LANDSCAPE = (1224.0, 792.0)
+
+    def draw_cierre_tabloid_decorations(canvas, doc):
         canvas.saveState()
         canvas.setFillColor(colors.HexColor("#D32F2F"))
-        canvas.rect(25, 580, 742, 4, fill=1, stroke=0)
+        canvas.rect(20, 762, 1184, 4, fill=1, stroke=0)
 
         canvas.setFont("Helvetica-Bold", 12)
-        canvas.drawCentredString(396, 592, f"REPORTE MATRICIAL DE EMBARQUES — PROYECTO: {nombre_proyecto}")
+        canvas.drawCentredString(612, 772, f"REPORTE MATRICIAL DE EMBARQUES — PROYECTO: {nombre_proyecto} (TABLOIDE)")
 
         canvas.setFont("Helvetica-Bold", 8)
-        canvas.drawString(25, 568, "INDUSTRIA SIGRAMA S.A. DE C.V. | METALES & ESTRUCTURAS")
-        canvas.drawRightString(767, 568, f"FECHA EMISION: {datetime.date.today().strftime('%d/%m/%Y')}")
+        canvas.drawString(20, 750, "INDUSTRIA SIGRAMA S.A. DE C.V. | METALES & ESTRUCTURAS")
+        canvas.drawRightString(1204, 750, f"FECHA EMISION: {datetime.date.today().strftime('%d/%m/%Y')}")
         canvas.restoreState()
 
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), leftMargin=25, rightMargin=25, topMargin=50, bottomMargin=30)
+    doc = SimpleDocTemplate(buffer, pagesize=TABLOID_LANDSCAPE, leftMargin=20, rightMargin=20, topMargin=45, bottomMargin=25)
     story, styles = [], getSampleStyleSheet()
 
-    f_sz = 7.5
-    f_leading = 9.0
-    style_hdr_top = ParagraphStyle('HdrTopC', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.white, alignment=1)
-    style_hdr_main = ParagraphStyle('HdrMainC', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.white, alignment=1)
-    style_cell_sku = ParagraphStyle('CellSkuC', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#1E293B"), alignment=0)
-    style_cell_val = ParagraphStyle('CellValC', fontName="Helvetica", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#0F172A"), alignment=1)
-    style_cell_tot = ParagraphStyle('CellTotC', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#0F172A"), alignment=1)
+    f_sz = 6.0
+    f_leading = 7.0
+    style_hdr_top = ParagraphStyle('HdrTopTab', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.white, alignment=1)
+    style_hdr_main = ParagraphStyle('HdrMainTab', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.white, alignment=1)
+    style_cell_sku = ParagraphStyle('CellSkuTab', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#1E293B"), alignment=0)
+    style_cell_val = ParagraphStyle('CellValTab', fontName="Helvetica", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#0F172A"), alignment=1)
+    style_cell_tot = ParagraphStyle('CellTotTab', fontName="Helvetica-Bold", fontSize=f_sz, leading=f_leading, textColor=colors.HexColor("#0F172A"), alignment=1)
 
-    CHUNK_SIZE = 11
+    CHUNK_SIZE = 25
     chunks_tarimas = [tarimas_info[i:i + CHUNK_SIZE] for i in range(0, len(tarimas_info), CHUNK_SIZE)]
 
     folios_unicos = sorted(list(set(t['folio'] for t in tarimas_info if t['folio'] not in ['Pendiente', 'N/A'])))
@@ -1242,17 +1244,17 @@ def generar_pdf_matriz_cierre_horizontal(nombre_proyecto, summary_dict, df_matri
              Paragraph(f"<b>PÁGINA:</b> {chunk_idx} de {len(chunks_tarimas)}", style_cell_sku),
              Paragraph(f"<b>TARIMAS EN PÁGINA:</b> {len(chunk)} (de {len(tarimas_info)})", style_cell_sku),
              Paragraph(f"<b>PIEZAS TOTALES:</b> {gran_total:,} PZS", style_cell_sku)]
-        ], colWidths=[160, 140, 220, 222])
+        ], colWidths=[250, 200, 350, 384])
 
         t_summary.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F1F5F9")),
             ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E1")),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('TOPPADDING', (0,0), (-1,-1), 3),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 3)
+            ('TOPPADDING', (0,0), (-1,-1), 2),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 2)
         ]))
         story.append(t_summary)
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
 
         tabla_data = []
 
@@ -1286,7 +1288,7 @@ def generar_pdf_matriz_cierre_horizontal(nombre_proyecto, summary_dict, df_matri
             matching_imgs = glob.glob(f"imagenes_articulos/{sku}(*.*")
             if matching_imgs and os.path.exists(matching_imgs[0]):
                 try:
-                    img_flow = RLImage(matching_imgs[0], width=18, height=18, hAlign='CENTER')
+                    img_flow = RLImage(matching_imgs[0], width=14, height=14, hAlign='CENTER')
                 except Exception:
                     pass
 
@@ -1319,9 +1321,9 @@ def generar_pdf_matriz_cierre_horizontal(nombre_proyecto, summary_dict, df_matri
         tabla_data.append(row_tot_cells)
 
         w_sku = 110.0
-        w_img = 32.0
-        w_tot = 60.0
-        w_tar = (742.0 - w_sku - w_img - w_tot) / max(len(chunk), 1)
+        w_img = 26.0
+        w_tot = 55.0
+        w_tar = (1184.0 - w_sku - w_img - w_tot) / max(len(chunk), 1)
 
         col_widths = [w_sku, w_img] + [w_tar] * len(chunk) + [w_tot]
 
@@ -1329,17 +1331,17 @@ def generar_pdf_matriz_cierre_horizontal(nombre_proyecto, summary_dict, df_matri
         t_mat.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,1), colors.HexColor("#334155")),
             ('BACKGROUND', (0,2), (-1,2), colors.HexColor("#1E293B")),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
+            ('GRID', (0,0), (-1,-1), 0.4, colors.HexColor("#CBD5E1")),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('TOPPADDING', (0,0), (-1,-1), 3),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-            ('LEFTPADDING', (0,0), (-1,-1), 2),
-            ('RIGHTPADDING', (0,0), (-1,-1), 2),
+            ('TOPPADDING', (0,0), (-1,-1), 1.5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 1.5),
+            ('LEFTPADDING', (0,0), (-1,-1), 1),
+            ('RIGHTPADDING', (0,0), (-1,-1), 1),
             ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor("#D9E1F2")),
         ]))
         story.append(t_mat)
 
-    doc.build(story, onFirstPage=draw_cierre_landscape_decorations, onLaterPages=draw_cierre_landscape_decorations)
+    doc.build(story, onFirstPage=draw_cierre_tabloid_decorations, onLaterPages=draw_cierre_tabloid_decorations)
     buffer.seek(0)
     return buffer.getvalue()
 
