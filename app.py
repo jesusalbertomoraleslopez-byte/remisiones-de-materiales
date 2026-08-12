@@ -1130,21 +1130,31 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
     </html>
     """
 def generar_cuerpo_correo_cierre_proyecto_html(nombre_proyecto, summary_dict, tarimas_info):
-    """Genera cuerpo HTML formal (solo texto estilizado y resumen) para el correo EML de cierre de proyecto."""
+    """Genera cuerpo HTML formal con todos los datos generales (PO, Descripción, Parcialidad, Direcciones) para el correo EML."""
     folios_unicos = sorted(list(set(t['folio'] for t in tarimas_info if t['folio'] not in ['Pendiente', 'N/A'])))
     receptores_unicos = sorted(list(set(t['receptor'] for t in tarimas_info if t['receptor'] not in ['N/A', ''])))
+    direcciones_unicas = sorted(list(set(t.get('direccion', '') for t in tarimas_info if t.get('direccion') not in ['N/A', ''])))
+
+    pos = summary_dict.get('pos', [])
+    descripciones = summary_dict.get('descripciones', [])
+    parcialidades = summary_dict.get('parcialidades', [])
+
+    str_po = ", ".join(pos) if pos else "N/A"
+    str_desc = ", ".join(descripciones) if descripciones else "N/A"
+    str_parc = ", ".join(parcialidades) if parcialidades else "N/A"
+    str_dir = " / ".join(direcciones_unicas) if direcciones_unicas else "N/A"
 
     html = f"""
     <html>
     <head>
         <style>
             body {{ font-family: 'Segoe UI', Arial, sans-serif; color: #1E293B; background-color: #F8FAFC; padding: 20px; }}
-            .container {{ max-width: 750px; margin: 0 auto; background: #FFFFFF; border-radius: 8px; border: 1px solid #E2E8F0; padding: 30px; }}
+            .container {{ max-width: 780px; margin: 0 auto; background: #FFFFFF; border-radius: 8px; border: 1px solid #E2E8F0; padding: 30px; }}
             .header-banner {{ background-color: #1E293B; border-bottom: 4px solid #EC2024; color: #FFFFFF; padding: 20px; text-align: center; border-radius: 6px 6px 0 0; }}
             .header-title {{ font-size: 20px; font-weight: bold; margin: 0; }}
             .header-sub {{ font-size: 13px; color: #94A3B8; margin-top: 5px; }}
-            .summary-box {{ background-color: #F1F5F9; border-left: 4px solid #EC2024; padding: 15px; margin: 20px 0; border-radius: 4px; }}
-            .summary-item {{ font-size: 13px; margin: 6px 0; color: #1E293B; }}
+            .summary-box {{ background-color: #F1F5F9; border-left: 4px solid #EC2024; padding: 18px; margin: 20px 0; border-radius: 4px; }}
+            .summary-item {{ font-size: 13px; margin: 7px 0; color: #1E293B; line-height: 1.5; }}
             .adjuntos-box {{ background-color: #EFF6FF; border: 1px solid #BFDBFE; padding: 15px; margin: 20px 0; border-radius: 6px; }}
             .footer {{ margin-top: 30px; font-size: 12px; color: #64748B; border-top: 1px solid #E2E8F0; padding-top: 15px; }}
         </style>
@@ -1153,27 +1163,31 @@ def generar_cuerpo_correo_cierre_proyecto_html(nombre_proyecto, summary_dict, ta
         <div class="container">
             <div class="header-banner">
                 <div class="header-title">🏁 REPORTE DE CIERRE Y FINIQUITO DE EMBARQUES</div>
-                <div class="header-sub">PROYECTO: {nombre_proyecto} | INDUSTRIA SIGRAMA METALES</div>
+                <div class="header-sub">PROYECTO: {nombre_proyecto} | PO: {str_po} | INDUSTRIA SIGRAMA METALES</div>
             </div>
 
             <p style="font-size: 14px; margin-top: 20px;">Estimados señores,</p>
             <p style="font-size: 13px; line-height: 1.6;">
-                Por medio del presente se emite la notificación formal de <b>Cierre y Finiquito de Embarques</b> correspondiente al proyecto <b>{nombre_proyecto}</b>.
+                Por medio del presente se emite la notificación formal de <b>Cierre y Finiquito de Embarques</b> correspondiente al proyecto <b>{nombre_proyecto}</b> (Orden de Compra: <b>{str_po}</b>).
             </p>
 
             <div class="summary-box">
-                <div class="summary-item"><b>📌 Proyecto:</b> {nombre_proyecto}</div>
+                <div class="summary-item"><b>📌 Código de Proyecto:</b> {nombre_proyecto}</div>
+                <div class="summary-item"><b>📝 Descripción del Proyecto:</b> {str_desc}</div>
+                <div class="summary-item"><b>📄 No. Orden de Compra (PO):</b> <span style="color: #EC2024; font-weight: bold;">{str_po}</span></div>
+                <div class="summary-item"><b>🏷️ Parcialidad(es):</b> {str_parc}</div>
                 <div class="summary-item"><b>📦 Total Tarimas Embarcadas:</b> {len(tarimas_info)}</div>
                 <div class="summary-item"><b>🚚 Total Remisiones Generadas:</b> {len(folios_unicos)} ({', '.join(folios_unicos)})</div>
                 <div class="summary-item"><b>🧩 Total Piezas Enviadas:</b> {summary_dict.get('gran_total', 0):,} PZS</div>
-                <div class="summary-item"><b>🏢 Receptor(es):</b> {', '.join(receptores_unicos)}</div>
+                <div class="summary-item"><b>🏢 Cliente / Receptor(es):</b> {', '.join(receptores_unicos)}</div>
+                <div class="summary-item"><b>📍 Dirección(es) de Entrega:</b> {str_dir}</div>
                 <div class="summary-item"><b>🏁 Estatus General:</b> EMBARQUES FINALIZADOS AL 100%</div>
             </div>
 
             <div class="adjuntos-box">
                 <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: bold; color: #1E3A8A;">📎 Archivos Adjuntos a este Expediente de Cierre:</p>
                 <ol style="margin: 0; padding-left: 20px; font-size: 13px; color: #1E293B;">
-                    <li style="margin-bottom: 6px;"><b><code>Reporte_Matriz_Cierre_Proyecto_{nombre_proyecto}.pdf</code></b><br/><span style="font-size: 11px; color: #475569;">Documento PDF oficial en formato horizontal (Landscape) con la matriz completa de dispersión por SKU, Remisión y Tarima.</span></li>
+                    <li style="margin-bottom: 6px;"><b><code>Reporte_Matriz_Cierre_Proyecto_{nombre_proyecto}.pdf</code></b><br/><span style="font-size: 11px; color: #475569;">Documento PDF oficial en formato Tabloide Horizontal (Landscape 17x11 in) con la matriz completa de dispersión por SKU, Remisión y Tarima.</span></li>
                     <li style="margin-bottom: 6px;"><b><code>Reporte_Cierre_Proyecto_{nombre_proyecto}.xlsx</code></b><br/><span style="font-size: 11px; color: #475569;">Reporte de Excel interactivo con imágenes de piezas y fórmulas de totales.</span></li>
                     <li><b><code>Paquete_Documentos_Cierre_{nombre_proyecto}.zip</code></b><br/><span style="font-size: 11px; color: #475569;">Archivo comprimido que contiene todos los PDFs individuales de Remisiones y Etiquetas de Tarimas oficiales.</span></li>
                 </ol>
@@ -1365,6 +1379,7 @@ def construir_matriz_cierre_proyecto(nombre_proyecto):
             fol = str(r_row.get('Folio_Remision', ''))
             fec = str(r_row.get('Fecha_Hora_Salida', '')).split()[0]
             rec = str(r_row.get('Nombre_Receptor', ''))
+            dir_rec = str(r_row.get('Direccion_Receptor', ''))
             asoc = r_row.get('Tarimas_Asociadas', '')
             if isinstance(asoc, str):
                 try:
@@ -1373,12 +1388,12 @@ def construir_matriz_cierre_proyecto(nombre_proyecto):
                     asoc = [asoc]
             if isinstance(asoc, list):
                 for t_id in asoc:
-                    rem_map[str(t_id).strip()] = {'folio': fol, 'fecha': fec, 'receptor': rec}
+                    rem_map[str(t_id).strip()] = {'folio': fol, 'fecha': fec, 'receptor': rec, 'direccion': dir_rec}
 
     tarimas_info = []
     for t_id in tarimas_proj:
-        info = rem_map.get(str(t_id).strip(), {'folio': 'Pendiente', 'fecha': 'N/A', 'receptor': 'N/A'})
-        tarimas_info.append({'tarima': str(t_id).strip(), 'folio': info['folio'], 'fecha': info['fecha'], 'receptor': info['receptor']})
+        info = rem_map.get(str(t_id).strip(), {'folio': 'Pendiente', 'fecha': 'N/A', 'receptor': 'N/A', 'direccion': 'N/A'})
+        tarimas_info.append({'tarima': str(t_id).strip(), 'folio': info['folio'], 'fecha': info['fecha'], 'receptor': info['receptor'], 'direccion': info.get('direccion', 'N/A')})
 
     def sort_key(x):
         fol = x['folio']
@@ -8089,17 +8104,23 @@ elif opcion_menu == "🏁 Cierre de Proyecto":
                             correo_para_default = str(match_rec.iloc[0]['Correo']).strip()
                             break
 
+                pos_unicas = sorted([str(p).strip() for p in sub_det_proj['PO'].dropna().unique() if str(p).strip() not in ['', 'nan', 'None']])
+                descripciones_unicas = sorted([str(d).strip() for d in sub_det_proj['Descripcion'].dropna().unique() if str(d).strip() not in ['', 'nan', 'None']])
+                parcialidades_unicas = sorted([str(p).strip() for p in sub_det_proj['Parcialidad'].dropna().unique() if str(p).strip() not in ['', 'nan', 'None']])
+
+                str_pos = ", ".join(pos_unicas) if pos_unicas else "N/A"
+
                 col_e1, col_e2 = st.columns(2)
                 with col_e1:
                     eml_to = st.text_input("Para (To):", value=correo_para_default if correo_para_default else "cliente@empresa.com", key="cierre_eml_to")
                 with col_e2:
                     eml_cc = st.text_input("Con Copia (CC):", value="l.quintana@sigrama.com.mx; albertorios@sigrama.com.mx", key="cierre_eml_cc")
 
-                eml_subject = st.text_input("Asunto del Correo:", value=f"REPORTE DE CIERRE Y FINIQUITO DE EMBARQUES PROYECTO {p_seleccionado} - SIGRAMA METALES", key="cierre_eml_subject")
+                eml_subject = st.text_input("Asunto del Correo:", value=f"REPORTE DE CIERRE Y FINIQUITO DE EMBARQUES — PO: {str_pos} — PROYECTO: {p_seleccionado} — SIGRAMA METALES", key="cierre_eml_subject")
 
                 st.markdown("""
                 > **📎 Contenido automático del paquete de cierre (.eml):**
-                > - **Adjunto 1**: `Reporte_Matriz_Cierre_Proyecto_[PROYECTO].pdf` (Documento PDF oficial en formato **Horizontal / Landscape** con la matriz completa maximizada).
+                > - **Adjunto 1**: `Reporte_Matriz_Cierre_Proyecto_[PROYECTO].pdf` (Documento PDF oficial en formato **Tabloide Horizontal / Landscape** con la matriz completa maximizada).
                 > - **Adjunto 2**: `Reporte_Cierre_[PROYECTO].xlsx` (Excel oficial con la matriz formateada y fotos).
                 > - **Adjunto 3**: `Paquete_Documentos_[PROYECTO].zip` (ZIP con todos los PDFs individuales de etiquetas y remisiones).
                 """)
@@ -8108,7 +8129,10 @@ elif opcion_menu == "🏁 Cierre de Proyecto":
                     summary_info = {
                         'gran_total': gran_total,
                         'total_tarimas': len(tarimas_info),
-                        'total_remisiones': len(folios_unicos)
+                        'total_remisiones': len(folios_unicos),
+                        'pos': pos_unicas,
+                        'descripciones': descripciones_unicas,
+                        'parcialidades': parcialidades_unicas
                     }
 
                     pdf_matriz_bytes = generar_pdf_matriz_cierre_horizontal(p_seleccionado, summary_info, df_matriz, tarimas_info)
