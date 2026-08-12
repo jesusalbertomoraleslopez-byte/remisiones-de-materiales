@@ -8007,16 +8007,53 @@ elif opcion_menu == "🏁 Cierre de Proyecto":
     if "BD_Detalle_Tarimas" not in st.session_state or st.session_state.BD_Detalle_Tarimas.empty:
         st.warning("⚠️ La base de datos de Detalle de Tarimas se encuentra vacía.")
     else:
-        df_det_p = st.session_state.BD_Detalle_Tarimas
+        df_det_p = st.session_state.BD_Detalle_Tarimas.copy()
         proyectos_raw = df_det_p['Proyecto'].dropna().unique().tolist()
         proyectos_validos = sorted([str(p).strip() for p in proyectos_raw if str(p).strip() not in ['S/N', 'Material Rechazado', 'scrap', 'SCRAP', 'INT-000', '']])
 
         if not proyectos_validos:
             st.warning("📋 No se encontraron proyectos válidos en la base de datos.")
         else:
-            col_p1, col_p2 = st.columns([2, 1])
+            # Mapear descripciones únicas de proyectos
+            descripciones_dict = {}
+            for p_code in proyectos_validos:
+                sub_p = df_det_p[df_det_p['Proyecto'].astype(str).str.strip() == p_code]
+                descs = [str(d).strip() for d in sub_p['Descripcion'].dropna().unique() if str(d).strip() not in ['', 'nan', 'None']]
+                desc_str = ", ".join(descs) if descs else "Sin descripción"
+                descripciones_dict[p_code] = desc_str
+
+            todas_descripciones = sorted(list(set(descripciones_dict.values())))
+            opciones_desc_filtro = ["(Todas las Descripciones)"] + todas_descripciones
+
+            col_p1, col_p2 = st.columns([1.5, 2])
             with col_p1:
-                p_seleccionado = st.selectbox("📌 Seleccione el Proyecto a Cerrar:", options=proyectos_validos, key="cierre_proj_selectbox")
+                desc_seleccionada = st.selectbox(
+                    "📝 Filtrar por Descripción de Proyecto:",
+                    options=opciones_desc_filtro,
+                    key="cierre_proj_desc_filter"
+                )
+
+            if desc_seleccionada != "(Todas las Descripciones)":
+                proyectos_filtrados = [p for p in proyectos_validos if descripciones_dict.get(p) == desc_seleccionada]
+            else:
+                proyectos_filtrados = proyectos_validos
+
+            def format_proj_option(p_code):
+                desc = descripciones_dict.get(p_code, "")
+                if desc and desc != "Sin descripción":
+                    return f"{p_code} — {desc}"
+                return p_code
+
+            with col_p2:
+                p_seleccionado = st.selectbox(
+                    "📌 Seleccione el Código de Proyecto:",
+                    options=proyectos_filtrados,
+                    format_func=format_proj_option,
+                    key="cierre_proj_selectbox"
+                )
+
+            desc_actual = descripciones_dict.get(p_seleccionado, "Sin descripción")
+            st.info(f"🔎 **Proyecto Seleccionado:** `{p_seleccionado}` | **Descripción:** `{desc_actual}`")
 
             df_matriz, tarimas_info, gran_total, sub_det_proj = construir_matriz_cierre_proyecto(p_seleccionado)
 
