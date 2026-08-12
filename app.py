@@ -1129,7 +1129,353 @@ def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas)
     </body>
     </html>
     """
+def generar_cuerpo_correo_cierre_proyecto_html(nombre_proyecto, summary_dict, df_matriz, tarimas_info):
+    """Genera cuerpo HTML formal para el correo EML de cierre de proyecto con la matriz incrustada."""
+    folios_unicos = sorted(list(set(t['folio'] for t in tarimas_info if t['folio'] not in ['Pendiente', 'N/A'])))
+    receptores_unicos = sorted(list(set(t['receptor'] for t in tarimas_info if t['receptor'] not in ['N/A', ''])))
+
+    html = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; color: #1E293B; background-color: #F8FAFC; padding: 20px; }}
+            .container {{ max-width: 950px; margin: 0 auto; background: #FFFFFF; border-radius: 8px; border: 1px solid #E2E8F0; padding: 30px; }}
+            .header-banner {{ background-color: #1E293B; border-bottom: 4px solid #EC2024; color: #FFFFFF; padding: 20px; text-align: center; border-radius: 6px 6px 0 0; }}
+            .header-title {{ font-size: 22px; font-weight: bold; margin: 0; }}
+            .header-sub {{ font-size: 13px; color: #94A3B8; margin-top: 5px; }}
+            .summary-box {{ background-color: #F1F5F9; border-left: 4px solid #EC2024; padding: 15px; margin: 20px 0; border-radius: 4px; }}
+            .summary-grid {{ display: table; width: 100%; }}
+            .summary-row {{ display: table-row; }}
+            .summary-cell {{ display: table-cell; padding: 6px 12px; font-size: 13px; }}
+            .matrix-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; }}
+            .matrix-table th, .matrix-table td {{ border: 1px solid #CBD5E1; padding: 8px; text-align: center; }}
+            .hdr-top {{ background-color: #334155; color: #FFFFFF; font-weight: bold; }}
+            .hdr-main {{ background-color: #1E293B; color: #FFFFFF; font-weight: bold; }}
+            .row-totals {{ background-color: #D9E1F2; font-weight: bold; color: #1E293B; }}
+            .footer {{ margin-top: 30px; font-size: 12px; color: #64748B; border-top: 1px solid #E2E8F0; padding-top: 15px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header-banner">
+                <div class="header-title">🏁 REPORTE DE CIERRE Y FINIQUITO DE EMBARQUES</div>
+                <div class="header-sub">PROYECTO: {nombre_proyecto} | INDUSTRIA SIGRAMA METALES</div>
+            </div>
+
+            <p style="font-size: 14px; margin-top: 20px;">Estimados señores,</p>
+            <p style="font-size: 13px; line-height: 1.5;">
+                Por medio del presente se emite el <b>Reporte Oficial de Cierre de Embarques</b> correspondiente al proyecto <b>{nombre_proyecto}</b>. A continuación se presenta el desglose consolidado de materiales y tarimas despachadas.
+            </p>
+
+            <div class="summary-box">
+                <div class="summary-grid">
+                    <div class="summary-row">
+                        <div class="summary-cell"><b>Proyecto:</b> {nombre_proyecto}</div>
+                        <div class="summary-cell"><b>Total Tarimas:</b> {len(tarimas_info)}</div>
+                    </div>
+                    <div class="summary-row">
+                        <div class="summary-cell"><b>Total Remisiones:</b> {len(folios_unicos)} ({', '.join(folios_unicos[:5])}{'...' if len(folios_unicos)>5 else ''})</div>
+                        <div class="summary-cell"><b>Total Piezas Enviadas:</b> {summary_dict.get('gran_total', 0):,} PZS</div>
+                    </div>
+                    <div class="summary-row">
+                        <div class="summary-cell"><b>Receptor(es):</b> {', '.join(receptores_unicos)}</div>
+                        <div class="summary-cell"><b>Estatus:</b> EMBARQUE FINALIZADO 🏁</div>
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="font-size: 15px; color: #1E293B; margin-top: 25px;">📊 Matriz Consolidada de Materiales por Tarima y Remisión</h3>
+            
+            <table class="matrix-table">
+                <thead>
+                    <tr class="hdr-top">
+                        <td colspan="2" style="background-color: #334155; color: #FFFFFF; font-weight: bold;">Remisión</td>
+    """
+    for t_info in tarimas_info:
+        html += f'<td style="background-color: #334155; color: #FFFFFF; font-weight: bold;">{t_info["folio"]}</td>'
+    html += '<td style="background-color: #334155; color: #FFFFFF; font-weight: bold;">TOTAL</td></tr>'
+
+    html += '<tr class="hdr-top"><td colspan="2" style="background-color: #334155; color: #FFFFFF; font-weight: bold;">Fecha Envío</td>'
+    for t_info in tarimas_info:
+        html += f'<td style="background-color: #334155; color: #FFFFFF; font-weight: bold;">{t_info["fecha"]}</td>'
+    html += '<td style="background-color: #334155; color: #FFFFFF; font-weight: bold;">-</td></tr>'
+
+    html += '<tr class="hdr-main"><th style="background-color: #1E293B; color: #FFFFFF; font-weight: bold;">SKU / PRODUCTO</th><th style="background-color: #1E293B; color: #FFFFFF; font-weight: bold;">Imagen</th>'
+    for t_info in tarimas_info:
+        html += f'<th style="background-color: #1E293B; color: #FFFFFF; font-weight: bold;">{t_info["tarima"]}</th>'
+    html += '<th style="background-color: #1E293B; color: #FFFFFF; font-weight: bold;">TOTAL</th></tr></thead><tbody>'
+
+    skus_rows = df_matriz[df_matriz['SKU'] != 'TOTALES']
+    for idx_r, (_, r_data) in enumerate(skus_rows.iterrows()):
+        sku = str(r_data['SKU'])
+        img_tag = resolver_img_tag_html(sku, width=45, height=45)
+        if img_tag == "N/A": img_tag = ""
+
+        bg_row = "#FFFFFF" if idx_r % 2 == 0 else "#F8FAFC"
+        html += f'<tr style="background-color: {bg_row};">'
+        html += f'<td style="font-weight: bold; text-align: left;">{sku}</td>'
+        html += f'<td>{img_tag}</td>'
+
+        for t_info in tarimas_info:
+            t_id = t_info['tarima']
+            val = r_data.get(t_id, "")
+            html += f'<td>{val}</td>'
+
+        html += f'<td style="font-weight: bold; background-color: #F1F5F9;">{r_data.get("TOTAL", 0)}</td></tr>'
+
+    tot_data_row = df_matriz[df_matriz['SKU'] == 'TOTALES'].iloc[0]
+    html += '<tr class="row-totals"><td style="background-color: #D9E1F2; color: #1E293B; font-weight: bold;">TOTALES</td><td style="background-color: #D9E1F2;"></td>'
+    for t_info in tarimas_info:
+        t_id = t_info['tarima']
+        html += f'<td style="background-color: #D9E1F2; color: #1E293B; font-weight: bold;">{tot_data_row.get(t_id, 0)}</td>'
+    html += f'<td style="background-color: #D9E1F2; color: #0F172A; font-weight: bold; font-size: 13px;">{summary_dict.get("gran_total", 0):,} PZS</td></tr>'
+
+    html += f"""
+                </tbody>
+            </table>
+
+            <p style="font-size: 12px; color: #475569;">
+                <b>📎 Adjuntos en este correo:</b><br/>
+                1. <code>Reporte_Cierre_{nombre_proyecto}.xlsx</code> — Matriz de cierre formateada en Excel.<br/>
+                2. <code>Paquete_Documentos_{nombre_proyecto}.zip</code> — Colección completa de PDFs de Etiquetas y Remisiones oficiales.
+            </p>
+
+            <div class="footer">
+                <p style="margin: 0;"><b>Industria SIGRAMA — Control Logístico y de Embarques</b><br/>
+                Ingeniería que da resultados | Metales & Estructuras</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
     return html
+
+def construir_matriz_cierre_proyecto(nombre_proyecto):
+    """Construye la estructura matricial de cierre de embarques para un Proyecto."""
+    if "BD_Detalle_Tarimas" not in st.session_state or st.session_state.BD_Detalle_Tarimas.empty:
+        return None, [], 0, pd.DataFrame()
+
+    df_det = st.session_state.BD_Detalle_Tarimas.copy()
+    sub_det = df_det[df_det['Proyecto'].astype(str).str.strip().str.upper() == str(nombre_proyecto).strip().upper()].copy()
+
+    if sub_det.empty:
+        return None, [], 0, pd.DataFrame()
+
+    tarimas_proj = sorted(sub_det['ID_Tarima'].dropna().unique().tolist())
+
+    rem_map = {}
+    if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
+        import ast as _ast
+        for _, r_row in st.session_state.BD_Datos_Generales_Remision.iterrows():
+            fol = str(r_row.get('Folio_Remision', ''))
+            fec = str(r_row.get('Fecha_Hora_Salida', '')).split()[0]
+            rec = str(r_row.get('Nombre_Receptor', ''))
+            asoc = r_row.get('Tarimas_Asociadas', '')
+            if isinstance(asoc, str):
+                try:
+                    asoc = _ast.literal_eval(asoc)
+                except Exception:
+                    asoc = [asoc]
+            if isinstance(asoc, list):
+                for t_id in asoc:
+                    rem_map[str(t_id).strip()] = {'folio': fol, 'fecha': fec, 'receptor': rec}
+
+    tarimas_info = []
+    for t_id in tarimas_proj:
+        info = rem_map.get(str(t_id).strip(), {'folio': 'Pendiente', 'fecha': 'N/A', 'receptor': 'N/A'})
+        tarimas_info.append({'tarima': str(t_id).strip(), 'folio': info['folio'], 'fecha': info['fecha'], 'receptor': info['receptor']})
+
+    def sort_key(x):
+        fol = x['folio']
+        num = 999999
+        import re as _re
+        m = _re.search(r'\d+', fol)
+        if m: num = int(m.group())
+        return (num, x['tarima'])
+
+    tarimas_info.sort(key=sort_key)
+    skus = sorted(sub_det['SKU'].dropna().unique().tolist())
+
+    matrix_rows = []
+    for sku in skus:
+        row = {'SKU': sku, 'Imagen': 'Imagen'}
+        total_sku = 0
+        for t_info in tarimas_info:
+            t_id = t_info['tarima']
+            sub_sku_tar = sub_det[(sub_det['SKU'].astype(str).str.strip() == str(sku).strip()) & (sub_det['ID_Tarima'].astype(str).str.strip() == t_id)]
+            cant = int(sub_sku_tar['Cantidad'].sum()) if not sub_sku_tar.empty else 0
+            row[t_id] = cant if cant > 0 else ""
+            total_sku += cant
+        row['TOTAL'] = total_sku
+        matrix_rows.append(row)
+
+    row_totales = {'SKU': 'TOTALES', 'Imagen': ''}
+    gran_total = 0
+    for t_info in tarimas_info:
+        t_id = t_info['tarima']
+        col_tot = sum(r[t_id] for r in matrix_rows if isinstance(r[t_id], int))
+        row_totales[t_id] = col_tot
+        gran_total += col_tot
+    row_totales['TOTAL'] = gran_total
+
+    matrix_rows.append(row_totales)
+    df_matrix = pd.DataFrame(matrix_rows)
+    return df_matrix, tarimas_info, gran_total, sub_det
+
+def generar_excel_cierre_proyecto(nombre_proyecto, df_matriz, tarimas_info, gran_total):
+    """Genera archivo .xlsx profesional con la matriz de cierre de embarques del proyecto."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.drawing.image import Image as OpenPyxlImage
+    import glob
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Cierre de Proyecto"
+
+    fill_top = PatternFill(start_color="334155", end_color="334155", fill_type="solid")
+    font_top = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+
+    fill_hdr = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    font_hdr = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+
+    fill_tot = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    font_tot = Font(name="Calibri", size=11, bold=True, color="1E293B")
+
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_left = Alignment(horizontal="left", vertical="center")
+
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1')
+    )
+
+    c_r1 = ws.cell(row=1, column=2, value="Remisión"); c_r1.fill = fill_top; c_r1.font = font_top; c_r1.alignment = align_center
+    c_r2 = ws.cell(row=2, column=2, value="Fecha Envio"); c_r2.fill = fill_top; c_r2.font = font_top; c_r2.alignment = align_center
+
+    for col_idx, t_info in enumerate(tarimas_info, start=3):
+        c1 = ws.cell(row=1, column=col_idx, value=t_info['folio'])
+        c1.fill = fill_top; c1.font = font_top; c1.alignment = align_center
+        c2 = ws.cell(row=2, column=col_idx, value=t_info['fecha'])
+        c2.fill = fill_top; c2.font = font_top; c2.alignment = align_center
+
+    ws.cell(row=3, column=1, value="SKU / PRODUCTO").fill = fill_hdr
+    ws.cell(row=3, column=1).font = font_hdr; ws.cell(row=3, column=1).alignment = align_center
+
+    ws.cell(row=3, column=2, value="Imagen").fill = fill_hdr
+    ws.cell(row=3, column=2).font = font_hdr; ws.cell(row=3, column=2).alignment = align_center
+
+    for col_idx, t_info in enumerate(tarimas_info, start=3):
+        c = ws.cell(row=3, column=col_idx, value=t_info['tarima'])
+        c.fill = fill_hdr; c.font = font_hdr; c.alignment = align_center
+
+    h_tot = ws.cell(row=3, column=len(tarimas_info) + 3, value="TOTAL")
+    h_tot.fill = fill_hdr; h_tot.font = font_hdr; h_tot.alignment = align_center
+
+    skus_rows = df_matriz[df_matriz['SKU'] != 'TOTALES']
+    for r_i, (_, r_data) in enumerate(skus_rows.iterrows()):
+        curr_row = 4 + r_i
+        sku = str(r_data['SKU'])
+
+        c_sku = ws.cell(row=curr_row, column=1, value=sku)
+        c_sku.font = Font(name="Calibri", size=11, bold=True)
+        c_sku.alignment = align_left; c_sku.border = thin_border
+
+        c_img = ws.cell(row=curr_row, column=2, value="")
+        c_img.border = thin_border; c_img.alignment = align_center
+
+        matching_imgs = glob.glob(f"imagenes_articulos/{sku}(*.*")
+        if matching_imgs and os.path.exists(matching_imgs[0]):
+            try:
+                img = OpenPyxlImage(matching_imgs[0])
+                img.width = 45; img.height = 45
+                ws.row_dimensions[curr_row].height = 40
+                ws.add_image(img, f"B{curr_row}")
+            except Exception:
+                c_img.value = "Imagen"
+
+        for col_idx, t_info in enumerate(tarimas_info, start=3):
+            t_id = t_info['tarima']
+            val = r_data.get(t_id, "")
+            c_val = ws.cell(row=curr_row, column=col_idx, value=val if val != "" else "")
+            c_val.alignment = align_center; c_val.border = thin_border
+
+        c_tot = ws.cell(row=curr_row, column=len(tarimas_info) + 3, value=r_data.get('TOTAL', 0))
+        c_tot.font = Font(name="Calibri", size=11, bold=True)
+        c_tot.alignment = align_center
+        c_tot.fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+        c_tot.border = thin_border
+
+    tot_row_idx = 4 + len(skus_rows)
+    ws.row_dimensions[tot_row_idx].height = 25
+
+    c_t1 = ws.cell(row=tot_row_idx, column=1, value="TOTALES")
+    c_t1.fill = fill_tot; c_t1.font = font_tot; c_t1.alignment = align_center; c_t1.border = thin_border
+
+    c_t2 = ws.cell(row=tot_row_idx, column=2, value="")
+    c_t2.fill = fill_tot; c_t2.font = font_tot; c_t2.border = thin_border
+
+    tot_data_row = df_matriz[df_matriz['SKU'] == 'TOTALES'].iloc[0]
+    for col_idx, t_info in enumerate(tarimas_info, start=3):
+        t_id = t_info['tarima']
+        c_t = ws.cell(row=tot_row_idx, column=col_idx, value=tot_data_row.get(t_id, 0))
+        c_t.fill = fill_tot; c_t.font = font_tot; c_t.alignment = align_center; c_t.border = thin_border
+
+    c_gt = ws.cell(row=tot_row_idx, column=len(tarimas_info) + 3, value=gran_total)
+    c_gt.fill = fill_tot; c_gt.font = Font(name="Calibri", size=12, bold=True, color="0F172A"); c_gt.alignment = align_center; c_gt.border = thin_border
+
+    ws.column_dimensions['A'].width = 24
+    ws.column_dimensions['B'].width = 12
+    for col_idx in range(3, len(tarimas_info) + 4):
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        ws.column_dimensions[col_letter].width = 14
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+def generar_zip_documentos_proyecto(nombre_proyecto, tarimas_info):
+    """Genera archivo .zip con todas las etiquetas y remisiones en PDF del proyecto."""
+    import zipfile
+    buf_zip = io.BytesIO()
+    with zipfile.ZipFile(buf_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+        tarimas_procesadas = set()
+        for t_info in tarimas_info:
+            t_id = t_info['tarima']
+            if t_id in tarimas_procesadas: continue
+            tarimas_procesadas.add(t_id)
+            try:
+                buf_pdf = generar_pdf_etiqueta(t_id)
+                if buf_pdf:
+                    zf.writestr(f"Etiquetas/etiqueta_{t_id}.pdf", buf_pdf.getvalue())
+            except Exception: pass
+
+        folios_procesados = set()
+        if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
+            import ast as _ast
+            for t_info in tarimas_info:
+                fol = t_info['folio']
+                if fol in folios_procesados or fol in ['Pendiente', 'N/A', '']: continue
+                folios_procesados.add(fol)
+                try:
+                    df_rem_mat = st.session_state.BD_Datos_Generales_Remision[st.session_state.BD_Datos_Generales_Remision['Folio_Remision'].astype(str).str.strip() == fol]
+                    if not df_rem_mat.empty:
+                        rem_row = df_rem_mat.iloc[0]
+                        t_asoc = rem_row.get('Tarimas_Asociadas', '')
+                        if isinstance(t_asoc, str):
+                            try: t_asoc = _ast.literal_eval(t_asoc)
+                            except Exception: t_asoc = [t_asoc]
+                        sub_det_rem = st.session_state.BD_Detalle_Tarimas[st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(t_asoc)] if isinstance(t_asoc, list) else pd.DataFrame()
+                        buf_rem_pdf = generar_pdf_remision_general(rem_row, sub_det_rem)
+                        if buf_rem_pdf:
+                            zf.writestr(f"Remisiones/remision_{fol}.pdf", buf_rem_pdf.getvalue())
+                except Exception: pass
+
+    buf_zip.seek(0)
+    return buf_zip.getvalue()
 
 def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
     # Generar tabla HTML de piezas
@@ -2529,6 +2875,7 @@ lista_modulos = [
     "🏭 Industria 4.0",
     "📖 Manual de Operación",
     "🏢 Reporte por Receptor",
+    "🏁 Cierre de Proyecto",
     "🕰️ Carga Histórica",
     "📉 Análisis de Faltantes",
     "📋 Consulta por Lote SKU"
@@ -7553,3 +7900,122 @@ elif opcion_menu == "\U0001f4c5 Movimientos del D\u00eda":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="btn_dl_log_mvdia"
         )
+
+
+# =============================================================================
+# 19. CIERRE DE EMBARQUES POR PROYECTO
+# =============================================================================
+elif opcion_menu == "🏁 Cierre de Proyecto":
+    st.title("🏁 Reporte y Finiquito de Cierre por Proyecto")
+    st.markdown("Genera el expediente formal de finiquito de embarques para un proyecto finalizado. Incluye la matriz de entregas por tarima, el reporte Excel con fotos, el paquete ZIP de documentos PDF y el borrador de correo `.eml` listo para Outlook.")
+
+    if "BD_Detalle_Tarimas" not in st.session_state or st.session_state.BD_Detalle_Tarimas.empty:
+        st.warning("⚠️ La base de datos de Detalle de Tarimas se encuentra vacía.")
+    else:
+        df_det_p = st.session_state.BD_Detalle_Tarimas
+        proyectos_raw = df_det_p['Proyecto'].dropna().unique().tolist()
+        proyectos_validos = sorted([str(p).strip() for p in proyectos_raw if str(p).strip() not in ['S/N', 'Material Rechazado', 'scrap', 'SCRAP', 'INT-000', '']])
+
+        if not proyectos_validos:
+            st.warning("📋 No se encontraron proyectos válidos en la base de datos.")
+        else:
+            col_p1, col_p2 = st.columns([2, 1])
+            with col_p1:
+                p_seleccionado = st.selectbox("📌 Seleccione el Proyecto a Cerrar:", options=proyectos_validos, key="cierre_proj_selectbox")
+
+            df_matriz, tarimas_info, gran_total, sub_det_proj = construir_matriz_cierre_proyecto(p_seleccionado)
+
+            if df_matriz is None or df_matriz.empty:
+                st.error("❌ No hay partidas registradas para el proyecto seleccionado.")
+            else:
+                folios_unicos = sorted(list(set(t['folio'] for t in tarimas_info if t['folio'] not in ['Pendiente', 'N/A'])))
+                receptores_unicos = sorted(list(set(t['receptor'] for t in tarimas_info if t['receptor'] not in ['N/A', ''])))
+                skus_unicos = sorted(list(sub_det_proj['SKU'].dropna().unique()))
+
+                # Metricas clave
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("📦 Total Tarimas", len(tarimas_info))
+                m2.metric("🚚 Total Remisiones", len(folios_unicos))
+                m3.metric("🧩 Piezas Embarcadas", f"{gran_total:,}")
+                m4.metric("📋 SKUs Distintos", len(skus_unicos))
+
+                st.write("---")
+                st.subheader(f"📊 Tabla Preliminar de Cierre — Proyecto {p_seleccionado}")
+                st.caption("Verifique la matriz de dispersión de piezas por tarima y remisión antes de emitir el borrador de correo.")
+
+                st.dataframe(df_matriz, use_container_width=True, hide_index=True)
+
+                st.write("---")
+                st.subheader("📧 Configuración del Borrador de Correo EML")
+
+                correo_para_default = ""
+                if receptores_unicos and "BD_Receptores" in st.session_state and not st.session_state.BD_Receptores.empty:
+                    rec_df = st.session_state.BD_Receptores
+                    for rec_name in receptores_unicos:
+                        match_rec = rec_df[rec_df['Nombre_Receptor'].astype(str).str.strip() == rec_name]
+                        if not match_rec.empty and 'Correo' in match_rec.columns and pd.notna(match_rec.iloc[0]['Correo']):
+                            correo_para_default = str(match_rec.iloc[0]['Correo']).strip()
+                            break
+
+                col_e1, col_e2 = st.columns(2)
+                with col_e1:
+                    eml_to = st.text_input("Para (To):", value=correo_para_default if correo_para_default else "cliente@empresa.com", key="cierre_eml_to")
+                with col_e2:
+                    eml_cc = st.text_input("Con Copia (CC):", value="l.quintana@sigrama.com.mx; albertorios@sigrama.com.mx", key="cierre_eml_cc")
+
+                eml_subject = st.text_input("Asunto del Correo:", value=f"REPORTE DE CIERRE Y FINIQUITO DE EMBARQUES PROYECTO {p_seleccionado} - SIGRAMA METALES", key="cierre_eml_subject")
+
+                st.markdown("""
+                > **📎 Contenido automático del paquete de cierre (.eml):**
+                > - **Matriz HTML incrustada** en el cuerpo del correo.
+                > - **Adjunto 1**: `Reporte_Cierre_[PROYECTO].xlsx` (Excel oficial con la matriz formateada y fotos).
+                > - **Adjunto 2**: `Paquete_Documentos_[PROYECTO].zip` (ZIP con todos los PDFs de etiquetas y remisiones).
+                """)
+
+                with st.spinner("Generando paquete documental de cierre..."):
+                    excel_bytes = generar_excel_cierre_proyecto(p_seleccionado, df_matriz, tarimas_info, gran_total)
+                    zip_bytes = generar_zip_documentos_proyecto(p_seleccionado, tarimas_info)
+
+                    summary_info = {
+                        'gran_total': gran_total,
+                        'total_tarimas': len(tarimas_info),
+                        'total_remisiones': len(folios_unicos)
+                    }
+
+                    cuerpo_html = generar_cuerpo_correo_cierre_proyecto_html(p_seleccionado, summary_info, df_matriz, tarimas_info)
+
+                    adjuntos_dict = {
+                        f"Reporte_Cierre_Proyecto_{p_seleccionado}.xlsx": excel_bytes,
+                        f"Paquete_Documentos_Cierre_{p_seleccionado}.zip": zip_bytes
+                    }
+
+                    eml_bytes = generar_archivo_eml(eml_to, eml_cc, eml_subject, cuerpo_html, adjuntos_dict)
+
+                col_b1, col_b2, col_b3 = st.columns(3)
+                with col_b1:
+                    st.download_button(
+                        label="📩 Descargar Borrador EML para Correo (.eml)",
+                        data=eml_bytes,
+                        file_name=f"Reporte_Cierre_Proyecto_{p_seleccionado}.eml",
+                        mime="message/rfc822",
+                        use_container_width=True,
+                        key="btn_dl_eml_cierre_proj"
+                    )
+                with col_b2:
+                    st.download_button(
+                        label="📊 Descargar Matriz Excel (.xlsx)",
+                        data=excel_bytes,
+                        file_name=f"Reporte_Cierre_Proyecto_{p_seleccionado}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        key="btn_dl_xlsx_cierre_proj"
+                    )
+                with col_b3:
+                    st.download_button(
+                        label="📦 Descargar ZIP de Documentos PDF (.zip)",
+                        data=zip_bytes,
+                        file_name=f"Paquete_Documentos_Cierre_{p_seleccionado}.zip",
+                        mime="application/zip",
+                        use_container_width=True,
+                        key="btn_dl_zip_cierre_proj"
+                    )
