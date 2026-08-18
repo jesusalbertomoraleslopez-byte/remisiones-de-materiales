@@ -2178,7 +2178,6 @@ if "BD_Receptores" not in st.session_state:
         ])
 
 # --- Migración automática: Renombrar COVISA → EQM en todas las bases de datos ---
-# Se ejecuta en cada arranque y verifica si hay algo que corregir
 bds_a_migrar = {
     "BD_Receptores": "BD_Receptores.xlsx",
     "BD_Datos_Generales_Remision": "BD_Datos_Generales_Remision.xlsx",
@@ -2188,14 +2187,13 @@ bds_a_migrar = {
 for bd_key, bd_file in bds_a_migrar.items():
     if bd_key in st.session_state and not st.session_state[bd_key].empty:
         df = st.session_state[bd_key]
-        hubo_cambio_en_bd = False
+        has_covisa = False
         for col in df.columns:
             if df[col].dtype == object:
-                original = df[col].copy()
-                df[col] = df[col].apply(lambda x: str(x).replace("COVISA", "EQM").replace("Covisa", "EQM").replace("covisa", "EQM") if pd.notna(x) else x)
-                if not original.equals(df[col]):
-                    hubo_cambio_en_bd = True
-        if hubo_cambio_en_bd:
+                if df[col].astype(str).str.contains("COVISA|Covisa|covisa", case=False, na=False).any():
+                    has_covisa = True
+                    df[col] = df[col].apply(lambda x: str(x).replace("COVISA", "EQM").replace("Covisa", "EQM").replace("covisa", "EQM") if pd.notna(x) else x)
+        if has_covisa:
             st.session_state[bd_key] = df
             subir_excel_a_github(bd_file, st.session_state[bd_key])
 
