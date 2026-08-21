@@ -288,8 +288,9 @@ def clean_po_val(val):
     # De lo contrario, dejarlo limpio pero como está
     return val_str
 
+@st.cache_data(ttl=180, max_entries=15)
 def cargar_excel_desde_github(file_name):
-    """Carga el archivo Excel: intenta GitHub API primero para tener la versión más reciente, luego fallback a local."""
+    """Carga el archivo Excel: intenta GitHub API primero para tener la versión más reciente, luego fallback a local. Resultado en caché RAM controlado."""
     import os
     # 1. Intentar GitHub API primero
     try:
@@ -384,6 +385,10 @@ def subir_excel_a_github(file_name, dataframe_to_save):
 
         res_put = requests.put(url, json=payload, headers=headers)
         if res_put.status_code in [200, 201]:
+            try:
+                cargar_excel_desde_github.clear()
+            except Exception:
+                pass
             return True
         else:
             st.error(f"⚠️ Error al guardar {file_name} en GitHub (HTTP {res_put.status_code}): {res_put.text}")
@@ -393,7 +398,7 @@ def subir_excel_a_github(file_name, dataframe_to_save):
         st.error(f"⚠️ No se pudo sincronizar {file_name} con GitHub: {e}")
         return False
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=180, max_entries=5)
 def obtener_skus_con_imagen():
     """Obtiene el conjunto de SKUs que tienen una imagen asociada local o remotamente."""
     import os
@@ -1008,7 +1013,10 @@ def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
         part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
         msg.attach(part)
         
-    return msg.as_bytes()
+    import gc
+    val = msg.as_bytes()
+    gc.collect()
+    return val
 
 def generar_cuerpo_correo_po_html(po_name, cab_info, df_matrix, fechas_columnas):
     # Cabecera informativa

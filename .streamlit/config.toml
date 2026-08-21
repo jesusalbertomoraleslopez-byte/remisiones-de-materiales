@@ -1,0 +1,6 @@
+[server]
+maxUploadSize = 25
+enableCORS = false
+
+[client]
+showErrorDetails = false
