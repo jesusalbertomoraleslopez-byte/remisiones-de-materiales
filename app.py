@@ -2172,7 +2172,7 @@ if "BD_Lideres" not in st.session_state:
     if df_git_lideres is not None:
         st.session_state.BD_Lideres = df_git_lideres
     else:
-        st.session_state.BD_Lideres = pd.DataFrame([{"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}])
+        st.session_state.BD_Lideres = pd.DataFrame([{"ID_Lider": "LID-01", "Nombre_Lider": "Luis Quintana", "Area": "Metales", "Estatus": "Activo"}])
 
 # --- Catálogo de Receptores / Destinos ---
 if "BD_Receptores" not in st.session_state:
@@ -3532,8 +3532,11 @@ elif opcion_menu == "📦 Módulo Tarimas":
         st.success("🔓 Acceso Autorizado.")
         arch = st.file_uploader("Suba el Excel con Formato de Proyectos", type=["xlsx"])
         col_t1, col_t2 = st.columns(2)
+        lider_def_tar = st.session_state.get("usuario_actual", "Luis Quintana")
+        if not lider_def_tar or lider_def_tar in ["Administrador", "Operador General"]:
+            lider_def_tar = "Luis Quintana"
         with col_t1: tipo_t = st.selectbox("Tipo:", ["Cuadrada", "Rectangular"])
-        with col_t2: oper = st.text_input("Líder:", "Jesus Morales")
+        with col_t2: oper = st.text_input("Líder:", lider_def_tar)
         if arch and st.button("Procesar e Integrar Plantilla Avanzada"):
             try:
                 df_ex = pd.read_excel(arch)
@@ -4759,10 +4762,14 @@ elif opcion_menu == "🚚 Módulo Remisiones":
         with col_e:
             # Lista desplegable acoplada de forma dinámica al catálogo relacional
             if "BD_Lideres" in st.session_state and not st.session_state.BD_Lideres.empty:
-                lista_nombres_lideres = st.session_state.BD_Lideres['Nombre_Lider'].unique().tolist()
-                nom_e = st.selectbox("Líder / Emisor Autorizado:", options=lista_nombres_lideres, key="rem_lider_sel_unique")
+                lista_nombres_lideres = [str(n).strip() for n in st.session_state.BD_Lideres['Nombre_Lider'].dropna().unique().tolist() if str(n).strip() != '']
+                lider_usuario = st.session_state.get("usuario_actual", "Luis Quintana")
+                if not lider_usuario or lider_usuario in ["Administrador", "Operador General"] or lider_usuario not in lista_nombres_lideres:
+                    lider_usuario = "Luis Quintana"
+                idx_default = lista_nombres_lideres.index(lider_usuario) if lider_usuario in lista_nombres_lideres else 0
+                nom_e = st.selectbox("Líder / Emisor Autorizado:", options=lista_nombres_lideres, index=idx_default, key="rem_lider_sel_unique")
             else:
-                nom_e = st.selectbox("Líder / Emisor Autorizado:", options=["Jesus Morales", "Supervisor General"], key="rem_lider_backup_unique")
+                nom_e = st.selectbox("Líder / Emisor Autorizado:", options=["Luis Quintana", "Jesus Morales", "Supervisor General"], key="rem_lider_backup_unique")
             dir_e = st.text_input("Almacén de Origen:", "Metales")
         with col_r:
             if "BD_Receptores" in st.session_state and not st.session_state.BD_Receptores.empty:
@@ -5808,7 +5815,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
     # Inicialización del catálogo básico de personal operativo en memoria
     if "BD_Lideres" not in st.session_state:
         st.session_state.BD_Lideres = pd.DataFrame([
-            {"ID_Lider": "LID-01", "Nombre_Lider": "Jesus Morales", "Area": "Metales", "Estatus": "Activo"}
+            {"ID_Lider": "LID-01", "Nombre_Lider": "Luis Quintana", "Area": "Metales", "Estatus": "Activo"}
         ])
 
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["📝 Ajustar Cantidades", "👥 Catálogo de Líderes", "⚠️ Purga de Datos", "📦 Catálogo de Artículos", "🔢 Contador de Tarimas", "🖼️ Carpeta de Imágenes", "🏢 Catálogo de Receptores", "📧 Listas de Correo"])
