@@ -371,20 +371,31 @@ df_detalle = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
 df_remisiones = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
 df_actividad = cargar_excel_desde_github("BD_Actividad_Log.xlsx")
 
-# --- ENCABEZADO SGP ESTILO OFICIAL ---
-col_logo, col_title = st.columns([0.9, 4.5])
-with col_logo:
-    if os.path.exists("logo_sigrama.png"):
-        st.image("logo_sigrama.png", width=140)
-    else:
-        st.title("🏭")
-with col_title:
-    st.markdown("""
-    <div class="sgp-header">
-        <h2>BASE DE DATOS SGP — SIGRAMA METALES</h2>
-        <p>Planta Metales Diagonal | Consulta de Piezas, Planos, Ubicación en Tarimas e Historial de Envíos</p>
-    </div>
-    """, unsafe_allow_html=True)
+# --- RENDERIZADO DEL BANNER OFICIAL DE LA APLICACIÓN DE REMISIONES ---
+if os.path.exists("REMISIONES APP.png"):
+    st.image("REMISIONES APP.png", use_container_width=True)
+else:
+    try:
+        url_b = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/REMISIONES%20APP.png"
+        res_b = requests.get(url_b)
+        if res_b.status_code == 200:
+            with open("REMISIONES APP.png", "wb") as f_b:
+                f_b.write(res_b.content)
+            st.image("REMISIONES APP.png", use_container_width=True)
+        else:
+            st.markdown("""
+            <div class="sgp-header">
+                <h2>APLICACIÓN DE REMISIONES — SIGRAMA METALES</h2>
+                <p>Planta Metales Diagonal | Consulta de Piezas, Planos, Ubicación en Tarimas e Historial de Envíos</p>
+            </div>
+            """, unsafe_allow_html=True)
+    except Exception:
+        st.markdown("""
+        <div class="sgp-header">
+            <h2>APLICACIÓN DE REMISIONES — SIGRAMA METALES</h2>
+            <p>Planta Metales Diagonal | Consulta de Piezas, Planos, Ubicación en Tarimas e Historial de Envíos</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 # Listas de SKUs
 skus_con_foto = sorted([s for s in set(df_articulos['SKU'].dropna().astype(str).str.strip().str.upper()) if s not in ['', 'NAN', 'NONE', 'N/A']]) if not df_articulos.empty and 'SKU' in df_articulos.columns else []
@@ -397,7 +408,7 @@ skus_todos = sorted([s for s in skus_todos_set if s not in ['', 'NAN', 'NONE', '
 
 # Pestañas Principales
 tab_sgp_piezas, tab_proyectos_po, tab_bitacora_global = st.tabs([
-    "🧩 Consulta de Piezas y Planos (SGP)",
+    "🧩 Consulta de Piezas y Fotografías",
     "📌 Consulta por Proyecto / PO",
     "📜 Bitácora e Historial Global"
 ])
