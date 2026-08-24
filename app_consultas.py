@@ -331,11 +331,23 @@ with tab_consulta:
 
     with subtab_sku:
         # --- LÓGICA Y CONTROLES DE NAVEGACIÓN RÁPIDA ENTRE PIEZAS ---
-        curr_sku_val = st.session_state.get("lookup_sku_select_v3", "(Seleccione un SKU...)")
-        if curr_sku_val in lista_skus:
-            curr_idx = lista_skus.index(curr_sku_val)
-        else:
-            curr_idx = 0
+        if "sku_nav_idx" not in st.session_state:
+            st.session_state["sku_nav_idx"] = 0
+
+        def nav_prev():
+            if st.session_state["sku_nav_idx"] > 0:
+                st.session_state["sku_nav_idx"] -= 1
+
+        def nav_next():
+            if st.session_state["sku_nav_idx"] < len(lista_skus) - 1:
+                st.session_state["sku_nav_idx"] += 1
+
+        def on_sku_select():
+            sel = st.session_state.get("lookup_sku_select_v3")
+            if sel in lista_skus:
+                st.session_state["sku_nav_idx"] = lista_skus.index(sel)
+
+        curr_idx = max(0, min(st.session_state["sku_nav_idx"], len(lista_skus) - 1)) if lista_skus else 0
 
         st.markdown("##### ⚡ Navegación Rápida entre Piezas")
         col_nav_prev, col_nav_curr, col_nav_next = st.columns([1.5, 2.5, 1.5])
@@ -343,9 +355,7 @@ with tab_consulta:
         with col_nav_prev:
             if curr_idx > 0:
                 prev_sku = lista_skus[curr_idx - 1]
-                if st.button(f"◀️ {prev_sku}", use_container_width=True, key="btn_prev_sku_nav"):
-                    st.session_state["lookup_sku_select_v3"] = prev_sku
-                    st.rerun()
+                st.button(f"◀️ {prev_sku}", use_container_width=True, key="btn_prev_sku_nav", on_click=nav_prev)
                 prev_img = obtener_imagen_sku(prev_sku)
                 if prev_img:
                     st.image(prev_img, width=55, caption=f"Anterior: {prev_sku}")
@@ -356,7 +366,9 @@ with tab_consulta:
             sku_input = st.selectbox(
                 f"Pieza {curr_idx+1} de {len(lista_skus)} (Seleccione o busque):",
                 options=["(Seleccione un SKU...)"] + lista_skus,
-                key="lookup_sku_select_v3"
+                index=curr_idx + 1 if (lista_skus and curr_idx < len(lista_skus)) else 0,
+                key="lookup_sku_select_v3",
+                on_change=on_sku_select
             )
             if sku_input != "(Seleccione un SKU...)":
                 sku_seleccionado = sku_input
@@ -364,9 +376,7 @@ with tab_consulta:
         with col_nav_next:
             if curr_idx < len(lista_skus) - 1:
                 next_sku = lista_skus[curr_idx + 1]
-                if st.button(f"{next_sku} ▶️", use_container_width=True, key="btn_next_sku_nav"):
-                    st.session_state["lookup_sku_select_v3"] = next_sku
-                    st.rerun()
+                st.button(f"{next_sku} ▶️", use_container_width=True, key="btn_next_sku_nav", on_click=nav_next)
                 next_img = obtener_imagen_sku(next_sku)
                 if next_img:
                     st.image(next_img, width=55, caption=f"Siguiente: {next_sku}")
