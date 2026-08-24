@@ -9,6 +9,11 @@ import urllib.parse
 from PIL import Image
 import glob
 
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
@@ -184,6 +189,144 @@ def normalizar_fecha_display(val):
     except Exception:
         pass
     return val_str
+
+# Helper para la generación de archivos EML con múltiples adjuntos
+def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
+    """Genera un archivo EML en memoria como borrador de Outlook con múltiples adjuntos."""
+    msg = MIMEMultipart('mixed')
+    msg['Subject'] = subject
+    msg['To'] = dest_to
+    msg['Cc'] = dest_cc
+    msg['X-Unsent'] = '1'
+    
+    body_part = MIMEText(body_html, 'html', 'utf-8')
+    msg.attach(body_part)
+    
+    for filename, file_bytes in adjuntos_dict.items():
+        if not file_bytes: continue
+        if hasattr(file_bytes, 'getvalue'): file_bytes = file_bytes.getvalue()
+        elif hasattr(file_bytes, 'read'): file_bytes = file_bytes.read()
+            
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(file_bytes)
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+        msg.attach(part)
+        
+    import gc
+    val = msg.as_bytes()
+    gc.collect()
+    return val
+
+def generar_html_correo_sku(sku, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla):
+    """Genera el cuerpo HTML corporativo para el correo EML de consulta de SKU."""
+    filas_html = ""
+    if not df_tabla.empty:
+        for idx, r in df_tabla.iterrows():
+            bg = "#ffffff" if idx % 2 == 0 else "#f8fafc"
+            filas_html += f"""
+            <tr style="background-color: {bg};">
+                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; font-weight: bold;">{r.get('ID Tarima (TPM)', 'N/A')}</td>
+                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; text-align: center;">{r.get('Fecha Empaque', 'N/A')}</td>
+                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px;">{r.get('Líder Empaque', 'N/A')}</td>
+                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px;">{r.get('Ubicación Actual', 'N/A')}</td>
+                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; text-align: center; font-weight: bold;">{r.get('Estatus Tarima', 'N/A')}</td>
+                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; text-align: center; font-weight: bold;">{r.get('Piezas', 0)}</td>
+                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px;">{r.get('Proyecto', 'N/A')}</td>
+                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px;">{r.get('PO', 'N/A')}</td>
+                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px;">{r.get('Estatus de Remisión / Destino', 'En Planta')}</td>
+            </tr>
+            """
+
+    html = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; color: #1E293B; background-color: #FFFFFF; padding: 15px; }}
+            .card {{ border: 1px solid #CBD5E1; border-radius: 8px; padding: 18px; background-color: #F8FAFC; margin-bottom: 20px; }}
+            .header-banner {{ background-color: #111111; border-left: 5px solid #EC2024; color: #FFFFFF; padding: 14px 18px; border-radius: 6px; margin-bottom: 20px; }}
+            .title {{ font-size: 18px; font-weight: bold; margin: 0; color: #FFFFFF; }}
+            .sub {{ font-size: 12px; color: #94A3B8; margin-top: 4px; }}
+            .metric-box {{ display: inline-block; width: 22%; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 10px; border-radius: 6px; text-align: center; margin-right: 2%; box-sizing: border-box; }}
+            .metric-val {{ font-size: 18px; font-weight: bold; color: #EC2024; }}
+            .metric-lbl {{ font-size: 11px; color: #64748B; }}
+            table {{ border-collapse: collapse; width: 100%; margin-top: 15px; }}
+            th {{ background-color: #1E293B; color: #FFFFFF; padding: 8px; font-size: 12px; border: 1px solid #CBD5E1; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="header-banner">
+            <div class="title">📦 REPORTE DE INVENTARIO E HISTORIAL DE PIEZA</div>
+            <div class="sub">INDUSTRIA SIGRAMA S.A. DE C.V. | PLANTA METALES DIAGONAL</div>
+        </div>
+
+        <p style="font-size: 14px;">Estimados señores,</p>
+        <p style="font-size: 13px;">Se emite la notificación con el reporte oficial de inventario, ubicación física e historial de movimientos del número de parte <b>{sku}</b>.</p>
+
+        <div class="card">
+            <h4 style="margin-top:0; color: #1E293B;">📋 Ficha Técnica del Artículo: <code>{sku}</code></h4>
+            <ul style="font-size: 13px; color: #334155; line-height: 1.6;">
+                <li><b>Descripción Comercial:</b> {spec_dict.get('nombre', 'N/A')}</li>
+                <li><b>Calibre / Espesor:</b> {spec_dict.get('calibre', 'N/A')}</li>
+                <li><b>Dimensiones:</b> {spec_dict.get('dims', 'N/A')}</li>
+                <li><b>Material / Acabado:</b> {spec_dict.get('acabado', 'N/A')}</li>
+            </ul>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <div class="metric-box">
+                <div class="metric-val">{pzs_disp:,} PZS</div>
+                <div class="metric-lbl">Disponibles Planta</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-val">{pzs_rem:,} PZS</div>
+                <div class="metric-lbl">Remesadas (Enviadas)</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-val">{pzs_tot:,} PZS</div>
+                <div class="metric-lbl">Total Piezas</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-val">{tar_tot}</div>
+                <div class="metric-lbl">Tarimas Físicas</div>
+            </div>
+        </div>
+
+        <h4 style="color: #1E293B; margin-bottom: 5px;">📍 Desglose de Tarimas y Ubicación Exacta</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID Tarima (TPM)</th>
+                    <th>Fecha Empaque</th>
+                    <th>Líder Empaque</th>
+                    <th>Ubicación Actual</th>
+                    <th>Estatus Tarima</th>
+                    <th>Piezas</th>
+                    <th>Proyecto</th>
+                    <th>PO</th>
+                    <th>Destino / Remisión</th>
+                </tr>
+            </thead>
+            <tbody>
+                {filas_html}
+            </tbody>
+        </table>
+
+        <div style="background-color: #F8FAFC; border: 1px solid #CBD5E1; border-left: 4px solid #EC2024; padding: 12px 16px; margin: 25px 0; border-radius: 6px;">
+            <p style="margin: 0; font-size: 13px; color: #1E293B; font-weight: bold;">
+                🔍 <b>Portal de Consulta de Inventario en Tiempo Real:</b>
+            </p>
+            <p style="margin: 4px 0 0 0; font-size: 12.5px; color: #334155;">
+                Para consultar fotografías de SKUs, disponibilidad y movimientos en tiempo real, ingrese a: 
+                <a href="https://remisiones.streamlit.app/" target="_blank" style="color: #EC2024; font-weight: bold; text-decoration: underline;">https://remisiones.streamlit.app/</a>
+            </p>
+        </div>
+
+        <p style="font-size: 12px; color: #64748B;">* Se adjuntan a este correo el reporte interactivo en Excel (.xlsx) y el archivo de impresión PDF (.pdf).</p>
+    </body>
+    </html>
+    """
+    return html
 
 # Helper de resolución de imágenes
 @st.cache_data(ttl=300, max_entries=50)
@@ -625,27 +768,55 @@ with tab_sgp_piezas:
 
                     st.dataframe(df_tabla_export, use_container_width=True, hide_index=True)
 
-                    c_dl1, c_dl2 = st.columns(2)
+                    c_dl1, c_dl2, c_dl3 = st.columns(3)
+                    
+                    # 1. Excel
+                    buf_xl = io.BytesIO()
+                    with pd.ExcelWriter(buf_xl, engine='openpyxl') as writer:
+                        df_tabla_export.to_excel(writer, index=False, sheet_name=f"Consulta_{sku_actual}")
+                    buf_xl.seek(0)
+                    xl_bytes = buf_xl.getvalue()
+                    
                     with c_dl1:
-                        buf_xl = io.BytesIO()
-                        with pd.ExcelWriter(buf_xl, engine='openpyxl') as writer:
-                            df_tabla_export.to_excel(writer, index=False, sheet_name=f"Consulta_{sku_actual}")
-                        buf_xl.seek(0)
                         st.download_button(
                             label=f"📥 Descargar Registro Excel ({sku_actual}.xlsx)",
-                            data=buf_xl.getvalue(),
+                            data=xl_bytes,
                             file_name=f"Consulta_Inventario_{sku_actual}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             key="btn_dl_excel_sgp"
                         )
+                        
+                    # 2. PDF
+                    pdf_bytes = generar_pdf_consulta_reportlab("Pieza SGP", sku_actual, df_tabla_export, spec_info=spec_dict, img_local_path=img_path_local)
                     with c_dl2:
-                        pdf_bytes = generar_pdf_consulta_reportlab("Pieza SGP", sku_actual, df_tabla_export, spec_info=spec_dict, img_local_path=img_path_local)
                         st.download_button(
                             label=f"📄 Descargar PDF Oficial de Impresión ({sku_actual}.pdf)",
                             data=pdf_bytes,
                             file_name=f"Reporte_SGP_Pieza_{sku_actual}.pdf",
                             mime="application/pdf",
                             key="btn_dl_pdf_sgp"
+                        )
+
+                    # 3. Borrador EML con Excel + PDF Adjuntos
+                    cuerpo_eml_html = generar_html_correo_sku(sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export)
+                    adjuntos_eml = {
+                        f"Reporte_Inventario_{sku_actual}.xlsx": xl_bytes,
+                        f"Reporte_Impresion_{sku_actual}.pdf": pdf_bytes
+                    }
+                    eml_bytes = generar_archivo_eml(
+                        dest_to="cliente@empresa.com",
+                        dest_cc="l.quintana@sigrama.com.mx; albertorios@sigrama.com.mx",
+                        subject=f"Reporte de Inventario e Historial - SKU: {sku_actual} - Industria Sigrama",
+                        body_html=cuerpo_eml_html,
+                        adjuntos_dict=adjuntos_eml
+                    )
+                    with c_dl3:
+                        st.download_button(
+                            label=f"📩 Descargar Borrador Correo (.eml) (Excel + PDF)",
+                            data=eml_bytes,
+                            file_name=f"Correo_Reporte_Inventario_{sku_actual}.eml",
+                            mime="message/rfc822",
+                            key="btn_dl_eml_sku"
                         )
             else:
                 st.info("No hay datos de detalle de tarimas cargados.")
