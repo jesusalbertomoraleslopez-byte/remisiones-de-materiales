@@ -397,13 +397,13 @@ def generar_html_correo_sku(sku, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot,
     """Genera el cuerpo HTML corporativo réplica exacta del reporte PDF oficial."""
     f_hoy = datetime.datetime.now().strftime("%d/%m/%Y")
     
-    logo_cell = '<div style="font-size: 22px; font-weight: 800; color: #EC2024; font-family: sans-serif;">SIGRAMA</div>'
+    logo_cell = '<div style="font-size: 18px; font-weight: 800; color: #EC2024; font-family: sans-serif;">SIGRAMA</div>'
     if has_logo_cid:
-        logo_cell = '<img src="cid:logo_sigrama_cid" style="width: 140px; height: auto;" alt="SIGRAMA">'
+        logo_cell = '<img src="cid:logo_sigrama_cid" style="width: 95px; max-width: 30%; height: auto;" alt="SIGRAMA">'
 
-    img_html_cell = f'<div style="border: 1px dashed #CBD5E1; border-radius: 6px; padding: 25px 10px; color: #94A3B8; font-size: 11px; background-color: #FFFFFF;">📷 Sin fotografía o plano registrado</div>'
+    img_html_cell = f'<div style="border: 1px dashed #CBD5E1; border-radius: 6px; padding: 15px 10px; color: #94A3B8; font-size: 10px; background-color: #FFFFFF;">📷 Sin fotografía o plano registrado</div>'
     if has_img_cid:
-        img_html_cell = f'<img src="cid:foto_sku_cid" style="max-height: 175px; max-width: 100%; width: auto; height: auto; object-fit: contain; border-radius: 4px; border: 1px solid #CBD5E1; padding: 4px; background-color: #FFFFFF;">'
+        img_html_cell = f'<img src="cid:foto_sku_cid" style="max-width: 40%; max-height: 120px; width: auto; height: auto; object-fit: contain; border-radius: 4px; border: 1px solid #CBD5E1; padding: 3px; background-color: #FFFFFF;">'
 
     filas_html = ""
     if not df_tabla.empty:
