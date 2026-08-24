@@ -399,11 +399,11 @@ def generar_html_correo_sku(sku, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot,
     
     logo_cell = '<div style="font-size: 18px; font-weight: 800; color: #EC2024; font-family: sans-serif;">SIGRAMA</div>'
     if has_logo_cid:
-        logo_cell = '<img src="cid:logo_sigrama_cid" style="width: 95px; max-width: 30%; height: auto;" alt="SIGRAMA">'
+        logo_cell = '<img src="cid:logo_sigrama_cid" width="110" style="width: 110px !important; max-width: 110px !important; height: auto;" alt="SIGRAMA">'
 
     img_html_cell = f'<div style="border: 1px dashed #CBD5E1; border-radius: 6px; padding: 15px 10px; color: #94A3B8; font-size: 10px; background-color: #FFFFFF;">📷 Sin fotografía o plano registrado</div>'
     if has_img_cid:
-        img_html_cell = f'<img src="cid:foto_sku_cid" style="max-width: 40%; max-height: 120px; width: auto; height: auto; object-fit: contain; border-radius: 4px; border: 1px solid #CBD5E1; padding: 3px; background-color: #FFFFFF;">'
+        img_html_cell = f'<img src="cid:foto_sku_cid" style="max-height: 120px; max-width: 100%; width: auto; height: auto; object-fit: contain; border-radius: 4px; border: 1px solid #CBD5E1; padding: 3px; background-color: #FFFFFF;">'
 
     filas_html = ""
     if not df_tabla.empty:
@@ -1034,18 +1034,33 @@ with tab_sgp_piezas:
                             key="btn_dl_pdf_sgp"
                         )
 
-                    # 3. Borrador EML con Excel + PDF Adjuntos e Imágenes Inline (Réplica PDF)
+                    # 3. Borrador EML con Excel + PDF Adjuntos e Imágenes Inline Redimensionadas Físicamente
                     inline_images_eml = {}
                     if os.path.exists("logo_sigrama.png"):
                         try:
-                            with open("logo_sigrama.png", "rb") as f_l:
-                                inline_images_eml['logo_sigrama_cid'] = f_l.read()
+                            im_logo = Image.open("logo_sigrama.png")
+                            t_w = 110
+                            t_h = int(t_w * (im_logo.height / im_logo.width))
+                            im_logo_small = im_logo.resize((t_w, t_h), Image.Resampling.LANCZOS)
+                            buf_logo = io.BytesIO()
+                            im_logo_small.save(buf_logo, format="PNG")
+                            inline_images_eml['logo_sigrama_cid'] = buf_logo.getvalue()
                         except Exception: pass
 
                     if img_path_local and os.path.exists(img_path_local):
                         try:
-                            with open(img_path_local, "rb") as f_i:
-                                inline_images_eml['foto_sku_cid'] = f_i.read()
+                            im_piece = Image.open(img_path_local)
+                            p_aspect = im_piece.height / im_piece.width
+                            max_w, max_h = 240, 120
+                            calc_w = max_w
+                            calc_h = int(max_w * p_aspect)
+                            if calc_h > max_h:
+                                calc_h = max_h
+                                calc_w = int(max_h / p_aspect)
+                            im_piece_small = im_piece.resize((calc_w, calc_h), Image.Resampling.LANCZOS)
+                            buf_piece = io.BytesIO()
+                            im_piece_small.save(buf_piece, format="PNG")
+                            inline_images_eml['foto_sku_cid'] = buf_piece.getvalue()
                         except Exception: pass
 
                     has_logo_cid = 'logo_sigrama_cid' in inline_images_eml
