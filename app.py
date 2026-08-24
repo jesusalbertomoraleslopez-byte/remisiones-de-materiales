@@ -3552,12 +3552,13 @@ elif opcion_menu == "📦 Módulo Tarimas":
     else:
         st.success("🔓 Acceso Autorizado.")
         arch = st.file_uploader("Suba el Excel con Formato de Proyectos", type=["xlsx"])
-        col_t1, col_t2 = st.columns(2)
+        col_t1, col_t2, col_t3 = st.columns(3)
         lider_def_tar = st.session_state.get("usuario_actual", "Luis Quintana")
         if not lider_def_tar or lider_def_tar in ["Administrador", "Operador General"]:
             lider_def_tar = "Luis Quintana"
-        with col_t1: tipo_t = st.selectbox("Tipo:", ["Cuadrada", "Rectangular"])
-        with col_t2: oper = st.text_input("Líder:", lider_def_tar)
+        with col_t1: planta_origen_sel = st.selectbox("Planta de Origen:", ["Planta 1 - Sigrama Diagonal", "Planta 2 - Metales Rio XIX"])
+        with col_t2: tipo_t = st.selectbox("Tipo:", ["Cuadrada", "Rectangular"])
+        with col_t3: oper = st.text_input("Líder:", lider_def_tar)
         if arch and st.button("Procesar e Integrar Plantilla Avanzada"):
             try:
                 df_ex = pd.read_excel(arch)
@@ -3604,7 +3605,17 @@ elif opcion_menu == "📦 Módulo Tarimas":
                     for t_orig in df_ex['Tarima'].unique():
                         num_actual = st.session_state["siguiente_numero_tpm"]
                         nuevo_id_tpm = f"TPM-{num_actual:04d}"
-                        n_t = {"ID_Tarima": nuevo_id_tpm, "Tarima_Origen_Excel": t_orig, "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"), "Ubicacion_Actual": "Metales", "Creado_Por": oper, "Tipo_Tarima": tipo_t, "Estatus": "Disponible", "Es_Nueva": True}
+                        n_t = {
+                            "ID_Tarima": nuevo_id_tpm,
+                            "Planta_Origen": planta_origen_sel,
+                            "Tarima_Origen_Excel": t_orig,
+                            "Fecha_Creacion": datetime.datetime.now().strftime("%d/%m/%Y"),
+                            "Ubicacion_Actual": planta_origen_sel,
+                            "Creado_Por": oper,
+                            "Tipo_Tarima": tipo_t,
+                            "Estatus": "Disponible",
+                            "Es_Nueva": True
+                        }
                         nuevas_tarimas_lista.append(n_t)
                         st.session_state["siguiente_numero_tpm"] += 1
 
@@ -3780,7 +3791,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
         df_tarimas_sorted = df_tarimas_sorted.sort_values(by='_sort_key', ascending=False).drop(columns=['_sort_key']).reset_index(drop=True)
         
         df_estilado = df_tarimas_sorted.style.apply(lambda r: ['background-color: #FFF59D' if r['Es_Nueva'] else '' for _ in r], axis=1)
-        seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
+        seleccion_tabla = st.dataframe(df_estilado, use_container_width=True, column_order=["ID_Tarima", "Planta_Origen", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus"], on_select="rerun", selection_mode="multi-row")
         filas_seleccionadas = seleccion_tabla.get("selection", {}).get("rows", [])
         
         # =============================================================================

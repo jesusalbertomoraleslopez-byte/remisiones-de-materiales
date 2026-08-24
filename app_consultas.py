@@ -727,7 +727,9 @@ def generar_pdf_consulta_reportlab(tipo_busqueda, valor_busqueda, df_tabla, spec
             rows.append(row_cells)
 
         num_cols = len(df_clean.columns)
-        if num_cols == 11:
+        if num_cols == 12:
+            col_widths = [52, 72, 52, 58, 55, 48, 30, 48, 55, 48, 70, 146]
+        elif num_cols == 11:
             col_widths = [62, 58, 65, 60, 52, 36, 52, 65, 52, 82, 150]
         else:
             col_widths = [734 / num_cols] * num_cols
@@ -925,17 +927,20 @@ with tab_sgp_piezas:
                     if not df_tarimas.empty:
                         df_sub_det = pd.merge(
                             df_sub_det, 
-                            df_tarimas[['ID_Tarima', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus']], 
+                            df_tarimas[['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus']], 
                             on="ID_Tarima", 
                             how="left"
                         )
                     else:
+                        df_sub_det['Planta_Origen'] = "Planta 1 - Sigrama Diagonal"
                         df_sub_det['Fecha_Creacion'] = "N/A"
                         df_sub_det['Creado_Por'] = "N/A"
-                        df_sub_det['Ubicacion_Actual'] = "Metales"
+                        df_sub_det['Ubicacion_Actual'] = "Planta 1 - Sigrama Diagonal"
                         df_sub_det['Estatus'] = "Disponible"
 
-                    df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].fillna("Metales")
+                    df_sub_det['Planta_Origen'] = df_sub_det['Planta_Origen'].fillna("Planta 1 - Sigrama Diagonal")
+                    df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].fillna("Planta 1 - Sigrama Diagonal")
+                    df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].replace({"Metales": "Planta 1 - Sigrama Diagonal"})
                     df_sub_det['Estatus'] = df_sub_det['Estatus'].fillna("Disponible")
                     df_sub_det['Cantidad'] = pd.to_numeric(df_sub_det['Cantidad'], errors='coerce').fillna(0).astype(int)
 
@@ -994,10 +999,11 @@ with tab_sgp_piezas:
                     m4.metric("📊 Total Tarimas Físicas", f"{tar_tot} Tarimas")
 
                     st.write("")
-                    cols_mostrar = ['ID_Tarima', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus', 'Cantidad', 'Proyecto', 'PO', 'Parcialidad', 'Descripcion', 'Detalle_Remision']
+                    cols_mostrar = ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus', 'Cantidad', 'Proyecto', 'PO', 'Parcialidad', 'Descripcion', 'Detalle_Remision']
                     df_tabla_export = df_sub_det[[c for c in cols_mostrar if c in df_sub_det.columns]].copy()
                     df_tabla_export = df_tabla_export.rename(columns={
                         'ID_Tarima': 'ID Tarima (TPM)',
+                        'Planta_Origen': 'Planta Origen',
                         'Fecha_Creacion': 'Fecha Empaque',
                         'Creado_Por': 'Líder Empaque',
                         'Ubicacion_Actual': 'Ubicación Actual',
