@@ -9,6 +9,10 @@ import urllib.parse
 from PIL import Image
 import glob
 
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -219,6 +223,161 @@ def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
     val = msg.as_bytes()
     gc.collect()
     return val
+
+def generar_excel_consulta_inventario(sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export):
+    """Genera un archivo Excel profesional estilizado con openpyxl (Ficha Técnica, Métricas y Tabla Auto-ajustada)."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"Inventario_{sku_actual}"[:30]
+    ws.views.sheetView[0].showGridLines = True
+    
+    fill_header = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    fill_accent = PatternFill(start_color="EC2024", end_color="EC2024", fill_type="solid")
+    fill_kpi = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    fill_zebra = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+    
+    font_title = Font(name="Arial", size=13, bold=True, color="FFFFFF")
+    font_sub = Font(name="Arial", size=9, italic=True, color="E2E8F0")
+    font_hdr = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+    font_bold = Font(name="Arial", size=9.5, bold=True, color="0F172A")
+    font_regular = Font(name="Arial", size=9.5, color="1E293B")
+    font_kpi_num = Font(name="Arial", size=13, bold=True, color="EC2024")
+    font_kpi_lbl = Font(name="Arial", size=8.5, bold=True, color="475569")
+
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1')
+    )
+
+    # 1. Cabecera Principal (Filas 1 a 2)
+    max_cols = max(len(df_tabla_export.columns), 9)
+    col_max_letter = get_column_letter(max_cols)
+    
+    ws.merge_cells(f"A1:{col_max_letter}1")
+    ws["A1"] = f"REPORTE DE INVENTARIO Y UBICACIÓN FÍSICA DE PIEZA — {sku_actual}"
+    ws["A1"].font = font_title
+    ws["A1"].fill = fill_header
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 26
+
+    ws.merge_cells(f"A2:{col_max_letter}2")
+    f_hoy = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    ws["A2"] = f"INDUSTRIA SIGRAMA S.A. DE C.V. | Planta Metales Diagonal | Generado: {f_hoy}"
+    ws["A2"].font = font_sub
+    ws["A2"].fill = fill_header
+    ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[2].height = 16
+
+    # Línea Roja de Acento (Fila 3)
+    ws.merge_cells(f"A3:{col_max_letter}3")
+    ws["A3"].fill = fill_accent
+    ws.row_dimensions[3].height = 3.5
+
+    # 2. Ficha Técnica del Artículo (Filas 5 y 6)
+    ws["A5"] = "DESCRIPCIÓN COMERCIAL:"
+    ws["A5"].font = font_bold
+    ws["B5"] = spec_dict.get('nombre', 'N/A')
+    ws["B5"].font = font_regular
+
+    ws["E5"] = "CALIBRE / ESPESOR:"
+    ws["E5"].font = font_bold
+    ws["F5"] = spec_dict.get('calibre', 'N/A')
+    ws["F5"].font = font_regular
+
+    ws["A6"] = "DIMENSIONES PIEZA:"
+    ws["A6"].font = font_bold
+    ws["B6"] = spec_dict.get('dims', 'N/A')
+    ws["B6"].font = font_regular
+
+    ws["E6"] = "MATERIAL / ACABADO:"
+    ws["E6"].font = font_bold
+    ws["F6"] = spec_dict.get('acabado', 'N/A')
+    ws["F6"].font = font_regular
+
+    ws.row_dimensions[5].height = 18
+    ws.row_dimensions[6].height = 18
+
+    # 3. Bloque de Métricas KPI (Filas 8 y 9)
+    kpis = [
+        ("DISPONIBLES PLANTA", pzs_disp, "A", "B"),
+        ("REMESADAS (ENVIADAS)", pzs_rem, "C", "D"),
+        ("TOTAL PIEZAS", pzs_tot, "E", "F"),
+        ("TARIMAS FÍSICAS", tar_tot, "G", col_max_letter)
+    ]
+    for lbl, val, c1, c2 in kpis:
+        cell_lbl = f"{c1}8"
+        cell_val = f"{c1}9"
+        if c1 != c2:
+            ws.merge_cells(f"{c1}8:{c2}8")
+            ws.merge_cells(f"{c1}9:{c2}9")
+        ws[cell_lbl] = lbl
+        ws[cell_lbl].font = font_kpi_lbl
+        ws[cell_lbl].fill = fill_kpi
+        ws[cell_lbl].alignment = Alignment(horizontal="center", vertical="center")
+
+        ws[cell_val] = val
+        ws[cell_val].font = font_kpi_num
+        ws[cell_val].fill = fill_kpi
+        ws[cell_val].alignment = Alignment(horizontal="center", vertical="center")
+        if isinstance(val, (int, float)):
+            ws[cell_val].number_format = '#,##0'
+
+    ws.row_dimensions[8].height = 15
+    ws.row_dimensions[9].height = 22
+
+    # 4. Tabla de Datos (Fila 11)
+    start_row = 11
+    headers = list(df_tabla_export.columns)
+    for col_num, h_text in enumerate(headers, 1):
+        cell = ws.cell(row=start_row, column=col_num, value=h_text)
+        cell.font = font_hdr
+        cell.fill = fill_header
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = thin_border
+    ws.row_dimensions[start_row].height = 24
+
+    # Filas de datos
+    current_row = start_row + 1
+    for r_idx, row_data in df_tabla_export.iterrows():
+        fill_row = fill_zebra if r_idx % 2 == 1 else fill_white
+        for c_idx, val in enumerate(row_data, 1):
+            col_name = headers[c_idx - 1]
+            cell = ws.cell(row=current_row, column=c_idx, value=val)
+            cell.font = font_regular
+            cell.fill = fill_row
+            cell.border = thin_border
+
+            if "ID Tarima" in col_name or "Fecha" in col_name or "Estatus Tarima" in col_name:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                if "ID Tarima" in col_name or "Estatus Tarima" in col_name:
+                    cell.font = font_bold
+            elif "Piezas" in col_name or isinstance(val, (int, float)):
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+                cell.number_format = '#,##0'
+                cell.font = font_bold
+            else:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+
+        ws.row_dimensions[current_row].height = 19
+        current_row += 1
+
+    # Auto-fit dinámico de ancho de columnas
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            if cell.row in [1, 2, 3]: continue
+            val_str = str(cell.value or '')
+            if len(val_str) > max_len: max_len = len(val_str)
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 13)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
 
 def generar_html_correo_sku(sku, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla):
     """Genera el cuerpo HTML corporativo para el correo EML de consulta de SKU."""
@@ -775,12 +934,8 @@ with tab_sgp_piezas:
 
                     c_dl1, c_dl2, c_dl3 = st.columns(3)
                     
-                    # 1. Excel
-                    buf_xl = io.BytesIO()
-                    with pd.ExcelWriter(buf_xl, engine='openpyxl') as writer:
-                        df_tabla_export.to_excel(writer, index=False, sheet_name=f"Consulta_{sku_actual}")
-                    buf_xl.seek(0)
-                    xl_bytes = buf_xl.getvalue()
+                    # 1. Excel con Formato Ejecutivo (openpyxl)
+                    xl_bytes = generar_excel_consulta_inventario(sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export)
                     
                     with c_dl1:
                         st.download_button(
