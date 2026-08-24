@@ -554,7 +554,11 @@ with tab_sgp_piezas:
                     df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].fillna("Metales")
                     df_sub_det['Estatus'] = df_sub_det['Estatus'].fillna("Disponible")
                     df_sub_det['Cantidad'] = pd.to_numeric(df_sub_det['Cantidad'], errors='coerce').fillna(0).astype(int)
+                    
+                    # Ordenar del movimiento más reciente al más antiguo (último a primero)
                     if 'Fecha_Creacion' in df_sub_det.columns:
+                        df_sub_det['_dt_sort'] = pd.to_datetime(df_sub_det['Fecha_Creacion'], errors='coerce', dayfirst=True)
+                        df_sub_det = df_sub_det.sort_values(by='_dt_sort', ascending=False)
                         df_sub_det['Fecha_Creacion'] = df_sub_det['Fecha_Creacion'].apply(normalizar_fecha_display)
 
                     rem_map = {}
@@ -641,6 +645,9 @@ with tab_proyectos_po:
             if p_sel != "(Seleccione...)":
                 df_proj = df_detalle[df_detalle['Proyecto'].astype(str).str.strip() == p_sel].copy()
                 if not df_proj.empty:
+                    if 'Fecha_Creacion' in df_proj.columns:
+                        df_proj['_dt_sort'] = pd.to_datetime(df_proj['Fecha_Creacion'], errors='coerce', dayfirst=True)
+                        df_proj = df_proj.sort_values(by='_dt_sort', ascending=False)
                     st.write(f"#### Partidas del Proyecto `{p_sel}`")
                     st.dataframe(df_proj[['ID_Tarima', 'SKU', 'PO', 'Parcialidad', 'Cantidad', 'Descripcion']], use_container_width=True, hide_index=True)
 
@@ -651,6 +658,9 @@ with tab_proyectos_po:
             if po_sel != "(Seleccione...)":
                 df_po = df_detalle[df_detalle['PO'].astype(str).str.strip() == po_sel].copy()
                 if not df_po.empty:
+                    if 'Fecha_Creacion' in df_po.columns:
+                        df_po['_dt_sort'] = pd.to_datetime(df_po['Fecha_Creacion'], errors='coerce', dayfirst=True)
+                        df_po = df_po.sort_values(by='_dt_sort', ascending=False)
                     st.write(f"#### Partidas de la Orden `{po_sel}`")
                     st.dataframe(df_po[['ID_Tarima', 'SKU', 'Proyecto', 'Parcialidad', 'Cantidad', 'Descripcion']], use_container_width=True, hide_index=True)
 
@@ -662,6 +672,9 @@ with tab_bitacora_global:
     if not df_actividad.empty:
         q_search = st.text_input("🔍 Buscar en historial (SKU, TPM-XXXX, Remisión, Usuario, PO):", key="sgp_log_search")
         df_log_f = df_actividad.copy()
+        if 'Fecha_Hora' in df_log_f.columns:
+            df_log_f['_dt_sort'] = pd.to_datetime(df_log_f['Fecha_Hora'], errors='coerce', dayfirst=True)
+            df_log_f = df_log_f.sort_values(by='_dt_sort', ascending=False)
         if q_search.strip():
             q = q_search.strip().lower()
             mask = df_log_f.apply(lambda row: row.astype(str).str.lower().str.contains(q).any(), axis=1)
