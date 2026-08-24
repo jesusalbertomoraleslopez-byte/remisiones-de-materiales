@@ -194,20 +194,34 @@ def normalizar_fecha_display(val):
         pass
     return val_str
 
-# Helper para la generación de archivos EML con múltiples adjuntos
-def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
-    """Genera un archivo EML en memoria como borrador de Outlook con múltiples adjuntos."""
-    msg = MIMEMultipart('mixed')
+# Helper para la generación de archivos EML con múltiples adjuntos e imágenes inline (CID)
+def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict, inline_images_dict=None):
+    """Genera un archivo EML en memoria como borrador de Outlook con adjuntos e imágenes inline (CID)."""
+    msg = MIMEMultipart('related')
     msg['Subject'] = subject
     if dest_to and str(dest_to).strip():
         msg['To'] = str(dest_to).strip()
     if dest_cc and str(dest_cc).strip():
         msg['Cc'] = str(dest_cc).strip()
     msg['X-Unsent'] = '1'
+
+    msg_alt = MIMEMultipart('alternative')
+    msg.attach(msg_alt)
     
     body_part = MIMEText(body_html, 'html', 'utf-8')
-    msg.attach(body_part)
+    msg_alt.attach(body_part)
     
+    # Imágenes Inline (CID)
+    if inline_images_dict:
+        from email.mime.image import MIMEImage
+        for cid, img_bytes in inline_images_dict.items():
+            if img_bytes:
+                img_part = MIMEImage(img_bytes)
+                img_part.add_header('Content-ID', f'<{cid}>')
+                img_part.add_header('Content-Disposition', 'inline', filename=f"{cid}.png")
+                msg.attach(img_part)
+
+    # Adjuntos de Archivos (.xlsx, .pdf)
     for filename, file_bytes in adjuntos_dict.items():
         if not file_bytes: continue
         if hasattr(file_bytes, 'getvalue'): file_bytes = file_bytes.getvalue()
@@ -379,85 +393,143 @@ def generar_excel_consulta_inventario(sku_actual, spec_dict, pzs_disp, pzs_rem, 
     buf.seek(0)
     return buf.getvalue()
 
-def generar_html_correo_sku(sku, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla):
-    """Genera el cuerpo HTML corporativo para el correo EML de consulta de SKU."""
+def generar_html_correo_sku(sku, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla, has_logo_cid=False, has_img_cid=False):
+    """Genera el cuerpo HTML corporativo réplica exacta del reporte PDF oficial."""
+    f_hoy = datetime.datetime.now().strftime("%d/%m/%Y")
+    
+    logo_cell = '<div style="font-size: 22px; font-weight: 800; color: #EC2024; font-family: sans-serif;">SIGRAMA</div>'
+    if has_logo_cid:
+        logo_cell = '<img src="cid:logo_sigrama_cid" style="width: 140px; height: auto;" alt="SIGRAMA">'
+
+    img_html_cell = f'<div style="border: 1px dashed #CBD5E1; border-radius: 6px; padding: 25px 10px; color: #94A3B8; font-size: 11px; background-color: #FFFFFF;">📷 Sin fotografía o plano registrado</div>'
+    if has_img_cid:
+        img_html_cell = f'<img src="cid:foto_sku_cid" style="max-height: 175px; max-width: 100%; width: auto; height: auto; object-fit: contain; border-radius: 4px; border: 1px solid #CBD5E1; padding: 4px; background-color: #FFFFFF;">'
+
     filas_html = ""
     if not df_tabla.empty:
         for idx, r in df_tabla.iterrows():
             bg = "#ffffff" if idx % 2 == 0 else "#f8fafc"
             filas_html += f"""
             <tr style="background-color: {bg};">
-                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; font-weight: bold;">{r.get('ID Tarima (TPM)', 'N/A')}</td>
-                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; text-align: center;">{r.get('Fecha Empaque', 'N/A')}</td>
-                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px;">{r.get('Líder Empaque', 'N/A')}</td>
-                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px;">{r.get('Ubicación Actual', 'N/A')}</td>
-                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; text-align: center; font-weight: bold;">{r.get('Estatus Tarima', 'N/A')}</td>
-                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; text-align: center; font-weight: bold;">{r.get('Piezas', 0)}</td>
-                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px;">{r.get('Proyecto', 'N/A')}</td>
-                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px;">{r.get('PO', 'N/A')}</td>
-                <td style="padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px;">{r.get('Estatus de Remisión / Destino', 'En Planta')}</td>
+                <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-size: 10px; font-weight: bold; text-align: center;">{r.get('ID Tarima (TPM)', 'N/A')}</td>
+                <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-size: 10px; text-align: center;">{r.get('Fecha Empaque', 'N/A')}</td>
+                <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-size: 10px;">{r.get('Líder Empaque', 'N/A')}</td>
+                <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-size: 10px;">{r.get('Ubicación Actual', 'N/A')}</td>
+                <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-size: 10px; text-align: center; font-weight: bold;">{r.get('Estatus Tarima', 'N/A')}</td>
+                <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-size: 10px; text-align: center; font-weight: bold;">{r.get('Piezas', 0)}</td>
+                <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-size: 10px;">{r.get('Proyecto', 'N/A')}</td>
+                <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-size: 10px;">{r.get('PO', 'N/A')}</td>
+                <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-size: 10px;">{r.get('Parcialidad', 'N/A')}</td>
+                <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-size: 10px;">{r.get('Descripción Proyecto', 'N/A')}</td>
+                <td style="padding: 5px 6px; border: 1px solid #cbd5e1; font-size: 10px;">{r.get('Estatus de Remisión / Destino', 'En Planta')}</td>
             </tr>
             """
 
     html = f"""
+    <!DOCTYPE html>
     <html>
     <head>
+        <meta charset="utf-8">
         <style>
-            body {{ font-family: 'Segoe UI', Arial, sans-serif; color: #1E293B; background-color: #FFFFFF; padding: 15px; }}
-            .card {{ border: 1px solid #CBD5E1; border-radius: 8px; padding: 18px; background-color: #F8FAFC; margin-bottom: 20px; }}
-            .header-banner {{ background-color: #111111; border-left: 5px solid #EC2024; color: #FFFFFF; padding: 14px 18px; border-radius: 6px; margin-bottom: 20px; }}
-            .title {{ font-size: 18px; font-weight: bold; margin: 0; color: #FFFFFF; }}
-            .sub {{ font-size: 12px; color: #94A3B8; margin-top: 4px; }}
-            .metric-box {{ display: inline-block; width: 22%; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 10px; border-radius: 6px; text-align: center; margin-right: 2%; box-sizing: border-box; }}
-            .metric-val {{ font-size: 18px; font-weight: bold; color: #EC2024; }}
-            .metric-lbl {{ font-size: 11px; color: #64748B; }}
-            table {{ border-collapse: collapse; width: 100%; margin-top: 15px; }}
-            th {{ background-color: #1E293B; color: #FFFFFF; padding: 8px; font-size: 12px; border: 1px solid #CBD5E1; text-align: center; }}
+            body {{ font-family: 'Segoe UI', Helvetica, Arial, sans-serif; color: #1E293B; background-color: #FFFFFF; margin: 0; padding: 15px; }}
+            .pdf-container {{ max-width: 920px; margin: 0 auto; }}
+            .header-table {{ width: 100%; border-collapse: collapse; margin-bottom: 6px; }}
+            .header-title {{ font-size: 16px; font-weight: 800; color: #0F172A; margin: 0; }}
+            .header-sub {{ font-size: 11.5px; font-weight: 800; color: #EC2024; margin: 2px 0 0 0; }}
+            .header-meta {{ font-size: 10px; color: #64748B; margin-top: 3px; text-transform: uppercase; font-weight: 600; }}
+            .red-line {{ height: 2px; background-color: #EC2024; margin-bottom: 12px; border: none; }}
+            
+            .card-spec {{ width: 100%; border: 1px solid #CBD5E1; border-radius: 6px; background-color: #F8FAFC; border-collapse: collapse; margin-bottom: 12px; }}
+            .spec-lbl {{ font-size: 10px; font-weight: bold; color: #64748B; text-transform: uppercase; padding: 3px 6px; width: 170px; }}
+            .spec-val {{ font-size: 11px; font-weight: bold; color: #0F172A; padding: 3px 6px; }}
+            
+            .metric-table {{ width: 100%; border-collapse: separate; border-spacing: 6px 0; margin-bottom: 12px; }}
+            .metric-cell {{ background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 4px; text-align: center; width: 25%; }}
+            .metric-num {{ font-size: 15px; font-weight: bold; color: #EC2024; }}
+            .metric-lbl {{ font-size: 9.5px; font-weight: bold; color: #64748B; margin-top: 1px; }}
+            
+            .data-table {{ width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 1px solid #CBD5E1; }}
+            .data-table th {{ background-color: #1E293B; color: #FFFFFF; font-size: 10px; font-weight: bold; padding: 6px 4px; border: 1px solid #CBD5E1; text-align: center; }}
+            .data-table td {{ font-size: 10px; padding: 5px 6px; border: 1px solid #CBD5E1; color: #1E293B; }}
+            
+            .portal-box {{ background-color: #F8FAFC; border: 1px solid #CBD5E1; border-left: 4px solid #EC2024; padding: 10px 14px; border-radius: 4px; margin: 15px 0; }}
         </style>
     </head>
     <body>
-        <div class="header-banner">
-            <div class="title">📦 REPORTE DE INVENTARIO E HISTORIAL DE PIEZA</div>
-            <div class="sub">INDUSTRIA SIGRAMA S.A. DE C.V. | PLANTA METALES DIAGONAL</div>
-        </div>
+    <div class="pdf-container">
 
-        <p style="font-size: 14px;">Estimados señores,</p>
-        <p style="font-size: 13px;">Se emite la notificación con el reporte oficial de inventario, ubicación física e historial de movimientos del número de parte <b>{sku}</b>.</p>
-
-        <div class="card">
-            <h4 style="margin-top:0; color: #1E293B;">📋 Ficha Técnica del Artículo: <code>{sku}</code></h4>
-            <ul style="font-size: 13px; color: #334155; line-height: 1.6;">
-                <li><b>Descripción Comercial:</b> {spec_dict.get('nombre', 'N/A')}</li>
-                <li><b>Calibre / Espesor:</b> {spec_dict.get('calibre', 'N/A')}</li>
-                <li><b>Dimensiones:</b> {spec_dict.get('dims', 'N/A')}</li>
-                <li><b>Material / Acabado:</b> {spec_dict.get('acabado', 'N/A')}</li>
-            </ul>
-        </div>
-
-        <!-- Tarjetas de Métricas en Estructura Table Horizontal Compatible con Outlook -->
-        <table style="width: 100%; border-collapse: separate; border-spacing: 10px 0; margin-bottom: 20px;">
+        <!-- 1. ENCABEZADO ESTILO REPORTE PDF OFICIAL -->
+        <table class="header-table">
             <tr>
-                <td style="width: 25%; background-color: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px 8px; text-align: center; border-radius: 6px;">
-                    <div style="font-size: 18px; font-weight: bold; color: #EC2024;">{pzs_disp:,} PZS</div>
-                    <div style="font-size: 11px; color: #64748B; font-weight: bold; margin-top: 3px;">Disponibles Planta</div>
+                <td style="width: 150px; vertical-align: middle;">
+                    {logo_cell}
                 </td>
-                <td style="width: 25%; background-color: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px 8px; text-align: center; border-radius: 6px;">
-                    <div style="font-size: 18px; font-weight: bold; color: #EC2024;">{pzs_rem:,} PZS</div>
-                    <div style="font-size: 11px; color: #64748B; font-weight: bold; margin-top: 3px;">Remesadas (Enviadas)</div>
+                <td style="vertical-align: middle; padding-left: 15px;">
+                    <div class="header-title">INDUSTRIA SIGRAMA S.A. DE C.V.</div>
+                    <div class="header-sub">BASE DE DATOS SGP — PLANTA METALES DIAGONAL</div>
+                    <div class="header-meta">REPORTE OFICIAL DE PIEZA | BÚSQUEDA: {sku} | FECHA DE EMISIÓN: {f_hoy}</div>
                 </td>
-                <td style="width: 25%; background-color: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px 8px; text-align: center; border-radius: 6px;">
-                    <div style="font-size: 18px; font-weight: bold; color: #EC2024;">{pzs_tot:,} PZS</div>
-                    <div style="font-size: 11px; color: #64748B; font-weight: bold; margin-top: 3px;">Total Piezas</div>
+            </tr>
+        </table>
+        <div class="red-line"></div>
+
+        <!-- 2. FICHA TÉCNICA Y DIBUJO/PLANO EN TARJETA ELEGANTE (REPLICA EXACTA DEL PDF) -->
+        <table class="card-spec">
+            <tr>
+                <td style="vertical-align: top; padding: 8px; width: 68%;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td class="spec-lbl">NÚMERO DE PARTE / PLANO:</td>
+                            <td class="spec-val" style="color: #EC2024; font-size: 12px;">{sku}</td>
+                        </tr>
+                        <tr>
+                            <td class="spec-lbl">DESCRIPCIÓN COMERCIAL:</td>
+                            <td class="spec-val">{spec_dict.get('nombre', 'N/A')}</td>
+                        </tr>
+                        <tr>
+                            <td class="spec-lbl">CALIBRE / ESPESOR:</td>
+                            <td class="spec-val">{spec_dict.get('calibre', 'N/A')}</td>
+                        </tr>
+                        <tr>
+                            <td class="spec-lbl">DIMENSIONES PIEZA:</td>
+                            <td class="spec-val">{spec_dict.get('dims', 'N/A')}</td>
+                        </tr>
+                        <tr>
+                            <td class="spec-lbl">MATERIAL / ACABADO:</td>
+                            <td class="spec-val">{spec_dict.get('acabado', 'N/A')}</td>
+                        </tr>
+                    </table>
                 </td>
-                <td style="width: 25%; background-color: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px 8px; text-align: center; border-radius: 6px;">
-                    <div style="font-size: 18px; font-weight: bold; color: #EC2024;">{tar_tot} Tarimas</div>
-                    <div style="font-size: 11px; color: #64748B; font-weight: bold; margin-top: 3px;">Tarimas Físicas</div>
+                <td style="vertical-align: middle; text-align: center; padding: 8px; width: 32%;">
+                    {img_html_cell}
                 </td>
             </tr>
         </table>
 
-        <h4 style="color: #1E293B; margin-bottom: 5px;">📍 Desglose de Tarimas y Ubicación Exacta</h4>
-        <table>
+        <!-- 3. BLOQUE DE TARJETAS DE MÉTRICAS -->
+        <table class="metric-table">
+            <tr>
+                <td class="metric-cell">
+                    <div class="metric-num">{pzs_disp:,} PZS</div>
+                    <div class="metric-lbl">Disponibles Planta</div>
+                </td>
+                <td class="metric-cell">
+                    <div class="metric-num">{pzs_rem:,} PZS</div>
+                    <div class="metric-lbl">Remesadas (Enviadas)</div>
+                </td>
+                <td class="metric-cell">
+                    <div class="metric-num">{pzs_tot:,} PZS</div>
+                    <div class="metric-lbl">Total Piezas</div>
+                </td>
+                <td class="metric-cell">
+                    <div class="metric-num">{tar_tot}</div>
+                    <div class="metric-lbl">Tarimas Físicas</div>
+                </td>
+            </tr>
+        </table>
+
+        <!-- 4. TABLA DE DESGLOSE HISTÓRICO DE TARIMAS -->
+        <table class="data-table">
             <thead>
                 <tr>
                     <th>ID Tarima (TPM)</th>
@@ -468,7 +540,9 @@ def generar_html_correo_sku(sku, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot,
                     <th>Piezas</th>
                     <th>Proyecto</th>
                     <th>PO</th>
-                    <th>Destino / Remisión</th>
+                    <th>Parcialidad</th>
+                    <th>Descripción Proyecto</th>
+                    <th>Estatus de Remisión / Destino</th>
                 </tr>
             </thead>
             <tbody>
@@ -476,17 +550,20 @@ def generar_html_correo_sku(sku, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot,
             </tbody>
         </table>
 
-        <div style="background-color: #F8FAFC; border: 1px solid #CBD5E1; border-left: 4px solid #EC2024; padding: 12px 16px; margin: 25px 0; border-radius: 6px;">
-            <p style="margin: 0; font-size: 13px; color: #1E293B; font-weight: bold;">
+        <!-- 5. ENLACE AL PORTAL -->
+        <div class="portal-box">
+            <p style="margin: 0; font-size: 11px; color: #1E293B; font-weight: bold;">
                 🔍 <b>Portal de Consulta de Inventario en Tiempo Real:</b>
             </p>
-            <p style="margin: 4px 0 0 0; font-size: 12.5px; color: #334155;">
-                Para consultar fotografías de SKUs, disponibilidad y movimientos en tiempo real, ingrese a: 
+            <p style="margin: 3px 0 0 0; font-size: 10.5px; color: #334155;">
+                Para consultar piezas, planos y disponibilidad en línea, ingrese a: 
                 <a href="https://remisiones.streamlit.app/" target="_blank" style="color: #EC2024; font-weight: bold; text-decoration: underline;">https://remisiones.streamlit.app/</a>
             </p>
         </div>
 
-        <p style="font-size: 12px; color: #64748B;">* Se adjuntan a este correo el reporte interactivo en Excel (.xlsx) y el archivo de impresión PDF (.pdf).</p>
+        <p style="font-size: 9.5px; color: #64748B; margin-top: 8px;">* Se adjuntan a este correo el reporte interactivo en Excel (.xlsx) y el archivo de impresión PDF (.pdf).</p>
+
+    </div>
     </body>
     </html>
     """
@@ -957,8 +1034,27 @@ with tab_sgp_piezas:
                             key="btn_dl_pdf_sgp"
                         )
 
-                    # 3. Borrador EML con Excel + PDF Adjuntos
-                    cuerpo_eml_html = generar_html_correo_sku(sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export)
+                    # 3. Borrador EML con Excel + PDF Adjuntos e Imágenes Inline (Réplica PDF)
+                    inline_images_eml = {}
+                    if os.path.exists("logo_sigrama.png"):
+                        try:
+                            with open("logo_sigrama.png", "rb") as f_l:
+                                inline_images_eml['logo_sigrama_cid'] = f_l.read()
+                        except Exception: pass
+
+                    if img_path_local and os.path.exists(img_path_local):
+                        try:
+                            with open(img_path_local, "rb") as f_i:
+                                inline_images_eml['foto_sku_cid'] = f_i.read()
+                        except Exception: pass
+
+                    has_logo_cid = 'logo_sigrama_cid' in inline_images_eml
+                    has_img_cid = 'foto_sku_cid' in inline_images_eml
+
+                    cuerpo_eml_html = generar_html_correo_sku(
+                        sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export,
+                        has_logo_cid=has_logo_cid, has_img_cid=has_img_cid
+                    )
                     adjuntos_eml = {
                         f"Reporte_Inventario_{sku_actual}.xlsx": xl_bytes,
                         f"Reporte_Impresion_{sku_actual}.pdf": pdf_bytes
@@ -969,7 +1065,8 @@ with tab_sgp_piezas:
                         dest_cc=dest_cc_sku,
                         subject=f"Reporte de Inventario e Historial - SKU: {sku_actual} - Industria Sigrama",
                         body_html=cuerpo_eml_html,
-                        adjuntos_dict=adjuntos_eml
+                        adjuntos_dict=adjuntos_eml,
+                        inline_images_dict=inline_images_eml
                     )
                     with c_dl3:
                         st.download_button(
