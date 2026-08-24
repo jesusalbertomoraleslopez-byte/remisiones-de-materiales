@@ -45,21 +45,23 @@ def obtener_secret(key, default=None):
         pass
     return default
 
-# Estilos CSS Inspirados en la Interfaz Oficial SGP SIGRAMA
+# Estilos CSS de Clase Mundial — Tema Industrial Elegante (Metal + Concreto + Iluminación Cálida Edison)
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Questrial&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Questrial&family=JetBrains+Mono:wght@500;700;800&display=swap');
 
+    /* FONDOS Y TEMA INDUSTRIAL DE CLASE MUNDIAL (CONCRETO PULIDO SLATE) */
     html, body, [class*="css"], .stApp {
         font-family: 'Questrial', sans-serif !important;
-        background-color: #F1F5F9 !important;
+        background: radial-gradient(circle at 50% 0%, #1E293B 0%, #0F172A 55%, #090D16 100%) !important;
+        color: #F8FAFC !important;
     }
 
-    /* Reducir espacio superior vacio del contenedor principal de Streamlit */
+    /* Reducir espacio superior del contenedor principal */
     .block-container, [data-testid="stBlockContainer"] {
-        padding-top: 0.8rem !important;
-        padding-bottom: 1rem !important;
-        margin-top: 0 !important;
+        padding-top: 0.6rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 1400px !important;
     }
     header[data-testid="stHeader"] {
         height: 0 !important;
@@ -67,47 +69,95 @@ st.markdown("""
         display: none !important;
     }
 
-    /* Barra Superior SGP Compacta en Rojo Corporativo SIGRAMA #EC2024 y Negro #111111 */
+    /* BANNER INDUSTRIAL INTEGRADO ARMONIOSAMENTE */
+    .banner-container {
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        border: 1px solid #334155 !important;
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.6), 0 0 20px rgba(236, 32, 36, 0.12) !important;
+        background-color: #0F172A !important;
+        margin-bottom: 12px !important;
+        transition: all 0.3s ease !important;
+    }
+    .banner-container:hover {
+        box-shadow: 0 14px 35px -5px rgba(0, 0, 0, 0.7), 0 0 25px rgba(245, 158, 11, 0.22) !important;
+        border-color: #475569 !important;
+    }
+
+    /* BARRA SUPERIOR SGP COMPACTA CON ILUMINACIÓN CÁLIDA EDISON */
     .sgp-header {
-        background: linear-gradient(90deg, #A81B1E 0%, #EC2024 45%, #111111 100%) !important;
-        padding: 8px 16px !important;
-        border-radius: 6px !important;
+        background: linear-gradient(135deg, #1E293B 0%, #0F172A 60%, #111111 100%) !important;
+        padding: 12px 20px !important;
+        border-radius: 10px !important;
         color: #FFFFFF !important;
-        margin-bottom: 8px !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+        margin-bottom: 12px !important;
+        border-left: 5px solid #EC2024 !important;
+        border-top: 1px solid #334155 !important;
+        border-right: 1px solid #334155 !important;
+        border-bottom: 1px solid #334155 !important;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
     }
     .sgp-header h2 {
         color: #FFFFFF !important;
         font-family: 'Montserrat', sans-serif !important;
         font-weight: 800 !important;
-        letter-spacing: 0.5px !important;
+        letter-spacing: 0.8px !important;
         margin: 0 !important;
-        font-size: 17px !important;
+        font-size: 18px !important;
     }
     .sgp-header p {
-        color: #F8FAFC !important;
-        margin: 1px 0 0 0 !important;
-        font-size: 11px !important;
+        color: #94A3B8 !important;
+        margin: 2px 0 0 0 !important;
+        font-size: 11.5px !important;
     }
 
-    /* Tarjeta de Ficha Técnica SGP Estilo Tablero Industrial */
-    .sgp-card {
-        background-color: #111111 !important;
-        border: 2px solid #334155 !important;
+    /* PESTAÑAS PRINCIPALES INDUSTRIALES */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px !important;
+        background-color: #0F172A !important;
+        padding: 6px 10px !important;
+        border-radius: 10px !important;
+        border: 1px solid #334155 !important;
+        margin-bottom: 14px !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #1E293B !important;
         border-radius: 8px !important;
-        padding: 20px !important;
+        color: #94A3B8 !important;
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 13px !important;
+        padding: 9px 18px !important;
+        border: 1px solid #334155 !important;
+        transition: all 0.25s ease !important;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #EC2024 0%, #B91C1C 100%) !important;
         color: #FFFFFF !important;
+        border-color: #EC2024 !important;
+        box-shadow: 0 4px 15px rgba(236, 32, 36, 0.45) !important;
+    }
+
+    /* TARJETA DE FICHA TÉCNICA SGP ESTILO TABLERO INDUSTRIAL */
+    .sgp-card {
+        background: linear-gradient(145deg, #0F172A 0%, #1E293B 100%) !important;
+        border: 1px solid #334155 !important;
+        border-radius: 10px !important;
+        padding: 18px !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 0, 0, 0.3) !important;
     }
     .sgp-sku-title {
-        background-color: #FFFFFF !important;
-        color: #111111 !important;
-        font-family: 'Montserrat', sans-serif !important;
-        font-size: 32px !important;
+        background: linear-gradient(135deg, #090D16 0%, #1E293B 100%) !important;
+        color: #FFFFFF !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 28px !important;
         font-weight: 800 !important;
         text-align: center !important;
         padding: 10px !important;
-        border-radius: 6px !important;
+        border-radius: 8px !important;
         border: 2px solid #EC2024 !important;
+        box-shadow: 0 0 15px rgba(236, 32, 36, 0.3), inset 0 1px 0 rgba(255,255,255,0.1) !important;
         margin-bottom: 15px !important;
         letter-spacing: 2px !important;
     }
@@ -115,29 +165,143 @@ st.markdown("""
         font-family: 'Montserrat', sans-serif !important;
         font-weight: 700 !important;
         color: #94A3B8 !important;
-        font-size: 12px !important;
+        font-size: 11px !important;
         text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
     }
     .sgp-value {
         font-family: 'Questrial', sans-serif !important;
-        font-size: 16px !important;
-        color: #FFFFFF !important;
+        font-size: 15px !important;
+        color: #F8FAFC !important;
         font-weight: bold !important;
     }
 
-    /* Restricción y Escalado a 0.8 veces para la Imagen o Plano de Pieza */
+    /* IMAGEN O PLANO DE PIEZA CON MARCO CÁLIDO TIPO EDISON */
     .stImage > img, [data-testid="stImage"] img {
-        max-height: 256px !important;
-        max-width: 80% !important;
+        max-height: 250px !important;
+        max-width: 85% !important;
         width: auto !important;
         object-fit: contain !important;
         margin: 0 auto !important;
         display: block !important;
-        border-radius: 8px !important;
-        border: 1px solid #CBD5E1 !important;
+        border-radius: 10px !important;
+        border: 1px solid #D97706 !important;
         background-color: #FFFFFF !important;
-        padding: 5px !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+        padding: 6px !important;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5), 0 0 15px rgba(245, 158, 11, 0.22) !important;
+        transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+    }
+    .stImage > img:hover, [data-testid="stImage"] img:hover {
+        transform: scale(1.02) !important;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), 0 0 25px rgba(245, 158, 11, 0.38) !important;
+    }
+
+    /* BOTONES GLOBALES STREAMLIT */
+    .stButton > button {
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 12px !important;
+        border-radius: 8px !important;
+        background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%) !important;
+        color: #F8FAFC !important;
+        border: 1px solid #334155 !important;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25) !important;
+    }
+    .stButton > button:hover {
+        background: linear-gradient(145deg, #334155 0%, #1E293B 100%) !important;
+        border-color: #F59E0B !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 6px 16px rgba(245, 158, 11, 0.25) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    /* BOTÓN AZUL PROMINENTE PARA PDF OFICIAL CON EFECTOS DE HOVER Y GLOW */
+    div[data-testid="stDownloadButton"] button[key*="pdf"],
+    div[data-testid="stDownloadButton"] button[key*="PDF"],
+    div[data-testid="stDownloadButton"]:nth-child(2) button {
+        background: linear-gradient(135deg, #1D4ED8 0%, #2563EB 50%, #3B82F6 100%) !important;
+        color: #FFFFFF !important;
+        border: 1px solid #60A5FA !important;
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 800 !important;
+        font-size: 12.5px !important;
+        border-radius: 8px !important;
+        padding: 9px 18px !important;
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45) !important;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    div[data-testid="stDownloadButton"] button[key*="pdf"]:hover,
+    div[data-testid="stDownloadButton"] button[key*="PDF"]:hover,
+    div[data-testid="stDownloadButton"]:nth-child(2) button:hover {
+        background: linear-gradient(135deg, #1E40AF 0%, #2563EB 100%) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.65), 0 0 20px rgba(59, 130, 246, 0.5) !important;
+        border-color: #93C5FD !important;
+    }
+
+    /* BOTÓN EXCEL (VERDE ESMERALDA METÁLICO) */
+    div[data-testid="stDownloadButton"] button[key*="excel"],
+    div[data-testid="stDownloadButton"] button[key*="Excel"],
+    div[data-testid="stDownloadButton"]:nth-child(1) button {
+        background: linear-gradient(135deg, #059669 0%, #10B981 100%) !important;
+        color: #FFFFFF !important;
+        border: 1px solid #34D399 !important;
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 12px !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+        transition: all 0.25s ease !important;
+    }
+    div[data-testid="stDownloadButton"] button[key*="excel"]:hover,
+    div[data-testid="stDownloadButton"] button[key*="Excel"]:hover,
+    div[data-testid="stDownloadButton"]:nth-child(1) button:hover {
+        background: linear-gradient(135deg, #047857 0%, #059669 100%) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.5) !important;
+    }
+
+    /* BOTÓN EML (PÚRPURA / ÍNDIGO METÁLICO) */
+    div[data-testid="stDownloadButton"] button[key*="eml"],
+    div[data-testid="stDownloadButton"] button[key*="EML"],
+    div[data-testid="stDownloadButton"]:nth-child(3) button {
+        background: linear-gradient(135deg, #6D28D9 0%, #7C3AED 100%) !important;
+        color: #FFFFFF !important;
+        border: 1px solid #A78BFA !important;
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 12px !important;
+        border-radius: 8px !important;
+        box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35) !important;
+        transition: all 0.25s ease !important;
+    }
+    div[data-testid="stDownloadButton"] button[key*="eml"]:hover,
+    div[data-testid="stDownloadButton"] button[key*="EML"]:hover,
+    div[data-testid="stDownloadButton"]:nth-child(3) button:hover {
+        background: linear-gradient(135deg, #5B21B6 0%, #6D28D9 100%) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 20px rgba(124, 58, 237, 0.5) !important;
+    }
+
+    /* EXPANDER INDUSTRIAL CON ILUMINACIÓN EDISON AMBER */
+    .stExpander {
+        background-color: #0F172A !important;
+        border: 1px solid #334155 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.3) !important;
+        margin-top: 10px !important;
+    }
+    .stExpander [data-testid="stExpanderToggleIcon"] {
+        color: #F59E0B !important;
+    }
+
+    /* ESTILOS DE TABLAS STREAMLIT DATAFRAME */
+    [data-testid="stDataFrame"] {
+        border-radius: 8px !important;
+        border: 1px solid #334155 !important;
+        overflow: hidden !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -862,11 +1026,8 @@ with tab_sgp_piezas:
 
     sku_actual = lista_skus_activas[idx_curr] if lista_skus_activas else None
 
-    # --- PANEL PRINCIPAL DE LA PIEZA (ESTILO SGP DE LA FOTO) ---
+    # --- PANEL PRINCIPAL DE LA PIEZA (ESTILO SGP Y JERARQUÍA VISUAL DE CLASE MUNDIAL) ---
     if sku_actual:
-        st.write("")
-        col_sgp_left, col_sgp_right = st.columns([1.1, 1.2])
-
         spec_dict = {'nombre': 'No especificado', 'calibre': 'N/A', 'dims': 'N/A', 'acabado': 'N/A'}
         if not df_articulos.empty and 'SKU' in df_articulos.columns:
             df_m = df_articulos[df_articulos['SKU'].astype(str).str.strip().str.upper() == sku_actual]
@@ -876,6 +1037,98 @@ with tab_sgp_piezas:
                 spec_dict['calibre'] = str(r_m.get('Calibre_Espesor', 'N/A'))
                 spec_dict['dims'] = str(r_m.get('Dimensiones_Pieza', 'N/A'))
                 spec_dict['acabado'] = str(r_m.get('Acabado_Superficial', 'N/A'))
+
+        # --- PRE-CÁLCULO DE MÉTRICAS Y TABLA PARA MANTENER LAS MÉTRICAS DE STOCK EN PRIMER PLANO ---
+        pzs_disp, pzs_rem, pzs_tot, tar_tot = 0, 0, 0, 0
+        df_sub_det = pd.DataFrame()
+        rem_date_map = {}
+        
+        if not df_detalle.empty:
+            df_sub_det = df_detalle[df_detalle['SKU'].astype(str).str.strip().str.upper() == sku_actual].copy()
+            if not df_sub_det.empty:
+                if not df_tarimas.empty:
+                    if 'Planta_Origen' not in df_tarimas.columns:
+                        df_tarimas['Planta_Origen'] = "Planta 1 - Sigrama Diagonal"
+                    cols_tar = [c for c in ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus'] if c in df_tarimas.columns]
+                    df_sub_det = pd.merge(df_sub_det, df_tarimas[cols_tar], on="ID_Tarima", how="left")
+                else:
+                    df_sub_det['Planta_Origen'] = "Planta 1 - Sigrama Diagonal"
+                    df_sub_det['Fecha_Creacion'] = "N/A"
+                    df_sub_det['Creado_Por'] = "N/A"
+                    df_sub_det['Ubicacion_Actual'] = "Planta 1 - Sigrama Diagonal"
+                    df_sub_det['Estatus'] = "Disponible"
+
+                df_sub_det['Planta_Origen'] = df_sub_det['Planta_Origen'].fillna("Planta 1 - Sigrama Diagonal")
+                df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].fillna("Planta 1 - Sigrama Diagonal").replace({"Metales": "Planta 1 - Sigrama Diagonal"})
+                df_sub_det['Estatus'] = df_sub_det['Estatus'].fillna("Disponible")
+                df_sub_det['Cantidad'] = pd.to_numeric(df_sub_det['Cantidad'], errors='coerce').fillna(0).astype(int)
+
+                rem_map = {}
+                if not df_remisiones.empty:
+                    import ast
+                    for _, r_row in df_remisiones.iterrows():
+                        fol = str(r_row.get('Folio_Remision', ''))
+                        fec_raw = r_row.get('Fecha_Hora_Salida', '')
+                        fec = normalizar_fecha_display(fec_raw)
+                        rec = str(r_row.get('Nombre_Receptor', ''))
+                        dir_rec = str(r_row.get('Direccion_Receptor', ''))
+                        asoc = r_row.get('Tarimas_Asociadas', '')
+                        if isinstance(asoc, str):
+                            try: asoc = ast.literal_eval(asoc)
+                            except Exception: asoc = [asoc]
+                        if isinstance(asoc, list):
+                            for t_id in asoc:
+                                t_str = str(t_id).strip()
+                                rem_map[t_str] = f"Remisión {fol} ({fec}) ➡️ {rec} [{dir_rec}]"
+                                rem_date_map[t_str] = fec_raw
+
+                df_sub_det['Detalle_Remision'] = df_sub_det['ID_Tarima'].astype(str).str.strip().map(lambda x: rem_map.get(x, "En Planta / Almacén"))
+
+                def get_latest_dt(row):
+                    t_id = str(row.get('ID_Tarima', '')).strip()
+                    d_rem = rem_date_map.get(t_id)
+                    d_emp = row.get('Fecha_Creacion')
+                    dt_rem = pd.to_datetime(d_rem, format='mixed', dayfirst=True, errors='coerce') if d_rem else pd.NaT
+                    dt_emp = pd.to_datetime(d_emp, format='mixed', dayfirst=True, errors='coerce') if d_emp else pd.NaT
+                    if pd.notna(dt_rem) and pd.notna(dt_emp): return max(dt_rem, dt_emp)
+                    if pd.notna(dt_rem): return dt_rem
+                    if pd.notna(dt_emp): return dt_emp
+                    return pd.Timestamp.min
+
+                df_sub_det['_dt_ult_mov'] = df_sub_det.apply(get_latest_dt, axis=1)
+                df_sub_det = df_sub_det.sort_values(by='_dt_ult_mov', ascending=False)
+                
+                if 'Fecha_Creacion' in df_sub_det.columns:
+                    df_sub_det['Fecha_Creacion'] = df_sub_det['Fecha_Creacion'].apply(normalizar_fecha_display)
+
+                pzs_disp = df_sub_det[df_sub_det['Estatus'] == 'Disponible']['Cantidad'].sum()
+                pzs_rem = df_sub_det[df_sub_det['Estatus'] == 'Remesada']['Cantidad'].sum()
+                pzs_tot = df_sub_det['Cantidad'].sum()
+                tar_tot = df_sub_det['ID_Tarima'].nunique()
+
+        # --- OPTIMIZACIÓN DE JERARQUÍA VISUAL: MÉTRICAS CRÍTICAS DE STOCK EN PRIMER PLANO ---
+        st.markdown(f"""
+        <div style="display: flex; gap: 12px; margin: 10px 0 16px 0;">
+            <div style="flex: 1; background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%); border: 1px solid #334155; border-top: 3px solid #10B981; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4);">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #10B981; text-shadow: 0 0 12px rgba(16,185,129,0.35);">{pzs_disp:,} PZS</div>
+                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">📦 Disponibles en Planta</div>
+            </div>
+            <div style="flex: 1; background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%); border: 1px solid #334155; border-top: 3px solid #3B82F6; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4);">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #3B82F6; text-shadow: 0 0 12px rgba(59,130,246,0.35);">{pzs_rem:,} PZS</div>
+                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">🚚 Remesadas (Enviadas)</div>
+            </div>
+            <div style="flex: 1; background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%); border: 1px solid #334155; border-top: 3px solid #EC2024; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4);">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #EC2024; text-shadow: 0 0 12px rgba(236,32,36,0.35);">{pzs_tot:,} PZS</div>
+                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">🏗️ Total Piezas Registradas</div>
+            </div>
+            <div style="flex: 1; background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%); border: 1px solid #334155; border-top: 3px solid #F59E0B; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4);">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #F59E0B; text-shadow: 0 0 12px rgba(245,158,11,0.35);">{tar_tot}</div>
+                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">📊 Tarimas Físicas</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_sgp_left, col_sgp_right = st.columns([1.1, 1.2])
 
         with col_sgp_left:
             st.markdown(f"""
@@ -914,194 +1167,107 @@ with tab_sgp_piezas:
                 st.info(f"📷 *Sin imagen fotográfica asignada para la pieza {sku_actual} en catálogo.*")
 
         st.write("")
-        st.write("---")
 
-        # --- BOTÓN CLARO Y PROMINENTE PARA VER HISTORIAL Y UBICACIÓN FÍSICA ---
+        # --- SECCIÓN DE DESGLOSE DE TARIMAS E HISTORIAL CON REPORTES EJECTUTIVOS ---
         with st.expander(f"📜 VER HISTORIAL Y UBICACIÓN FÍSICA DE LA PIEZA `{sku_actual}`", expanded=True):
-            if not df_detalle.empty:
-                df_sub_det = df_detalle[df_detalle['SKU'].astype(str).str.strip().str.upper() == sku_actual].copy()
-                
-                if df_sub_det.empty:
-                    st.info(f"ℹ️ El SKU **{sku_actual}** está registrado en el catálogo master, pero **aún no cuenta con tarimas físicamente registradas en planta**.")
-                else:
-                    if not df_tarimas.empty:
-                        if 'Planta_Origen' not in df_tarimas.columns:
-                            df_tarimas['Planta_Origen'] = "Planta 1 - Sigrama Diagonal"
-                        cols_tar = [c for c in ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus'] if c in df_tarimas.columns]
-                        df_sub_det = pd.merge(
-                            df_sub_det, 
-                            df_tarimas[cols_tar], 
-                            on="ID_Tarima", 
-                            how="left"
-                        )
-                    else:
-                        df_sub_det['Planta_Origen'] = "Planta 1 - Sigrama Diagonal"
-                        df_sub_det['Fecha_Creacion'] = "N/A"
-                        df_sub_det['Creado_Por'] = "N/A"
-                        df_sub_det['Ubicacion_Actual'] = "Planta 1 - Sigrama Diagonal"
-                        df_sub_det['Estatus'] = "Disponible"
-
-                    df_sub_det['Planta_Origen'] = df_sub_det['Planta_Origen'].fillna("Planta 1 - Sigrama Diagonal")
-                    df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].fillna("Planta 1 - Sigrama Diagonal")
-                    df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].replace({"Metales": "Planta 1 - Sigrama Diagonal"})
-                    df_sub_det['Estatus'] = df_sub_det['Estatus'].fillna("Disponible")
-                    df_sub_det['Cantidad'] = pd.to_numeric(df_sub_det['Cantidad'], errors='coerce').fillna(0).astype(int)
-
-                    rem_map = {}
-                    rem_date_map = {}
-                    if not df_remisiones.empty:
-                        import ast
-                        for _, r_row in df_remisiones.iterrows():
-                            fol = str(r_row.get('Folio_Remision', ''))
-                            fec_raw = r_row.get('Fecha_Hora_Salida', '')
-                            fec = normalizar_fecha_display(fec_raw)
-                            rec = str(r_row.get('Nombre_Receptor', ''))
-                            dir_rec = str(r_row.get('Direccion_Receptor', ''))
-                            asoc = r_row.get('Tarimas_Asociadas', '')
-                            if isinstance(asoc, str):
-                                try: asoc = ast.literal_eval(asoc)
-                                except Exception: asoc = [asoc]
-                            if isinstance(asoc, list):
-                                for t_id in asoc:
-                                    t_str = str(t_id).strip()
-                                    rem_map[t_str] = f"Remisión {fol} ({fec}) ➡️ {rec} [{dir_rec}]"
-                                    rem_date_map[t_str] = fec_raw
-
-                    df_sub_det['Detalle_Remision'] = df_sub_det['ID_Tarima'].astype(str).str.strip().map(lambda x: rem_map.get(x, "En Planta / Almacén"))
-
-                    # Helper para obtener timestamp comparable seguro del último movimiento
-                    def get_latest_dt(row):
-                        t_id = str(row.get('ID_Tarima', '')).strip()
-                        d_rem = rem_date_map.get(t_id)
-                        d_emp = row.get('Fecha_Creacion')
-                        
-                        dt_rem = pd.to_datetime(d_rem, format='mixed', dayfirst=True, errors='coerce') if d_rem else pd.NaT
-                        dt_emp = pd.to_datetime(d_emp, format='mixed', dayfirst=True, errors='coerce') if d_emp else pd.NaT
-                        
-                        if pd.notna(dt_rem) and pd.notna(dt_emp): return max(dt_rem, dt_emp)
-                        if pd.notna(dt_rem): return dt_rem
-                        if pd.notna(dt_emp): return dt_emp
-                        return pd.Timestamp.min
-
-                    # ORDENAR ESTRICTAMENTE DE MÁS RECIENTE A MÁS ANTIGUO (ÚLTIMO MOVIMIENTO AL PRINCIPADO)
-                    df_sub_det['_dt_ult_mov'] = df_sub_det.apply(get_latest_dt, axis=1)
-                    df_sub_det = df_sub_det.sort_values(by='_dt_ult_mov', ascending=False)
-                    
-                    if 'Fecha_Creacion' in df_sub_det.columns:
-                        df_sub_det['Fecha_Creacion'] = df_sub_det['Fecha_Creacion'].apply(normalizar_fecha_display)
-
-                    pzs_disp = df_sub_det[df_sub_det['Estatus'] == 'Disponible']['Cantidad'].sum()
-                    pzs_rem = df_sub_det[df_sub_det['Estatus'] == 'Remesada']['Cantidad'].sum()
-                    pzs_tot = df_sub_det['Cantidad'].sum()
-                    tar_tot = df_sub_det['ID_Tarima'].nunique()
-
-                    m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("📦 Piezas Disponibles en Planta", f"{pzs_disp:,} PZS")
-                    m2.metric("🚚 Piezas Remesadas (Enviadas)", f"{pzs_rem:,} PZS")
-                    m3.metric("🏗️ Total Piezas Registradas", f"{pzs_tot:,} PZS")
-                    m4.metric("📊 Total Tarimas Físicas", f"{tar_tot} Tarimas")
-
-                    st.write("")
-                    cols_mostrar = ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus', 'Cantidad', 'Proyecto', 'PO', 'Parcialidad', 'Descripcion', 'Detalle_Remision']
-                    df_tabla_export = df_sub_det[[c for c in cols_mostrar if c in df_sub_det.columns]].copy()
-                    df_tabla_export = df_tabla_export.rename(columns={
-                        'ID_Tarima': 'ID Tarima (TPM)',
-                        'Planta_Origen': 'Planta Origen',
-                        'Fecha_Creacion': 'Fecha Empaque',
-                        'Creado_Por': 'Líder Empaque',
-                        'Ubicacion_Actual': 'Ubicación Actual',
-                        'Estatus': 'Estatus Tarima',
-                        'Cantidad': 'Piezas',
-                        'Descripcion': 'Descripción Proyecto',
-                        'Detalle_Remision': 'Estatus de Remisión / Destino'
-                    })
-
-                    st.dataframe(df_tabla_export, use_container_width=True, hide_index=True)
-
-                    c_dl1, c_dl2, c_dl3 = st.columns(3)
-                    
-                    # 1. Excel con Formato Ejecutivo (openpyxl)
-                    xl_bytes = generar_excel_consulta_inventario(sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export)
-                    
-                    with c_dl1:
-                        st.download_button(
-                            label=f"📥 Descargar Registro Excel ({sku_actual}.xlsx)",
-                            data=xl_bytes,
-                            file_name=f"Consulta_Inventario_{sku_actual}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key="btn_dl_excel_sgp"
-                        )
-                        
-                    # 2. PDF
-                    pdf_bytes = generar_pdf_consulta_reportlab("Pieza SGP", sku_actual, df_tabla_export, spec_info=spec_dict, img_local_path=img_path_local)
-                    with c_dl2:
-                        st.download_button(
-                            label=f"📄 Descargar PDF Oficial de Impresión ({sku_actual}.pdf)",
-                            data=pdf_bytes,
-                            file_name=f"Reporte_SGP_Pieza_{sku_actual}.pdf",
-                            mime="application/pdf",
-                            key="btn_dl_pdf_sgp"
-                        )
-
-                    # 3. Borrador EML con Excel + PDF Adjuntos e Imágenes Inline Redimensionadas Físicamente
-                    inline_images_eml = {}
-                    if os.path.exists("logo_sigrama.png"):
-                        try:
-                            im_logo = Image.open("logo_sigrama.png")
-                            t_w = 110
-                            t_h = int(t_w * (im_logo.height / im_logo.width))
-                            im_logo_small = im_logo.resize((t_w, t_h), Image.Resampling.LANCZOS)
-                            buf_logo = io.BytesIO()
-                            im_logo_small.save(buf_logo, format="PNG")
-                            inline_images_eml['logo_sigrama_cid'] = buf_logo.getvalue()
-                        except Exception: pass
-
-                    if img_path_local and os.path.exists(img_path_local):
-                        try:
-                            im_piece = Image.open(img_path_local)
-                            p_aspect = im_piece.height / im_piece.width
-                            max_w, max_h = 240, 120
-                            calc_w = max_w
-                            calc_h = int(max_w * p_aspect)
-                            if calc_h > max_h:
-                                calc_h = max_h
-                                calc_w = int(max_h / p_aspect)
-                            im_piece_small = im_piece.resize((calc_w, calc_h), Image.Resampling.LANCZOS)
-                            buf_piece = io.BytesIO()
-                            im_piece_small.save(buf_piece, format="PNG")
-                            inline_images_eml['foto_sku_cid'] = buf_piece.getvalue()
-                        except Exception: pass
-
-                    has_logo_cid = 'logo_sigrama_cid' in inline_images_eml
-                    has_img_cid = 'foto_sku_cid' in inline_images_eml
-
-                    cuerpo_eml_html = generar_html_correo_sku(
-                        sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export,
-                        has_logo_cid=has_logo_cid, has_img_cid=has_img_cid
-                    )
-                    adjuntos_eml = {
-                        f"Reporte_Inventario_{sku_actual}.xlsx": xl_bytes,
-                        f"Reporte_Impresion_{sku_actual}.pdf": pdf_bytes
-                    }
-                    dest_cc_sku = "bryan.mancinas@sigrama.com.mx; cruz.carreon@sigrama.com.mx; jesus.morales@sigrama.com.mx; jose.fernandez@sigrama.com.mx; luis.quintana@sigrama.com.mx"
-                    eml_bytes = generar_archivo_eml(
-                        dest_to="",
-                        dest_cc=dest_cc_sku,
-                        subject=f"Reporte de Inventario e Historial - SKU: {sku_actual} - Industria Sigrama",
-                        body_html=cuerpo_eml_html,
-                        adjuntos_dict=adjuntos_eml,
-                        inline_images_dict=inline_images_eml
-                    )
-                    with c_dl3:
-                        st.download_button(
-                            label=f"📩 Descargar Borrador Correo (.eml) (Excel + PDF)",
-                            data=eml_bytes,
-                            file_name=f"Correo_Reporte_Inventario_{sku_actual}.eml",
-                            mime="message/rfc822",
-                            key="btn_dl_eml_sku"
-                        )
+            if df_sub_det.empty:
+                st.info(f"ℹ️ El SKU **{sku_actual}** está registrado en el catálogo master, pero **aún no cuenta con tarimas físicamente registradas en planta**.")
             else:
-                st.info("No hay datos de detalle de tarimas cargados.")
+                cols_mostrar = ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus', 'Cantidad', 'Proyecto', 'PO', 'Parcialidad', 'Descripcion', 'Detalle_Remision']
+                df_tabla_export = df_sub_det[[c for c in cols_mostrar if c in df_sub_det.columns]].copy()
+                df_tabla_export = df_tabla_export.rename(columns={
+                    'ID_Tarima': 'ID Tarima (TPM)',
+                    'Planta_Origen': 'Planta Origen',
+                    'Fecha_Creacion': 'Fecha Empaque',
+                    'Creado_Por': 'Líder Empaque',
+                    'Ubicacion_Actual': 'Ubicación Actual',
+                    'Estatus': 'Estatus Tarima',
+                    'Cantidad': 'Piezas',
+                    'Descripcion': 'Descripción Proyecto',
+                    'Detalle_Remision': 'Estatus de Remisión / Destino'
+                })
+
+                st.dataframe(df_tabla_export, use_container_width=True, hide_index=True)
+
+                c_dl1, c_dl2, c_dl3 = st.columns(3)
+                
+                xl_bytes = generar_excel_consulta_inventario(sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export)
+                with c_dl1:
+                    st.download_button(
+                        label=f"📥 Descargar Registro Excel ({sku_actual}.xlsx)",
+                        data=xl_bytes,
+                        file_name=f"Consulta_Inventario_{sku_actual}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="btn_dl_excel_sgp"
+                    )
+                    
+                pdf_bytes = generar_pdf_consulta_reportlab("Pieza SGP", sku_actual, df_tabla_export, spec_info=spec_dict, img_local_path=img_path_local)
+                with c_dl2:
+                    st.download_button(
+                        label=f"📄 Descargar PDF Oficial de Impresión ({sku_actual}.pdf)",
+                        data=pdf_bytes,
+                        file_name=f"Reporte_SGP_Pieza_{sku_actual}.pdf",
+                        mime="application/pdf",
+                        key="btn_dl_pdf_sgp"
+                    )
+
+                # 3. Borrador EML con Excel + PDF Adjuntos e Imágenes Inline Redimensionadas Físicamente
+                inline_images_eml = {}
+                if os.path.exists("logo_sigrama.png"):
+                    try:
+                        im_logo = Image.open("logo_sigrama.png")
+                        t_w = 110
+                        t_h = int(t_w * (im_logo.height / im_logo.width))
+                        im_logo_small = im_logo.resize((t_w, t_h), Image.Resampling.LANCZOS)
+                        buf_logo = io.BytesIO()
+                        im_logo_small.save(buf_logo, format="PNG")
+                        inline_images_eml['logo_sigrama_cid'] = buf_logo.getvalue()
+                    except Exception: pass
+
+                if img_path_local and os.path.exists(img_path_local):
+                    try:
+                        im_piece = Image.open(img_path_local)
+                        p_aspect = im_piece.height / im_piece.width
+                        max_w, max_h = 240, 120
+                        calc_w = max_w
+                        calc_h = int(max_w * p_aspect)
+                        if calc_h > max_h:
+                            calc_h = max_h
+                            calc_w = int(max_h / p_aspect)
+                        im_piece_small = im_piece.resize((calc_w, calc_h), Image.Resampling.LANCZOS)
+                        buf_piece = io.BytesIO()
+                        im_piece_small.save(buf_piece, format="PNG")
+                        inline_images_eml['foto_sku_cid'] = buf_piece.getvalue()
+                    except Exception: pass
+
+                has_logo_cid = 'logo_sigrama_cid' in inline_images_eml
+                has_img_cid = 'foto_sku_cid' in inline_images_eml
+
+                cuerpo_eml_html = generar_html_correo_sku(
+                    sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export,
+                    has_logo_cid=has_logo_cid, has_img_cid=has_img_cid
+                )
+                adjuntos_eml = {
+                    f"Reporte_Inventario_{sku_actual}.xlsx": xl_bytes,
+                    f"Reporte_Impresion_{sku_actual}.pdf": pdf_bytes
+                }
+                dest_cc_sku = "bryan.mancinas@sigrama.com.mx; cruz.carreon@sigrama.com.mx; jesus.morales@sigrama.com.mx; jose.fernandez@sigrama.com.mx; luis.quintana@sigrama.com.mx"
+                eml_bytes = generar_archivo_eml(
+                    dest_to="",
+                    dest_cc=dest_cc_sku,
+                    subject=f"Reporte de Inventario e Historial - SKU: {sku_actual} - Industria Sigrama",
+                    body_html=cuerpo_eml_html,
+                    adjuntos_dict=adjuntos_eml,
+                    inline_images_dict=inline_images_eml
+                )
+                with c_dl3:
+                    st.download_button(
+                        label=f"📩 Descargar Borrador Correo (.eml)",
+                        data=eml_bytes,
+                        file_name=f"Correo_Reporte_Inventario_{sku_actual}.eml",
+                        mime="message/rfc822",
+                        key="btn_dl_eml_sku"
+                    )
 
 # =============================================================================
 # PESTAÑA 2: BÚSQUEDA POR PROYECTO O PO
