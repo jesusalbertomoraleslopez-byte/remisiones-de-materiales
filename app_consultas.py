@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import os
 import pandas as pd
 import datetime
@@ -7,6 +8,12 @@ import requests
 import urllib.parse
 from PIL import Image
 import glob
+
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
 
 # 1. CONFIGURACIÓN E INTERFAZ BASE RESPONSIVA (Portal de Consulta e Historial Interno)
 st.set_page_config(
@@ -47,13 +54,23 @@ st.markdown("""
         color: #111111 !important;
     }
 
+    /* Fondo oscuro de cabecera con Texto Blanco Puro Garantizado */
     .main-header {
-        background: linear-gradient(135deg, #111111 0%, #1E293B 100%);
-        padding: 20px 25px;
-        border-radius: 10px;
-        border-left: 6px solid #EC2024;
-        margin-bottom: 20px;
-        color: #FFFFFF;
+        background: linear-gradient(135deg, #111111 0%, #1E293B 100%) !important;
+        padding: 22px 28px !important;
+        border-radius: 10px !important;
+        border-left: 6px solid #EC2024 !important;
+        margin-bottom: 20px !important;
+    }
+
+    .main-header h1, 
+    .main-header h2, 
+    .main-header h3, 
+    .main-header p, 
+    .main-header span, 
+    .main-header div {
+        color: #FFFFFF !important;
+        font-family: 'Montserrat', sans-serif !important;
     }
 
     .status-disponible {
@@ -159,6 +176,77 @@ def obtener_imagen_sku(sku):
 
     return None
 
+# 4. GENERADOR DE REPORTES PDF PARA IMPRESIÓN OFICIAL CON REPORTLAB
+def generar_pdf_consulta_reportlab(tipo_busqueda, valor_busqueda, df_tabla, spec_info=None, img_local_path=None):
+    """Genera un reporte oficial en PDF formateado para impresión."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=40, bottomMargin=40)
+    story = []
+    styles = getSampleStyleSheet()
+    
+    style_title = ParagraphStyle('T_PDF', parent=styles['Heading1'], fontName="Helvetica-Bold", fontSize=13, textColor=colors.HexColor("#111111"))
+    style_sub = ParagraphStyle('S_PDF', parent=styles['Normal'], fontName="Helvetica", fontSize=9, textColor=colors.HexColor("#555555"))
+    style_hdr = ParagraphStyle('H_PDF', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=8, textColor=colors.white, alignment=1)
+    style_cell = ParagraphStyle('C_PDF', parent=styles['Normal'], fontName="Helvetica", fontSize=8)
+    style_cell_bold = ParagraphStyle('CB_PDF', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=8)
+    
+    # Encabezado
+    story.append(Paragraph(f"INDUSTRIA SIGRAMA S.A. DE C.V. — REPORTE DE CONSULTA DE INVENTARIOS", style_title))
+    story.append(Paragraph(f"<b>Tipo de Búsqueda:</b> {tipo_busqueda} | <b>Filtro:</b> {valor_busqueda} | <b>Fecha de Impresión:</b> {datetime.date.today().strftime('%d/%m/%Y')}", style_sub))
+    story.append(Spacer(1, 0.12 * inch))
+    
+    # Ficha Técnica e Imagen
+    if spec_info:
+        info_text = f"""
+        <b>SKU / Código:</b> {valor_busqueda}<br/>
+        <b>Descripción Comercial:</b> {spec_info.get('nombre', 'N/A')}<br/>
+        <b>Calibre / Espesor:</b> {spec_info.get('calibre', 'N/A')}<br/>
+        <b>Dimensiones:</b> {spec_info.get('dims', 'N/A')}<br/>
+        <b>Material / Acabado:</b> {spec_info.get('acabado', 'N/A')}
+        """
+        cell_info = Paragraph(info_text, style_cell)
+        cell_img = Paragraph("Sin imagen", style_cell)
+        if img_local_path and os.path.exists(img_local_path):
+            try:
+                cell_img = RLImage(img_local_path, width=1.1*inch, height=1.1*inch)
+            except Exception:
+                pass
+        t_spec = Table([[cell_info, cell_img]], colWidths=[5.5*inch, 2.0*inch])
+        t_spec.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F8FAFC")),
+            ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('PADDING', (0,0), (-1,-1), 6)
+        ]))
+        story.append(t_spec)
+        story.append(Spacer(1, 0.12 * inch))
+        
+    # Tabla de Resultados
+    if not df_tabla.empty:
+        headers = [Paragraph(str(col), style_hdr) for col in df_tabla.columns]
+        rows = [headers]
+        for _, r in df_tabla.iterrows():
+            row_cells = []
+            for col in df_tabla.columns:
+                val_str = str(r[col])
+                style_use = style_cell_bold if col in ['ID Tarima', 'ID Tarima (TPM)', 'SKU', 'Piezas', 'Cantidad (Pzs)'] else style_cell
+                row_cells.append(Paragraph(val_str, style_use))
+            rows.append(row_cells)
+            
+        t_rep = Table(rows, repeatRows=1)
+        t_rep.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#EC2024")),
+            ('GRID', (0,0), (-1,-1), 0.4, colors.HexColor("#CBD5E1")),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3)
+        ]))
+        story.append(t_rep)
+        
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
 # Cargar Bases de Datos
 df_articulos = cargar_excel_desde_github("BD_Articulos.xlsx")
 df_skus_aut = cargar_excel_desde_github("BD_SKUs_Autorizados.xlsx")
@@ -177,8 +265,8 @@ with col_logo:
 with col_title:
     st.markdown("""
     <div class="main-header">
-        <h2 style="margin:0; color:#FFFFFF; font-size:24px;">🔍 PORTAL DE CONSULTA DE INVENTARIOS E HISTORIAL</h2>
-        <p style="margin:4px 0 0 0; color:#94A3B8; font-size:14px;">
+        <h2 style="margin:0; font-size:24px;">🔍 PORTAL DE CONSULTA DE INVENTARIOS E HISTORIAL</h2>
+        <p style="margin:4px 0 0 0; font-size:14px;">
             Industria SIGRAMA S.A. de C.V. — Verificación en tiempo real de fotografías de SKUs, inventario actual y registro histórico de movimientos.
         </p>
     </div>
@@ -207,7 +295,34 @@ tab_consulta, tab_historial_global = st.tabs([
 # PESTAÑA 1: CONSULTA POR SKU, PROYECTO O PO
 # =============================================================================
 with tab_consulta:
-    st.markdown("### 🔎 Buscar Material")
+    col_hdr_search, col_btn_clear, col_btn_print = st.columns([2, 1, 1])
+    with col_hdr_search:
+        st.markdown("### 🔎 Buscar Material")
+        
+    with col_btn_clear:
+        if st.button("🧹 Limpiar Filtros", use_container_width=True, key="btn_clear_filters_v3"):
+            for k in ["lookup_sku_select_v3", "lookup_sku_text_v3", "lookup_proj_select_v3", "lookup_po_select_v3"]:
+                if k in st.session_state:
+                    del st.session_state[k]
+            st.rerun()
+            
+    with col_btn_print:
+        components.html("""
+        <button onclick="window.parent.print()" style="
+            background-color: #EC2024;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            font-size: 13.5px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        ">🖨️ Imprimir Pantalla</button>
+        """, height=42)
+
     subtab_sku, subtab_proj, subtab_po = st.tabs(["🏷️ Búsqueda por SKU", "📌 Búsqueda por Proyecto", "📄 Búsqueda por PO"])
 
     sku_seleccionado = None
@@ -220,27 +335,27 @@ with tab_consulta:
             sku_input = st.selectbox(
                 "Seleccione o escriba el Código de SKU:",
                 options=["(Seleccione un SKU...)"] + lista_skus,
-                key="lookup_sku_select_v2"
+                key="lookup_sku_select_v3"
             )
             if sku_input != "(Seleccione un SKU...)":
                 sku_seleccionado = sku_input
 
         with col_s2:
-            sku_manual = st.text_input("O escriba código manualmente:", placeholder="Ej: 11-A-6815-10", key="lookup_sku_text_v2")
+            sku_manual = st.text_input("O escriba código manualmente:", placeholder="Ej: 11-A-6815-10", key="lookup_sku_text_v3")
             if sku_manual.strip():
                 sku_seleccionado = sku_manual.strip().upper()
 
     with subtab_proj:
         if not df_detalle.empty and 'Proyecto' in df_detalle.columns:
             proyectos_disponibles = sorted([str(p).strip() for p in df_detalle['Proyecto'].dropna().unique() if str(p).strip() not in ['', 'nan', 'None']])
-            proyecto_seleccionado = st.selectbox("Seleccione el Proyecto:", options=["(Seleccione un Proyecto...)"] + proyectos_disponibles, key="lookup_proj_select_v2")
+            proyecto_seleccionado = st.selectbox("Seleccione el Proyecto:", options=["(Seleccione un Proyecto...)"] + proyectos_disponibles, key="lookup_proj_select_v3")
             if proyecto_seleccionado == "(Seleccione un Proyecto...)":
                 proyecto_seleccionado = None
 
     with subtab_po:
         if not df_detalle.empty and 'PO' in df_detalle.columns:
             pos_disponibles = sorted([str(p).strip() for p in df_detalle['PO'].dropna().unique() if str(p).strip() not in ['', 'nan', 'None']])
-            po_seleccionada = st.selectbox("Seleccione la Orden de Compra (PO):", options=["(Seleccione una PO...)"] + pos_disponibles, key="lookup_po_select_v2")
+            po_seleccionada = st.selectbox("Seleccione la Orden de Compra (PO):", options=["(Seleccione una PO...)"] + pos_disponibles, key="lookup_po_select_v3")
             if po_seleccionada == "(Seleccione una PO...)":
                 po_seleccionada = None
 
@@ -251,51 +366,52 @@ with tab_consulta:
         st.markdown(f"## 📦 Resultado para el SKU: `{sku_seleccionado}`")
         
         col_info, col_img = st.columns([2, 1])
+        spec_dict = {'nombre': 'No especificado en catálogo', 'calibre': 'N/A', 'dims': 'N/A', 'acabado': 'N/A'}
         
         # 1. FICHA TÉCNICA DEL ARTÍCULO
         with col_info:
             st.markdown("#### 📋 Ficha Técnica del Artículo")
             
-            nombre_art = "No especificado en catálogo"
-            calibre_art = "N/A"
-            dims_art = "N/A"
-            acabado_art = "N/A"
-            
             if not df_articulos.empty and 'SKU' in df_articulos.columns:
                 df_match = df_articulos[df_articulos['SKU'].astype(str).str.strip().str.upper() == sku_seleccionado]
                 if not df_match.empty:
                     art_row = df_match.iloc[0]
-                    nombre_art = str(art_row.get('Nombre', 'No especificado'))
-                    calibre_art = str(art_row.get('Calibre_Espesor', 'N/A'))
-                    dims_art = str(art_row.get('Dimensiones_Pieza', 'N/A'))
-                    acabado_art = str(art_row.get('Acabado_Superficial', 'N/A'))
+                    spec_dict['nombre'] = str(art_row.get('Nombre', 'No especificado'))
+                    spec_dict['calibre'] = str(art_row.get('Calibre_Espesor', 'N/A'))
+                    spec_dict['dims'] = str(art_row.get('Dimensiones_Pieza', 'N/A'))
+                    spec_dict['acabado'] = str(art_row.get('Acabado_Superficial', 'N/A'))
                     
             st.markdown(f"""
-            - **Descripción Comercial:** `{nombre_art}`
-            - **Calibre / Espesor:** `{calibre_art}`
-            - **Dimensiones:** `{dims_art}`
-            - **Material / Acabado:** `{acabado_art}`
+            - **Descripción Comercial:** `{spec_dict['nombre']}`
+            - **Calibre / Espesor:** `{spec_dict['calibre']}`
+            - **Dimensiones:** `{spec_dict['dims']}`
+            - **Material / Acabado:** `{spec_dict['acabado']}`
             """)
 
         # 2. FOTOGRAFÍA DEL ARTÍCULO (DISCO LOCAL + GITHUB API FALLBACK)
+        img_local_path = None
         with col_img:
             st.markdown("#### 🖼️ Fotografía del Producto")
             imagen_sku = obtener_imagen_sku(sku_seleccionado)
             if imagen_sku:
                 st.image(imagen_sku, caption=f"Fotografía oficial de {sku_seleccionado}", use_container_width=True)
+                # Ruta local si fue guardada
+                matching_local = glob.glob(f"imagenes_articulos/{sku_seleccionado}(*.*")
+                if matching_local:
+                    img_local_path = matching_local[0]
             else:
                 st.info("📷 *Sin fotografía asignada en catálogo.*")
 
         st.write("---")
 
         # 3. DETALLE DE INVENTARIO Y UBICACIÓN FÍSICA
+        df_tabla_export = pd.DataFrame()
         if not df_detalle.empty:
             df_sub_det = df_detalle[df_detalle['SKU'].astype(str).str.strip().str.upper() == sku_seleccionado].copy()
             
             if df_sub_det.empty:
                 st.info(f"ℹ️ **Estado de Registro:** El SKU **{sku_seleccionado}** está autorizado en catálogo master, pero **aún no cuenta con paquetes o tarimas creadas en planta**.")
             else:
-                # Cruzar con BD_Tarimas para obtener Fecha_Creacion, Creado_Por, Ubicacion_Actual y Estatus
                 if not df_tarimas.empty:
                     df_sub_det = pd.merge(
                         df_sub_det, 
@@ -309,12 +425,10 @@ with tab_consulta:
                     df_sub_det['Ubicacion_Actual'] = "Metales"
                     df_sub_det['Estatus'] = "Disponible"
 
-                # Rellenar nulos
                 df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].fillna("Metales")
                 df_sub_det['Estatus'] = df_sub_det['Estatus'].fillna("Disponible")
                 df_sub_det['Cantidad'] = pd.to_numeric(df_sub_det['Cantidad'], errors='coerce').fillna(0).astype(int)
 
-                # Cruzar con BD_Datos_Generales_Remision si está remesada
                 rem_map = {}
                 if not df_remisiones.empty:
                     import ast
@@ -333,7 +447,6 @@ with tab_consulta:
 
                 df_sub_det['Detalle_Remision'] = df_sub_det['ID_Tarima'].astype(str).str.strip().map(lambda x: rem_map.get(x, "En Planta / Almacén"))
 
-                # Métricas agregadas
                 pzs_disponibles = df_sub_det[df_sub_det['Estatus'] == 'Disponible']['Cantidad'].sum()
                 pzs_remesadas = df_sub_det[df_sub_det['Estatus'] == 'Remesada']['Cantidad'].sum()
                 pzs_totales = df_sub_det['Cantidad'].sum()
@@ -349,8 +462,8 @@ with tab_consulta:
                 st.markdown("#### 📍 Desglose Histórico de Tarimas y Ubicación Exacta")
                 
                 cols_mostrar = ['ID_Tarima', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus', 'Cantidad', 'Proyecto', 'PO', 'Parcialidad', 'Descripcion', 'Detalle_Remision']
-                df_tabla = df_sub_det[[c for c in cols_mostrar if c in df_sub_det.columns]].copy()
-                df_tabla = df_tabla.rename(columns={
+                df_tabla_export = df_sub_det[[c for c in cols_mostrar if c in df_sub_det.columns]].copy()
+                df_tabla_export = df_tabla_export.rename(columns={
                     'ID_Tarima': 'ID Tarima (TPM)',
                     'Fecha_Creacion': 'Fecha Empaque',
                     'Creado_Por': 'Líder Empaque',
@@ -361,21 +474,32 @@ with tab_consulta:
                     'Detalle_Remision': 'Estatus de Remisión / Destino'
                 })
 
-                st.dataframe(df_tabla, use_container_width=True, hide_index=True)
+                st.dataframe(df_tabla_export, use_container_width=True, hide_index=True)
 
-                # Exportar consulta a Excel
-                buf_xl = io.BytesIO()
-                with pd.ExcelWriter(buf_xl, engine='openpyxl') as writer:
-                    df_tabla.to_excel(writer, index=False, sheet_name=f"Consulta_{sku_seleccionado}")
-                buf_xl.seek(0)
-                
-                st.download_button(
-                    label=f"📥 Descargar Registro Histórico en Excel ({sku_seleccionado}.xlsx)",
-                    data=buf_xl.getvalue(),
-                    file_name=f"Consulta_Inventario_{sku_seleccionado}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="btn_dl_consulta_sku_v2"
-                )
+                # Exportar consulta a Excel y PDF
+                c_dl1, c_dl2 = st.columns(2)
+                with c_dl1:
+                    buf_xl = io.BytesIO()
+                    with pd.ExcelWriter(buf_xl, engine='openpyxl') as writer:
+                        df_tabla_export.to_excel(writer, index=False, sheet_name=f"Consulta_{sku_seleccionado}")
+                    buf_xl.seek(0)
+                    
+                    st.download_button(
+                        label=f"📥 Descargar Excel ({sku_seleccionado}.xlsx)",
+                        data=buf_xl.getvalue(),
+                        file_name=f"Consulta_Inventario_{sku_seleccionado}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="btn_dl_consulta_sku_v3"
+                    )
+                with c_dl2:
+                    pdf_bytes = generar_pdf_consulta_reportlab("SKU", sku_seleccionado, df_tabla_export, spec_info=spec_dict, img_local_path=img_local_path)
+                    st.download_button(
+                        label=f"📄 Descargar PDF Oficial de Impresión ({sku_seleccionado}.pdf)",
+                        data=pdf_bytes,
+                        file_name=f"Reporte_Consulta_SKU_{sku_seleccionado}.pdf",
+                        mime="application/pdf",
+                        key="btn_dl_pdf_sku_v3"
+                    )
 
         # 4. BUSCAR EN LOG DE ACTIVIDAD DEL SISTEMA
         if not df_actividad.empty:
@@ -415,7 +539,17 @@ with tab_consulta:
 
                 st.write("")
                 st.markdown("#### 📑 Partidas del Proyecto")
-                st.dataframe(df_proj[['ID_Tarima', 'Fecha_Creacion', 'SKU', 'PO', 'Parcialidad', 'Cantidad', 'Ubicacion_Actual', 'Estatus']], use_container_width=True, hide_index=True)
+                df_proj_show = df_proj[['ID_Tarima', 'Fecha_Creacion', 'SKU', 'PO', 'Parcialidad', 'Cantidad', 'Ubicacion_Actual', 'Estatus']].copy()
+                st.dataframe(df_proj_show, use_container_width=True, hide_index=True)
+
+                pdf_proj_bytes = generar_pdf_consulta_reportlab("Proyecto", proyecto_seleccionado, df_proj_show)
+                st.download_button(
+                    label=f"📄 Descargar Reporte PDF de Proyecto ({proyecto_seleccionado}.pdf)",
+                    data=pdf_proj_bytes,
+                    file_name=f"Reporte_Proyecto_{proyecto_seleccionado}.pdf",
+                    mime="application/pdf",
+                    key="btn_dl_pdf_proj_v3"
+                )
 
     elif po_seleccionada:
         st.markdown(f"## 📄 Consulta por Orden de Compra (PO): `{po_seleccionada}`")
@@ -441,7 +575,17 @@ with tab_consulta:
 
                 st.write("")
                 st.markdown("#### 📑 Partidas de la PO")
-                st.dataframe(df_po[['ID_Tarima', 'Fecha_Creacion', 'SKU', 'Proyecto', 'Parcialidad', 'Cantidad', 'Ubicacion_Actual', 'Estatus']], use_container_width=True, hide_index=True)
+                df_po_show = df_po[['ID_Tarima', 'Fecha_Creacion', 'SKU', 'Proyecto', 'Parcialidad', 'Cantidad', 'Ubicacion_Actual', 'Estatus']].copy()
+                st.dataframe(df_po_show, use_container_width=True, hide_index=True)
+
+                pdf_po_bytes = generar_pdf_consulta_reportlab("Orden de Compra (PO)", po_seleccionada, df_po_show)
+                st.download_button(
+                    label=f"📄 Descargar Reporte PDF de PO ({po_seleccionada}.pdf)",
+                    data=pdf_po_bytes,
+                    file_name=f"Reporte_PO_{po_seleccionada}.pdf",
+                    mime="application/pdf",
+                    key="btn_dl_pdf_po_v3"
+                )
 
     else:
         st.info("💡 **Instrucciones:** Seleccione un **SKU**, **Proyecto** o **Orden de Compra (PO)** para consultar la foto del producto, disponibilidad, ubicación física e historial de movimientos.")
@@ -456,10 +600,10 @@ with tab_historial_global:
     if not df_actividad.empty:
         col_f1, col_f2 = st.columns([2, 1])
         with col_f1:
-            query_search = st.text_input("🔍 Filtrar por palabra clave (SKU, TPM-XXXX, Folio Remisión, Usuario, PO, Cliente):", key="search_log_global")
+            query_search = st.text_input("🔍 Filtrar por palabra clave (SKU, TPM-XXXX, Folio Remisión, Usuario, PO, Cliente):", key="search_log_global_v2")
         with col_f2:
             tipos_evento = ["Todos"] + sorted(df_actividad['Tipo_Evento'].dropna().astype(str).unique().tolist())
-            filtro_tipo = st.selectbox("Filtrar por Tipo de Evento:", options=tipos_evento, key="filter_event_type_global")
+            filtro_tipo = st.selectbox("Filtrar por Tipo de Evento:", options=tipos_evento, key="filter_event_type_global_v2")
 
         df_log_filt = df_actividad.copy()
 
@@ -485,7 +629,7 @@ with tab_historial_global:
             data=buf_log_xl.getvalue(),
             file_name="Historial_Movimientos_Sigrama.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="btn_dl_log_global"
+            key="btn_dl_log_global_v2"
         )
     else:
         st.warning("No se encontraron registros de historial en la base de datos `BD_Actividad_Log.xlsx`.")
