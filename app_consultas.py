@@ -231,66 +231,109 @@ def obtener_imagen_sku(sku):
             pass
     return None
 
-# Generador de PDF oficial para impresión
+# Generador de PDF oficial para impresión en Orientación Horizontal (Landscape)
 def generar_pdf_consulta_reportlab(tipo_busqueda, valor_busqueda, df_tabla, spec_info=None, img_local_path=None):
+    """Genera un reporte PDF profesional en orientacion Horizontal (Landscape) con anchos de columna optimizados."""
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=40, bottomMargin=40)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
     story = []
     styles = getSampleStyleSheet()
     
-    style_title = ParagraphStyle('T_PDF', parent=styles['Heading1'], fontName="Helvetica-Bold", fontSize=13, textColor=colors.HexColor("#111111"))
-    style_sub = ParagraphStyle('S_PDF', parent=styles['Normal'], fontName="Helvetica", fontSize=9, textColor=colors.HexColor("#555555"))
-    style_hdr = ParagraphStyle('H_PDF', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=8, textColor=colors.white, alignment=1)
-    style_cell = ParagraphStyle('C_PDF', parent=styles['Normal'], fontName="Helvetica", fontSize=8)
-    style_cell_bold = ParagraphStyle('CB_PDF', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=8)
+    style_title = ParagraphStyle('T_PDF', fontName="Helvetica-Bold", fontSize=13, textColor=colors.HexColor("#FFFFFF"), alignment=0)
+    style_sub = ParagraphStyle('S_PDF', fontName="Helvetica-Bold", fontSize=8.5, textColor=colors.HexColor("#FFFFFF"), alignment=0)
+    style_spec_lbl = ParagraphStyle('SL_PDF', fontName="Helvetica-Bold", fontSize=8, textColor=colors.HexColor("#64748B"))
+    style_spec_val = ParagraphStyle('SV_PDF', fontName="Helvetica-Bold", fontSize=8.5, textColor=colors.HexColor("#0F172A"))
     
-    story.append(Paragraph(f"INDUSTRIA SIGRAMA S.A. DE C.V. — BASE DE DATOS SGP / REPORTE DE PIEZA", style_title))
-    story.append(Paragraph(f"<b>Búsqueda por:</b> {tipo_busqueda} | <b>Valor:</b> {valor_busqueda} | <b>Fecha de Impresión:</b> {datetime.date.today().strftime('%d/%m/%Y')}", style_sub))
-    story.append(Spacer(1, 0.12 * inch))
+    style_hdr = ParagraphStyle('H_PDF', fontName="Helvetica-Bold", fontSize=7.5, textColor=colors.white, alignment=1)
+    style_cell = ParagraphStyle('C_PDF', fontName="Helvetica", fontSize=7, leading=9, textColor=colors.HexColor("#1E293B"))
+    style_cell_center = ParagraphStyle('CC_PDF', fontName="Helvetica", fontSize=7, leading=9, textColor=colors.HexColor("#1E293B"), alignment=1)
+    style_cell_bold = ParagraphStyle('CB_PDF', fontName="Helvetica-Bold", fontSize=7.5, leading=9.5, textColor=colors.HexColor("#0F172A"), alignment=1)
+    
+    title_p = Paragraph(f"INDUSTRIA SIGRAMA S.A. DE C.V. — BASE DE DATOS SGP", style_title)
+    sub_p = Paragraph(f"REPORTE OFICIAL DE PIEZA | Búsqueda: <b>{valor_busqueda}</b> | Fecha: {datetime.date.today().strftime('%d/%m/%Y')}", style_sub)
+    
+    logo_img = Paragraph("", style_cell)
+    if os.path.exists("logo_sigrama.png"):
+        try:
+            logo_img = RLImage("logo_sigrama.png", width=1.4*inch, height=0.45*inch)
+        except Exception:
+            pass
+            
+    header_table = Table([[logo_img, [title_p, sub_p]]], colWidths=[1.6*inch, 8.6*inch])
+    header_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EC2024")),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('PADDING', (0,0), (-1,-1), 6),
+    ]))
+    story.append(header_table)
+    story.append(Spacer(1, 0.08 * inch))
     
     if spec_info:
-        info_text = f"""
-        <b>Número de Parte / SKU:</b> {valor_busqueda}<br/>
-        <b>Descripción Comercial:</b> {spec_info.get('nombre', 'N/A')}<br/>
-        <b>Calibre / Espesor:</b> {spec_info.get('calibre', 'N/A')}<br/>
-        <b>Dimensiones:</b> {spec_info.get('dims', 'N/A')}<br/>
-        <b>Material / Acabado:</b> {spec_info.get('acabado', 'N/A')}
-        """
-        cell_info = Paragraph(info_text, style_cell)
-        cell_img = Paragraph("Sin imagen", style_cell)
+        info_data = [
+            [Paragraph("NÚMERO DE PARTE / PLANO:", style_spec_lbl), Paragraph(str(valor_busqueda), style_spec_val)],
+            [Paragraph("DESCRIPCIÓN COMERCIAL:", style_spec_lbl), Paragraph(str(spec_info.get('nombre', 'N/A')), style_spec_val)],
+            [Paragraph("CALIBRE / ESPESOR:", style_spec_lbl), Paragraph(str(spec_info.get('calibre', 'N/A')), style_spec_val)],
+            [Paragraph("DIMENSIONES PIEZA:", style_spec_lbl), Paragraph(str(spec_info.get('dims', 'N/A')), style_spec_val)],
+            [Paragraph("MATERIAL / ACABADO:", style_spec_lbl), Paragraph(str(spec_info.get('acabado', 'N/A')), style_spec_val)],
+        ]
+        info_table = Table(info_data, colWidths=[1.8*inch, 5.0*inch])
+        info_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('PADDING', (0,0), (-1,-1), 2),
+        ]))
+        
+        cell_img = Paragraph("<i>Sin imagen asignada</i>", style_cell_center)
         if img_local_path and os.path.exists(img_local_path):
             try:
-                cell_img = RLImage(img_local_path, width=1.1*inch, height=1.1*inch)
+                cell_img = RLImage(img_local_path, width=2.0*inch, height=1.1*inch)
             except Exception:
                 pass
-        t_spec = Table([[cell_info, cell_img]], colWidths=[5.5*inch, 2.0*inch])
-        t_spec.setStyle(TableStyle([
+                
+        card_table = Table([[info_table, cell_img]], colWidths=[7.2*inch, 3.0*inch])
+        card_table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F8FAFC")),
-            ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
+            ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E1")),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('PADDING', (0,0), (-1,-1), 6)
+            ('PADDING', (0,0), (-1,-1), 5)
         ]))
-        story.append(t_spec)
-        story.append(Spacer(1, 0.12 * inch))
+        story.append(card_table)
+        story.append(Spacer(1, 0.1 * inch))
         
     if not df_tabla.empty:
-        headers = [Paragraph(str(col), style_hdr) for col in df_tabla.columns]
+        df_clean = df_tabla.copy()
+        for col in df_clean.columns:
+            df_clean[col] = df_clean[col].astype(str).str.replace("➡️", " -> ").str.replace("➡", " -> ")
+            
+        headers = [Paragraph(str(col), style_hdr) for col in df_clean.columns]
         rows = [headers]
-        for _, r in df_tabla.iterrows():
+        
+        for _, r in df_clean.iterrows():
             row_cells = []
-            for col in df_tabla.columns:
+            for col in df_clean.columns:
                 val_str = str(r[col])
-                style_use = style_cell_bold if col in ['ID Tarima', 'ID Tarima (TPM)', 'SKU', 'Piezas', 'Cantidad (Pzs)'] else style_cell
+                if col in ['ID Tarima (TPM)', 'ID Tarima', 'Estatus Tarima', 'Estatus']:
+                    style_use = style_cell_bold
+                elif col in ['Fecha Empaque', 'Piezas', 'Cantidad', 'PO', 'Proyecto', 'Parcialidad']:
+                    style_use = style_cell_center
+                else:
+                    style_use = style_cell
                 row_cells.append(Paragraph(val_str, style_use))
             rows.append(row_cells)
-            
-        t_rep = Table(rows, repeatRows=1)
+
+        num_cols = len(df_clean.columns)
+        if num_cols == 11:
+            col_widths = [62, 58, 65, 60, 52, 36, 52, 65, 52, 82, 150]
+        else:
+            col_widths = [734 / num_cols] * num_cols
+
+        t_rep = Table(rows, colWidths=col_widths, repeatRows=1)
         t_rep.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#EC2024")),
-            ('GRID', (0,0), (-1,-1), 0.4, colors.HexColor("#CBD5E1")),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('TOPPADDING', (0,0), (-1,-1), 3),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 3)
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#F8FAFC")]),
         ]))
         story.append(t_rep)
         
