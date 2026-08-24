@@ -195,8 +195,10 @@ def generar_archivo_eml(dest_to, dest_cc, subject, body_html, adjuntos_dict):
     """Genera un archivo EML en memoria como borrador de Outlook con múltiples adjuntos."""
     msg = MIMEMultipart('mixed')
     msg['Subject'] = subject
-    msg['To'] = dest_to
-    msg['Cc'] = dest_cc
+    if dest_to and str(dest_to).strip():
+        msg['To'] = str(dest_to).strip()
+    if dest_cc and str(dest_cc).strip():
+        msg['Cc'] = str(dest_cc).strip()
     msg['X-Unsent'] = '1'
     
     body_part = MIMEText(body_html, 'html', 'utf-8')
@@ -806,9 +808,10 @@ with tab_sgp_piezas:
                         f"Reporte_Inventario_{sku_actual}.xlsx": xl_bytes,
                         f"Reporte_Impresion_{sku_actual}.pdf": pdf_bytes
                     }
+                    dest_cc_sku = "bryan.mancinas@sigrama.com.mx; cruz.carreon@sigrama.com.mx; jose.fernandez@sigrama.com.mx; luis.quintana@sigrama.com.mx"
                     eml_bytes = generar_archivo_eml(
-                        dest_to="cliente@empresa.com",
-                        dest_cc="l.quintana@sigrama.com.mx; albertorios@sigrama.com.mx",
+                        dest_to="",
+                        dest_cc=dest_cc_sku,
                         subject=f"Reporte de Inventario e Historial - SKU: {sku_actual} - Industria Sigrama",
                         body_html=cuerpo_eml_html,
                         adjuntos_dict=adjuntos_eml
