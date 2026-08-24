@@ -116,10 +116,10 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* Restricción de Tamaño para Fotografía o Plano de Pieza */
+    /* Restricción y Escalado a 0.8 veces para la Imagen o Plano de Pieza */
     .stImage > img, [data-testid="stImage"] img {
-        max-height: 320px !important;
-        max-width: 100% !important;
+        max-height: 256px !important;
+        max-width: 80% !important;
         width: auto !important;
         object-fit: contain !important;
         margin: 0 auto !important;
@@ -127,7 +127,7 @@ st.markdown("""
         border-radius: 8px !important;
         border: 1px solid #CBD5E1 !important;
         background-color: #FFFFFF !important;
-        padding: 6px !important;
+        padding: 5px !important;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
     }
 </style>
@@ -371,31 +371,33 @@ df_detalle = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
 df_remisiones = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
 df_actividad = cargar_excel_desde_github("BD_Actividad_Log.xlsx")
 
-# --- RENDERIZADO DEL BANNER OFICIAL DE LA APLICACIÓN DE REMISIONES ---
-if os.path.exists("REMISIONES APP.png"):
-    st.image("REMISIONES APP.png", use_container_width=True)
-else:
-    try:
-        url_b = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/REMISIONES%20APP.png"
-        res_b = requests.get(url_b)
-        if res_b.status_code == 200:
-            with open("REMISIONES APP.png", "wb") as f_b:
-                f_b.write(res_b.content)
-            st.image("REMISIONES APP.png", use_container_width=True)
-        else:
+# --- RENDERIZADO DEL BANNER OFICIAL ESCALADO A 0.8X (80%) ---
+c_banner1, c_banner2, c_banner3 = st.columns([0.1, 0.8, 0.1])
+with c_banner2:
+    if os.path.exists("REMISIONES APP.png"):
+        st.image("REMISIONES APP.png", use_container_width=True)
+    else:
+        try:
+            url_b = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/REMISIONES%20APP.png"
+            res_b = requests.get(url_b)
+            if res_b.status_code == 200:
+                with open("REMISIONES APP.png", "wb") as f_b:
+                    f_b.write(res_b.content)
+                st.image("REMISIONES APP.png", use_container_width=True)
+            else:
+                st.markdown("""
+                <div class="sgp-header">
+                    <h2>APLICACIÓN DE REMISIONES — SIGRAMA METALES</h2>
+                    <p>Planta Metales Diagonal | Consulta de Piezas, Planos, Ubicación en Tarimas e Historial de Envíos</p>
+                </div>
+                """, unsafe_allow_html=True)
+        except Exception:
             st.markdown("""
             <div class="sgp-header">
                 <h2>APLICACIÓN DE REMISIONES — SIGRAMA METALES</h2>
                 <p>Planta Metales Diagonal | Consulta de Piezas, Planos, Ubicación en Tarimas e Historial de Envíos</p>
             </div>
             """, unsafe_allow_html=True)
-    except Exception:
-        st.markdown("""
-        <div class="sgp-header">
-            <h2>APLICACIÓN DE REMISIONES — SIGRAMA METALES</h2>
-            <p>Planta Metales Diagonal | Consulta de Piezas, Planos, Ubicación en Tarimas e Historial de Envíos</p>
-        </div>
-        """, unsafe_allow_html=True)
 
 # Listas de SKUs
 skus_con_foto = sorted([s for s in set(df_articulos['SKU'].dropna().astype(str).str.strip().str.upper()) if s not in ['', 'NAN', 'NONE', 'N/A']]) if not df_articulos.empty and 'SKU' in df_articulos.columns else []
