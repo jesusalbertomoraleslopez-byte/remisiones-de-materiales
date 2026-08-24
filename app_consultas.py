@@ -233,14 +233,16 @@ def obtener_imagen_sku(sku):
 
 # Generador de PDF oficial para impresión en Orientación Horizontal (Landscape)
 def generar_pdf_consulta_reportlab(tipo_busqueda, valor_busqueda, df_tabla, spec_info=None, img_local_path=None):
-    """Genera un reporte PDF profesional en orientacion Horizontal (Landscape) con anchos de columna optimizados."""
+    """Genera un reporte PDF profesional en orientacion Horizontal (Landscape) con proporciones de logo exactas y diseño ejecutivo."""
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), leftMargin=28, rightMargin=28, topMargin=24, bottomMargin=24)
     story = []
     styles = getSampleStyleSheet()
     
-    style_title = ParagraphStyle('T_PDF', fontName="Helvetica-Bold", fontSize=13, textColor=colors.HexColor("#FFFFFF"), alignment=0)
-    style_sub = ParagraphStyle('S_PDF', fontName="Helvetica-Bold", fontSize=8.5, textColor=colors.HexColor("#FFFFFF"), alignment=0)
+    style_company = ParagraphStyle('C_PDF', fontName="Helvetica-Bold", fontSize=14, textColor=colors.HexColor("#0F172A"), leading=16)
+    style_subtitle = ParagraphStyle('S_PDF', fontName="Helvetica-Bold", fontSize=9.5, textColor=colors.HexColor("#EC2024"), leading=12)
+    style_meta = ParagraphStyle('M_PDF', fontName="Helvetica", fontSize=8, textColor=colors.HexColor("#64748B"), leading=10)
+    
     style_spec_lbl = ParagraphStyle('SL_PDF', fontName="Helvetica-Bold", fontSize=8, textColor=colors.HexColor("#64748B"))
     style_spec_val = ParagraphStyle('SV_PDF', fontName="Helvetica-Bold", fontSize=8.5, textColor=colors.HexColor("#0F172A"))
     
@@ -249,25 +251,33 @@ def generar_pdf_consulta_reportlab(tipo_busqueda, valor_busqueda, df_tabla, spec
     style_cell_center = ParagraphStyle('CC_PDF', fontName="Helvetica", fontSize=7, leading=9, textColor=colors.HexColor("#1E293B"), alignment=1)
     style_cell_bold = ParagraphStyle('CB_PDF', fontName="Helvetica-Bold", fontSize=7.5, leading=9.5, textColor=colors.HexColor("#0F172A"), alignment=1)
     
-    title_p = Paragraph(f"INDUSTRIA SIGRAMA S.A. DE C.V. — BASE DE DATOS SGP", style_title)
-    sub_p = Paragraph(f"REPORTE OFICIAL DE PIEZA | Búsqueda: <b>{valor_busqueda}</b> | Fecha: {datetime.date.today().strftime('%d/%m/%Y')}", style_sub)
-    
-    logo_img = Paragraph("", style_cell)
+    # 1. LOGOTIPO CON PROPORCIÓN EXACTA (SIN DEFORMACIÓN)
+    logo_cell = Paragraph("", style_cell)
     if os.path.exists("logo_sigrama.png"):
         try:
-            logo_img = RLImage("logo_sigrama.png", width=1.4*inch, height=0.45*inch)
+            im_pil = Image.open("logo_sigrama.png")
+            aspect = im_pil.height / im_pil.width
+            target_w = 1.7 * inch
+            target_h = target_w * aspect
+            logo_cell = RLImage("logo_sigrama.png", width=target_w, height=target_h)
         except Exception:
             pass
             
-    header_table = Table([[logo_img, [title_p, sub_p]]], colWidths=[1.6*inch, 8.6*inch])
+    p_comp = Paragraph("INDUSTRIA SIGRAMA S.A. DE C.V.", style_company)
+    p_sub = Paragraph("BASE DE DATOS SGP — PLANTA METALES DIAGONAL", style_subtitle)
+    p_meta = Paragraph(f"REPORTE OFICIAL DE PIEZA | BÚSQUEDA: <b>{valor_busqueda}</b> | FECHA DE EMISIÓN: {datetime.date.today().strftime('%d/%m/%Y')}", style_meta)
+    
+    header_table = Table([[logo_cell, [p_comp, p_sub, p_meta]]], colWidths=[1.8*inch, 8.4*inch])
     header_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#EC2024")),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('PADDING', (0,0), (-1,-1), 6),
+        ('PADDING', (0,0), (-1,-1), 0),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('LINEBELOW', (0,0), (-1,-1), 2, colors.HexColor("#EC2024")),
     ]))
     story.append(header_table)
     story.append(Spacer(1, 0.08 * inch))
     
+    # 2. FICHA TÉCNICA Y DIBUJO/PLANO EN TARJETA ELEGANTE
     if spec_info:
         info_data = [
             [Paragraph("NÚMERO DE PARTE / PLANO:", style_spec_lbl), Paragraph(str(valor_busqueda), style_spec_val)],
@@ -285,20 +295,32 @@ def generar_pdf_consulta_reportlab(tipo_busqueda, valor_busqueda, df_tabla, spec
         cell_img = Paragraph("<i>Sin imagen asignada</i>", style_cell_center)
         if img_local_path and os.path.exists(img_local_path):
             try:
-                cell_img = RLImage(img_local_path, width=2.0*inch, height=1.1*inch)
+                im_part = Image.open(img_local_path)
+                p_aspect = im_part.height / im_part.width
+                max_w = 2.4 * inch
+                max_h = 1.15 * inch
+                
+                calc_w = max_w
+                calc_h = max_w * p_aspect
+                if calc_h > max_h:
+                    calc_h = max_h
+                    calc_w = max_h / p_aspect
+                    
+                cell_img = RLImage(img_local_path, width=calc_w, height=calc_h)
             except Exception:
                 pass
                 
         card_table = Table([[info_table, cell_img]], colWidths=[7.2*inch, 3.0*inch])
         card_table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F8FAFC")),
-            ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#CBD5E1")),
+            ('BOX', (0,0), (-1,-1), 0.75, colors.HexColor("#CBD5E1")),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('PADDING', (0,0), (-1,-1), 5)
         ]))
         story.append(card_table)
         story.append(Spacer(1, 0.1 * inch))
         
+    # 3. TABLA DE DATOS CON ENCABEZADO CORPORATIVO ROJO/GRIS
     if not df_tabla.empty:
         df_clean = df_tabla.copy()
         for col in df_clean.columns:
@@ -328,7 +350,7 @@ def generar_pdf_consulta_reportlab(tipo_busqueda, valor_busqueda, df_tabla, spec
 
         t_rep = Table(rows, colWidths=col_widths, repeatRows=1)
         t_rep.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#EC2024")),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1E293B")),
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('TOPPADDING', (0,0), (-1,-1), 4),
