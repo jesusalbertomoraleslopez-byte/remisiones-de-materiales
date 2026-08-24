@@ -963,7 +963,7 @@ with tab_sgp_piezas:
                         f"Reporte_Inventario_{sku_actual}.xlsx": xl_bytes,
                         f"Reporte_Impresion_{sku_actual}.pdf": pdf_bytes
                     }
-                    dest_cc_sku = "bryan.mancinas@sigrama.com.mx; cruz.carreon@sigrama.com.mx; jose.fernandez@sigrama.com.mx; luis.quintana@sigrama.com.mx"
+                    dest_cc_sku = "bryan.mancinas@sigrama.com.mx; cruz.carreon@sigrama.com.mx; jesus.morales@sigrama.com.mx; jose.fernandez@sigrama.com.mx; luis.quintana@sigrama.com.mx"
                     eml_bytes = generar_archivo_eml(
                         dest_to="",
                         dest_cc=dest_cc_sku,
