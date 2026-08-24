@@ -274,16 +274,15 @@ with col_title:
 
 st.write("")
 
-# --- OBTENER LISTA COMPLETA DE SKUS ---
-skus_set = set()
-if not df_articulos.empty and 'SKU' in df_articulos.columns:
-    skus_set.update(df_articulos['SKU'].dropna().astype(str).str.strip().str.upper())
-if not df_skus_aut.empty and 'SKU' in df_skus_aut.columns:
-    skus_set.update(df_skus_aut['SKU'].dropna().astype(str).str.strip().str.upper())
-if not df_detalle.empty and 'SKU' in df_detalle.columns:
-    skus_set.update(df_detalle['SKU'].dropna().astype(str).str.strip().str.upper())
+# --- OBTENER LISTAS DE SKUS CATEGORIZADAS ---
+skus_con_foto = sorted([s for s in set(df_articulos['SKU'].dropna().astype(str).str.strip().str.upper()) if s not in ['', 'NAN', 'NONE', 'N/A']]) if not df_articulos.empty and 'SKU' in df_articulos.columns else []
+skus_con_tarima = sorted([s for s in set(df_detalle['SKU'].dropna().astype(str).str.strip().str.upper()) if s not in ['', 'NAN', 'NONE', 'N/A']]) if not df_detalle.empty and 'SKU' in df_detalle.columns else []
 
-lista_skus = sorted([s for s in skus_set if s not in ['', 'NAN', 'NONE', 'N/A']])
+skus_todos_set = set(skus_con_foto) | set(skus_con_tarima)
+if not df_skus_aut.empty and 'SKU' in df_skus_aut.columns:
+    skus_todos_set.update(df_skus_aut['SKU'].dropna().astype(str).str.strip().str.upper())
+
+skus_todos = sorted([s for s in skus_todos_set if s not in ['', 'NAN', 'NONE', 'N/A']])
 
 # --- PESTAÑAS PRINCIPALES ---
 tab_consulta, tab_historial_global = st.tabs([
@@ -301,7 +300,7 @@ with tab_consulta:
         
     with col_btn_clear:
         if st.button("🧹 Limpiar Filtros", use_container_width=True, key="btn_clear_filters_v3"):
-            for k in ["lookup_sku_select_v3", "lookup_sku_text_v3", "lookup_proj_select_v3", "lookup_po_select_v3"]:
+            for k in ["lookup_sku_select_v3", "lookup_sku_text_v3", "lookup_proj_select_v3", "lookup_po_select_v3", "modo_alcance_skus"]:
                 if k in st.session_state:
                     del st.session_state[k]
             st.rerun()
@@ -330,6 +329,25 @@ with tab_consulta:
     po_seleccionada = None
 
     with subtab_sku:
+        # --- FILTRO DE ALCANCE DE LA LISTA DE SKUS ---
+        modo_alcance = st.radio(
+            "Filtrar catálogo de navegación:",
+            options=[
+                f"📸 Solo SKUs con Fotografía y Ficha ({len(skus_con_foto)} artículos)",
+                f"📦 Solo SKUs con Tarimas Físicas ({len(skus_con_tarima)} artículos)",
+                f"📋 Todos los SKUs Autorizados ({len(skus_todos)} artículos)"
+            ],
+            horizontal=True,
+            key="modo_alcance_skus"
+        )
+
+        if "📸" in modo_alcance:
+            lista_skus = skus_con_foto if skus_con_foto else skus_todos
+        elif "📦" in modo_alcance:
+            lista_skus = skus_con_tarima if skus_con_tarima else skus_todos
+        else:
+            lista_skus = skus_todos
+
         # --- LÓGICA Y CONTROLES DE NAVEGACIÓN RÁPIDA ENTRE PIEZAS ---
         if "sku_nav_idx" not in st.session_state:
             st.session_state["sku_nav_idx"] = 0
