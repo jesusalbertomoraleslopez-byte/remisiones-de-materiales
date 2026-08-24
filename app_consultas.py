@@ -330,20 +330,52 @@ with tab_consulta:
     po_seleccionada = None
 
     with subtab_sku:
-        col_s1, col_s2 = st.columns([3, 1])
-        with col_s1:
+        # --- LÓGICA Y CONTROLES DE NAVEGACIÓN RÁPIDA ENTRE PIEZAS ---
+        curr_sku_val = st.session_state.get("lookup_sku_select_v3", "(Seleccione un SKU...)")
+        if curr_sku_val in lista_skus:
+            curr_idx = lista_skus.index(curr_sku_val)
+        else:
+            curr_idx = 0
+
+        st.markdown("##### ⚡ Navegación Rápida entre Piezas")
+        col_nav_prev, col_nav_curr, col_nav_next = st.columns([1.5, 2.5, 1.5])
+
+        with col_nav_prev:
+            if curr_idx > 0:
+                prev_sku = lista_skus[curr_idx - 1]
+                if st.button(f"◀️ {prev_sku}", use_container_width=True, key="btn_prev_sku_nav"):
+                    st.session_state["lookup_sku_select_v3"] = prev_sku
+                    st.rerun()
+                prev_img = obtener_imagen_sku(prev_sku)
+                if prev_img:
+                    st.image(prev_img, width=55, caption=f"Anterior: {prev_sku}")
+            else:
+                st.button("◀️ Inicio de Lista", disabled=True, use_container_width=True, key="btn_prev_dis_nav")
+
+        with col_nav_curr:
             sku_input = st.selectbox(
-                "Seleccione o escriba el Código de SKU:",
+                f"Pieza {curr_idx+1} de {len(lista_skus)} (Seleccione o busque):",
                 options=["(Seleccione un SKU...)"] + lista_skus,
                 key="lookup_sku_select_v3"
             )
             if sku_input != "(Seleccione un SKU...)":
                 sku_seleccionado = sku_input
 
-        with col_s2:
-            sku_manual = st.text_input("O escriba código manualmente:", placeholder="Ej: 11-A-6815-10", key="lookup_sku_text_v3")
-            if sku_manual.strip():
-                sku_seleccionado = sku_manual.strip().upper()
+        with col_nav_next:
+            if curr_idx < len(lista_skus) - 1:
+                next_sku = lista_skus[curr_idx + 1]
+                if st.button(f"{next_sku} ▶️", use_container_width=True, key="btn_next_sku_nav"):
+                    st.session_state["lookup_sku_select_v3"] = next_sku
+                    st.rerun()
+                next_img = obtener_imagen_sku(next_sku)
+                if next_img:
+                    st.image(next_img, width=55, caption=f"Siguiente: {next_sku}")
+            else:
+                st.button("Fin de Lista ▶️", disabled=True, use_container_width=True, key="btn_next_dis_nav")
+
+        sku_manual = st.text_input("O escriba código manualmente para ir directo:", placeholder="Ej: 11-A-6815-10", key="lookup_sku_text_v3")
+        if sku_manual.strip():
+            sku_seleccionado = sku_manual.strip().upper()
 
     with subtab_proj:
         if not df_detalle.empty and 'Proyecto' in df_detalle.columns:
