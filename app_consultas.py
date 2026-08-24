@@ -103,6 +103,21 @@ st.markdown("""
         color: #FFFFFF !important;
         font-weight: bold !important;
     }
+
+    /* Restricción de Tamaño para Fotografía o Plano de Pieza */
+    .stImage > img, [data-testid="stImage"] img {
+        max-height: 320px !important;
+        max-width: 100% !important;
+        width: auto !important;
+        object-fit: contain !important;
+        margin: 0 auto !important;
+        display: block !important;
+        border-radius: 8px !important;
+        border: 1px solid #CBD5E1 !important;
+        background-color: #FFFFFF !important;
+        padding: 6px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
