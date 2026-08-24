@@ -1201,6 +1201,16 @@ def generar_cuerpo_correo_cierre_proyecto_html(nombre_proyecto, summary_dict, ta
                 </ol>
             </div>
 
+            <div style="background-color: #F8FAFC; border: 1px solid #CBD5E1; border-left: 4px solid #EC2024; padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
+                <p style="margin: 0; font-size: 13px; color: #1E293B; font-weight: bold;">
+                    🔍 <b>Portal de Consulta e Historial de Inventarios en Tiempo Real:</b>
+                </p>
+                <p style="margin: 4px 0 0 0; font-size: 12.5px; color: #334155;">
+                    Para consultar fotografías de SKUs, disponibilidad de piezas, historial y ubicación exacta en planta/almacén, ingrese a: 
+                    <a href="https://remisiones.streamlit.app/" target="_blank" style="color: #EC2024; font-weight: bold; text-decoration: underline;">https://remisiones.streamlit.app/</a>
+                </p>
+            </div>
+
             <p style="font-size: 13px; line-height: 1.5; color: #334155;">
                 Agradecemos su atención y confirmación de recepción. Para cualquier duda o aclaración sobre este finiquito, quedamos a sus órdenes.
             </p>
@@ -1685,6 +1695,17 @@ def generar_cuerpo_correo_html(list_selected_remisiones, df_det):
             </tbody>
         </table>
         
+        <!-- Caja de Enlace a Portal de Consulta e Historial -->
+        <div style="background-color: #F8F9FA; border: 1px solid #E2E8F0; border-left: 4px solid #EC2024; padding: 12px 16px; margin: 20px 0; border-radius: 4px; max-width: 900px;">
+            <p style="margin: 0; font-size: 13px; color: #1E293B; font-weight: bold;">
+                🔍 <b>Portal de Consulta de Inventario y Ubicación en Tiempo Real:</b>
+            </p>
+            <p style="margin: 4px 0 0 0; font-size: 12.5px; color: #334155;">
+                Para consultar fotografías de SKUs, disponibilidad de piezas, historial de envíos y ubicación en almacén, ingrese a: 
+                <a href="https://remisiones.streamlit.app/" target="_blank" style="color: #EC2024; font-weight: bold; text-decoration: underline;">https://remisiones.streamlit.app/</a>
+            </p>
+        </div>
+
         <p style="font-size: 14px; margin-bottom: 5px;">Gracias y quedo al pendiente de sus comentarios.</p>
         
         <!-- Firma Corporativa -->
