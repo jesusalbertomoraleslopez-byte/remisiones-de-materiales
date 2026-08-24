@@ -46,27 +46,39 @@ st.markdown("""
         background-color: #F1F5F9 !important;
     }
 
-    /* Barra Superior SGP en Rojo Corporativo SIGRAMA #EC2024 y Negro #111111 */
+    /* Reducir espacio superior vacio del contenedor principal de Streamlit */
+    .block-container, [data-testid="stBlockContainer"] {
+        padding-top: 0.8rem !important;
+        padding-bottom: 1rem !important;
+        margin-top: 0 !important;
+    }
+    header[data-testid="stHeader"] {
+        height: 0 !important;
+        background: transparent !important;
+        display: none !important;
+    }
+
+    /* Barra Superior SGP Compacta en Rojo Corporativo SIGRAMA #EC2024 y Negro #111111 */
     .sgp-header {
-        background: linear-gradient(90deg, #A81B1E 0%, #EC2024 40%, #111111 100%) !important;
-        padding: 16px 24px !important;
-        border-radius: 8px !important;
+        background: linear-gradient(90deg, #A81B1E 0%, #EC2024 45%, #111111 100%) !important;
+        padding: 8px 16px !important;
+        border-radius: 6px !important;
         color: #FFFFFF !important;
-        margin-bottom: 18px !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        margin-bottom: 8px !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.12);
     }
     .sgp-header h2 {
         color: #FFFFFF !important;
         font-family: 'Montserrat', sans-serif !important;
         font-weight: 800 !important;
-        letter-spacing: 1px !important;
+        letter-spacing: 0.5px !important;
         margin: 0 !important;
-        font-size: 24px !important;
+        font-size: 17px !important;
     }
     .sgp-header p {
         color: #F8FAFC !important;
-        margin: 3px 0 0 0 !important;
-        font-size: 13px !important;
+        margin: 1px 0 0 0 !important;
+        font-size: 11px !important;
     }
 
     /* Tarjeta de Ficha Técnica SGP Estilo Tablero Industrial */
@@ -273,10 +285,10 @@ df_remisiones = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
 df_actividad = cargar_excel_desde_github("BD_Actividad_Log.xlsx")
 
 # --- ENCABEZADO SGP ESTILO OFICIAL ---
-col_logo, col_title = st.columns([1, 4])
+col_logo, col_title = st.columns([0.9, 4.5])
 with col_logo:
     if os.path.exists("logo_sigrama.png"):
-        st.image("logo_sigrama.png", use_container_width=True)
+        st.image("logo_sigrama.png", width=140)
     else:
         st.title("🏭")
 with col_title:
