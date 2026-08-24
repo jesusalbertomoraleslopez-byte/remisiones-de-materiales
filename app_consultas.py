@@ -45,16 +45,16 @@ def obtener_secret(key, default=None):
         pass
     return default
 
-# Estilos CSS de Clase Mundial — Tema Industrial Elegante (Metal + Concreto + Iluminación Cálida Edison)
+# Estilos CSS de Clase Mundial — Tema Industrial Claro Elegante (Light Executive Industrial Slate)
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Questrial&family=JetBrains+Mono:wght@500;700;800&display=swap');
 
-    /* FONDOS Y TEMA INDUSTRIAL DE CLASE MUNDIAL (CONCRETO PULIDO SLATE) */
+    /* TEMA INDUSTRIAL MODERNO CLARO (LIGHT EXECUTIVE INDUSTRIAL SLATE) */
     html, body, [class*="css"], .stApp {
         font-family: 'Questrial', sans-serif !important;
-        background: radial-gradient(circle at 50% 0%, #1E293B 0%, #0F172A 55%, #090D16 100%) !important;
-        color: #F8FAFC !important;
+        background-color: #F8FAFC !important;
+        color: #0F172A !important;
     }
 
     /* Reducir espacio superior del contenedor principal */
@@ -73,29 +73,26 @@ st.markdown("""
     .banner-container {
         border-radius: 12px !important;
         overflow: hidden !important;
-        border: 1px solid #334155 !important;
-        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.6), 0 0 20px rgba(236, 32, 36, 0.12) !important;
-        background-color: #0F172A !important;
-        margin-bottom: 12px !important;
+        border: 1px solid #E2E8F0 !important;
+        box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08) !important;
+        background-color: #FFFFFF !important;
+        margin-bottom: 14px !important;
         transition: all 0.3s ease !important;
     }
     .banner-container:hover {
-        box-shadow: 0 14px 35px -5px rgba(0, 0, 0, 0.7), 0 0 25px rgba(245, 158, 11, 0.22) !important;
-        border-color: #475569 !important;
+        box-shadow: 0 14px 30px -5px rgba(15, 23, 42, 0.12) !important;
+        border-color: #CBD5E1 !important;
     }
 
     /* BARRA SUPERIOR SGP COMPACTA CON ILUMINACIÓN CÁLIDA EDISON */
     .sgp-header {
-        background: linear-gradient(135deg, #1E293B 0%, #0F172A 60%, #111111 100%) !important;
+        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
         padding: 12px 20px !important;
         border-radius: 10px !important;
         color: #FFFFFF !important;
         margin-bottom: 12px !important;
         border-left: 5px solid #EC2024 !important;
-        border-top: 1px solid #334155 !important;
-        border-right: 1px solid #334155 !important;
-        border-bottom: 1px solid #334155 !important;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+        box-shadow: 0 4px 15px rgba(15, 23, 42, 0.12);
     }
     .sgp-header h2 {
         color: #FFFFFF !important;
@@ -114,41 +111,42 @@ st.markdown("""
     /* PESTAÑAS PRINCIPALES INDUSTRIALES */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px !important;
-        background-color: #0F172A !important;
+        background-color: #FFFFFF !important;
         padding: 6px 10px !important;
         border-radius: 10px !important;
-        border: 1px solid #334155 !important;
+        border: 1px solid #E2E8F0 !important;
         margin-bottom: 14px !important;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03) !important;
     }
     .stTabs [data-baseweb="tab"] {
-        background-color: #1E293B !important;
+        background-color: #F1F5F9 !important;
         border-radius: 8px !important;
-        color: #94A3B8 !important;
+        color: #475569 !important;
         font-family: 'Montserrat', sans-serif !important;
         font-weight: 700 !important;
         font-size: 13px !important;
         padding: 9px 18px !important;
-        border: 1px solid #334155 !important;
+        border: 1px solid #CBD5E1 !important;
         transition: all 0.25s ease !important;
     }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #EC2024 0%, #B91C1C 100%) !important;
         color: #FFFFFF !important;
         border-color: #EC2024 !important;
-        box-shadow: 0 4px 15px rgba(236, 32, 36, 0.45) !important;
+        box-shadow: 0 4px 14px rgba(236, 32, 36, 0.35) !important;
     }
 
-    /* TARJETA DE FICHA TÉCNICA SGP ESTILO TABLERO INDUSTRIAL */
+    /* TARJETA DE FICHA TÉCNICA SGP ESTILO TABLERO INDUSTRIAL CLARO */
     .sgp-card {
-        background: linear-gradient(145deg, #0F172A 0%, #1E293B 100%) !important;
-        border: 1px solid #334155 !important;
+        background: #FFFFFF !important;
+        border: 2px solid #E2E8F0 !important;
         border-radius: 10px !important;
         padding: 18px !important;
-        color: #FFFFFF !important;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 0, 0, 0.3) !important;
+        color: #0F172A !important;
+        box-shadow: 0 8px 20px -3px rgba(15, 23, 42, 0.06) !important;
     }
     .sgp-sku-title {
-        background: linear-gradient(135deg, #090D16 0%, #1E293B 100%) !important;
+        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
         color: #FFFFFF !important;
         font-family: 'JetBrains Mono', monospace !important;
         font-size: 28px !important;
@@ -157,14 +155,14 @@ st.markdown("""
         padding: 10px !important;
         border-radius: 8px !important;
         border: 2px solid #EC2024 !important;
-        box-shadow: 0 0 15px rgba(236, 32, 36, 0.3), inset 0 1px 0 rgba(255,255,255,0.1) !important;
+        box-shadow: 0 4px 12px rgba(236, 32, 36, 0.25) !important;
         margin-bottom: 15px !important;
         letter-spacing: 2px !important;
     }
     .sgp-label {
         font-family: 'Montserrat', sans-serif !important;
         font-weight: 700 !important;
-        color: #94A3B8 !important;
+        color: #64748B !important;
         font-size: 11px !important;
         text-transform: uppercase !important;
         letter-spacing: 0.5px !important;
@@ -172,7 +170,7 @@ st.markdown("""
     .sgp-value {
         font-family: 'Questrial', sans-serif !important;
         font-size: 15px !important;
-        color: #F8FAFC !important;
+        color: #0F172A !important;
         font-weight: bold !important;
     }
 
@@ -185,15 +183,16 @@ st.markdown("""
         margin: 0 auto !important;
         display: block !important;
         border-radius: 10px !important;
-        border: 1px solid #D97706 !important;
+        border: 2px solid #E2E8F0 !important;
         background-color: #FFFFFF !important;
         padding: 6px !important;
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5), 0 0 15px rgba(245, 158, 11, 0.22) !important;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08) !important;
         transition: transform 0.3s ease, box-shadow 0.3s ease !important;
     }
     .stImage > img:hover, [data-testid="stImage"] img:hover {
         transform: scale(1.02) !important;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), 0 0 25px rgba(245, 158, 11, 0.38) !important;
+        box-shadow: 0 12px 25px rgba(15, 23, 42, 0.15) !important;
+        border-color: #F59E0B !important;
     }
 
     /* BOTONES GLOBALES STREAMLIT */
@@ -202,17 +201,17 @@ st.markdown("""
         font-weight: 700 !important;
         font-size: 12px !important;
         border-radius: 8px !important;
-        background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%) !important;
-        color: #F8FAFC !important;
-        border: 1px solid #334155 !important;
+        background: #FFFFFF !important;
+        color: #1E293B !important;
+        border: 1px solid #CBD5E1 !important;
         transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25) !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05) !important;
     }
     .stButton > button:hover {
-        background: linear-gradient(145deg, #334155 0%, #1E293B 100%) !important;
+        background: #F1F5F9 !important;
         border-color: #F59E0B !important;
-        color: #FFFFFF !important;
-        box-shadow: 0 6px 16px rgba(245, 158, 11, 0.25) !important;
+        color: #0F172A !important;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25) !important;
         transform: translateY(-1px) !important;
     }
 
@@ -228,7 +227,7 @@ st.markdown("""
         font-size: 12.5px !important;
         border-radius: 8px !important;
         padding: 9px 18px !important;
-        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45) !important;
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35) !important;
         transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
     div[data-testid="stDownloadButton"] button[key*="pdf"]:hover,
@@ -236,7 +235,7 @@ st.markdown("""
     div[data-testid="stDownloadButton"]:nth-child(2) button:hover {
         background: linear-gradient(135deg, #1E40AF 0%, #2563EB 100%) !important;
         transform: translateY(-2px) !important;
-        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.65), 0 0 20px rgba(59, 130, 246, 0.5) !important;
+        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.5), 0 0 15px rgba(59, 130, 246, 0.4) !important;
         border-color: #93C5FD !important;
     }
 
@@ -251,7 +250,7 @@ st.markdown("""
         font-weight: 700 !important;
         font-size: 12px !important;
         border-radius: 8px !important;
-        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3) !important;
         transition: all 0.25s ease !important;
     }
     div[data-testid="stDownloadButton"] button[key*="excel"]:hover,
@@ -259,7 +258,7 @@ st.markdown("""
     div[data-testid="stDownloadButton"]:nth-child(1) button:hover {
         background: linear-gradient(135deg, #047857 0%, #059669 100%) !important;
         transform: translateY(-2px) !important;
-        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.5) !important;
+        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.45) !important;
     }
 
     /* BOTÓN EML (PÚRPURA / ÍNDIGO METÁLICO) */
@@ -273,7 +272,7 @@ st.markdown("""
         font-weight: 700 !important;
         font-size: 12px !important;
         border-radius: 8px !important;
-        box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35) !important;
+        box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3) !important;
         transition: all 0.25s ease !important;
     }
     div[data-testid="stDownloadButton"] button[key*="eml"]:hover,
@@ -281,15 +280,15 @@ st.markdown("""
     div[data-testid="stDownloadButton"]:nth-child(3) button:hover {
         background: linear-gradient(135deg, #5B21B6 0%, #6D28D9 100%) !important;
         transform: translateY(-2px) !important;
-        box-shadow: 0 8px 20px rgba(124, 58, 237, 0.5) !important;
+        box-shadow: 0 8px 20px rgba(124, 58, 237, 0.45) !important;
     }
 
-    /* EXPANDER INDUSTRIAL CON ILUMINACIÓN EDISON AMBER */
+    /* EXPANDER INDUSTRIAL CLARO CON ILUMINACIÓN EDISON AMBER */
     .stExpander {
-        background-color: #0F172A !important;
-        border: 1px solid #334155 !important;
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
         border-radius: 10px !important;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.3) !important;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.04) !important;
         margin-top: 10px !important;
     }
     .stExpander [data-testid="stExpanderToggleIcon"] {
@@ -299,9 +298,9 @@ st.markdown("""
     /* ESTILOS DE TABLAS STREAMLIT DATAFRAME */
     [data-testid="stDataFrame"] {
         border-radius: 8px !important;
-        border: 1px solid #334155 !important;
+        border: 1px solid #E2E8F0 !important;
         overflow: hidden !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1109,21 +1108,21 @@ with tab_sgp_piezas:
         # --- OPTIMIZACIÓN DE JERARQUÍA VISUAL: MÉTRICAS CRÍTICAS DE STOCK EN PRIMER PLANO ---
         st.markdown(f"""
         <div style="display: flex; gap: 12px; margin: 10px 0 16px 0;">
-            <div style="flex: 1; background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%); border: 1px solid #334155; border-top: 3px solid #10B981; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4);">
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #10B981; text-shadow: 0 0 12px rgba(16,185,129,0.35);">{pzs_disp:,} PZS</div>
-                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">📦 Disponibles en Planta</div>
+            <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #10B981; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #059669;">{pzs_disp:,} PZS</div>
+                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">📦 Disponibles en Planta</div>
             </div>
-            <div style="flex: 1; background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%); border: 1px solid #334155; border-top: 3px solid #3B82F6; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4);">
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #3B82F6; text-shadow: 0 0 12px rgba(59,130,246,0.35);">{pzs_rem:,} PZS</div>
-                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">🚚 Remesadas (Enviadas)</div>
+            <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #2563EB; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #2563EB;">{pzs_rem:,} PZS</div>
+                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">🚚 Remesadas (Enviadas)</div>
             </div>
-            <div style="flex: 1; background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%); border: 1px solid #334155; border-top: 3px solid #EC2024; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4);">
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #EC2024; text-shadow: 0 0 12px rgba(236,32,36,0.35);">{pzs_tot:,} PZS</div>
-                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">🏗️ Total Piezas Registradas</div>
+            <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #EC2024; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #EC2024;">{pzs_tot:,} PZS</div>
+                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">🏗️ Total Piezas Registradas</div>
             </div>
-            <div style="flex: 1; background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%); border: 1px solid #334155; border-top: 3px solid #F59E0B; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4);">
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #F59E0B; text-shadow: 0 0 12px rgba(245,158,11,0.35);">{tar_tot}</div>
-                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">📊 Tarimas Físicas</div>
+            <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #D97706; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #D97706;">{tar_tot}</div>
+                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">📊 Tarimas Físicas</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
