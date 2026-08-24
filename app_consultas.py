@@ -273,24 +273,27 @@ def generar_html_correo_sku(sku, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot,
             </ul>
         </div>
 
-        <div style="margin-bottom: 20px;">
-            <div class="metric-box">
-                <div class="metric-val">{pzs_disp:,} PZS</div>
-                <div class="metric-lbl">Disponibles Planta</div>
-            </div>
-            <div class="metric-box">
-                <div class="metric-val">{pzs_rem:,} PZS</div>
-                <div class="metric-lbl">Remesadas (Enviadas)</div>
-            </div>
-            <div class="metric-box">
-                <div class="metric-val">{pzs_tot:,} PZS</div>
-                <div class="metric-lbl">Total Piezas</div>
-            </div>
-            <div class="metric-box">
-                <div class="metric-val">{tar_tot}</div>
-                <div class="metric-lbl">Tarimas Físicas</div>
-            </div>
-        </div>
+        <!-- Tarjetas de Métricas en Estructura Table Horizontal Compatible con Outlook -->
+        <table style="width: 100%; border-collapse: separate; border-spacing: 10px 0; margin-bottom: 20px;">
+            <tr>
+                <td style="width: 25%; background-color: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px 8px; text-align: center; border-radius: 6px;">
+                    <div style="font-size: 18px; font-weight: bold; color: #EC2024;">{pzs_disp:,} PZS</div>
+                    <div style="font-size: 11px; color: #64748B; font-weight: bold; margin-top: 3px;">Disponibles Planta</div>
+                </td>
+                <td style="width: 25%; background-color: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px 8px; text-align: center; border-radius: 6px;">
+                    <div style="font-size: 18px; font-weight: bold; color: #EC2024;">{pzs_rem:,} PZS</div>
+                    <div style="font-size: 11px; color: #64748B; font-weight: bold; margin-top: 3px;">Remesadas (Enviadas)</div>
+                </td>
+                <td style="width: 25%; background-color: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px 8px; text-align: center; border-radius: 6px;">
+                    <div style="font-size: 18px; font-weight: bold; color: #EC2024;">{pzs_tot:,} PZS</div>
+                    <div style="font-size: 11px; color: #64748B; font-weight: bold; margin-top: 3px;">Total Piezas</div>
+                </td>
+                <td style="width: 25%; background-color: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px 8px; text-align: center; border-radius: 6px;">
+                    <div style="font-size: 18px; font-weight: bold; color: #EC2024;">{tar_tot} Tarimas</div>
+                    <div style="font-size: 11px; color: #64748B; font-weight: bold; margin-top: 3px;">Tarimas Físicas</div>
+                </td>
+            </tr>
+        </table>
 
         <h4 style="color: #1E293B; margin-bottom: 5px;">📍 Desglose de Tarimas y Ubicación Exacta</h4>
         <table>
