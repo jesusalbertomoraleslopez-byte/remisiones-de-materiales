@@ -554,19 +554,15 @@ with tab_sgp_piezas:
                     df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].fillna("Metales")
                     df_sub_det['Estatus'] = df_sub_det['Estatus'].fillna("Disponible")
                     df_sub_det['Cantidad'] = pd.to_numeric(df_sub_det['Cantidad'], errors='coerce').fillna(0).astype(int)
-                    
-                    # Ordenar del movimiento más reciente al más antiguo (último a primero)
-                    if 'Fecha_Creacion' in df_sub_det.columns:
-                        df_sub_det['_dt_sort'] = pd.to_datetime(df_sub_det['Fecha_Creacion'], errors='coerce', dayfirst=True)
-                        df_sub_det = df_sub_det.sort_values(by='_dt_sort', ascending=False)
-                        df_sub_det['Fecha_Creacion'] = df_sub_det['Fecha_Creacion'].apply(normalizar_fecha_display)
 
                     rem_map = {}
+                    rem_date_map = {}
                     if not df_remisiones.empty:
                         import ast
                         for _, r_row in df_remisiones.iterrows():
                             fol = str(r_row.get('Folio_Remision', ''))
-                            fec = normalizar_fecha_display(r_row.get('Fecha_Hora_Salida', ''))
+                            fec_raw = r_row.get('Fecha_Hora_Salida', '')
+                            fec = normalizar_fecha_display(fec_raw)
                             rec = str(r_row.get('Nombre_Receptor', ''))
                             dir_rec = str(r_row.get('Direccion_Receptor', ''))
                             asoc = r_row.get('Tarimas_Asociadas', '')
@@ -575,9 +571,32 @@ with tab_sgp_piezas:
                                 except Exception: asoc = [asoc]
                             if isinstance(asoc, list):
                                 for t_id in asoc:
-                                    rem_map[str(t_id).strip()] = f"Remisión {fol} ({fec}) ➡️ {rec} [{dir_rec}]"
+                                    t_str = str(t_id).strip()
+                                    rem_map[t_str] = f"Remisión {fol} ({fec}) ➡️ {rec} [{dir_rec}]"
+                                    rem_date_map[t_str] = fec_raw
 
                     df_sub_det['Detalle_Remision'] = df_sub_det['ID_Tarima'].astype(str).str.strip().map(lambda x: rem_map.get(x, "En Planta / Almacén"))
+
+                    # Helper para obtener timestamp comparable seguro del último movimiento
+                    def get_latest_dt(row):
+                        t_id = str(row.get('ID_Tarima', '')).strip()
+                        d_rem = rem_date_map.get(t_id)
+                        d_emp = row.get('Fecha_Creacion')
+                        
+                        dt_rem = pd.to_datetime(d_rem, format='mixed', dayfirst=True, errors='coerce') if d_rem else pd.NaT
+                        dt_emp = pd.to_datetime(d_emp, format='mixed', dayfirst=True, errors='coerce') if d_emp else pd.NaT
+                        
+                        if pd.notna(dt_rem) and pd.notna(dt_emp): return max(dt_rem, dt_emp)
+                        if pd.notna(dt_rem): return dt_rem
+                        if pd.notna(dt_emp): return dt_emp
+                        return pd.Timestamp.min
+
+                    # ORDENAR ESTRICTAMENTE DE MÁS RECIENTE A MÁS ANTIGUO (ÚLTIMO MOVIMIENTO AL PRINCIPADO)
+                    df_sub_det['_dt_ult_mov'] = df_sub_det.apply(get_latest_dt, axis=1)
+                    df_sub_det = df_sub_det.sort_values(by='_dt_ult_mov', ascending=False)
+                    
+                    if 'Fecha_Creacion' in df_sub_det.columns:
+                        df_sub_det['Fecha_Creacion'] = df_sub_det['Fecha_Creacion'].apply(normalizar_fecha_display)
 
                     pzs_disp = df_sub_det[df_sub_det['Estatus'] == 'Disponible']['Cantidad'].sum()
                     pzs_rem = df_sub_det[df_sub_det['Estatus'] == 'Remesada']['Cantidad'].sum()
