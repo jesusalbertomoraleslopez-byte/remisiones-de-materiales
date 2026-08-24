@@ -925,9 +925,12 @@ with tab_sgp_piezas:
                     st.info(f"ℹ️ El SKU **{sku_actual}** está registrado en el catálogo master, pero **aún no cuenta con tarimas físicamente registradas en planta**.")
                 else:
                     if not df_tarimas.empty:
+                        if 'Planta_Origen' not in df_tarimas.columns:
+                            df_tarimas['Planta_Origen'] = "Planta 1 - Sigrama Diagonal"
+                        cols_tar = [c for c in ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus'] if c in df_tarimas.columns]
                         df_sub_det = pd.merge(
                             df_sub_det, 
-                            df_tarimas[['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus']], 
+                            df_tarimas[cols_tar], 
                             on="ID_Tarima", 
                             how="left"
                         )

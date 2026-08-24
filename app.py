@@ -2085,9 +2085,14 @@ if "BD_SKUs_Autorizados" not in st.session_state or st.session_state.get("BD_SKU
 if "BD_Tarimas" not in st.session_state or st.session_state.get("BD_Tarimas") is None:
     df_git_tarimas = cargar_excel_desde_github("BD_Tarimas.xlsx")
     if df_git_tarimas is not None:
+        if "Planta_Origen" not in df_git_tarimas.columns:
+            df_git_tarimas["Planta_Origen"] = "Planta 1 - Sigrama Diagonal"
         st.session_state.BD_Tarimas = df_git_tarimas
     else:
-        st.session_state.BD_Tarimas = pd.DataFrame(columns=["ID_Tarima", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus", "Es_Nueva"])
+        st.session_state.BD_Tarimas = pd.DataFrame(columns=["ID_Tarima", "Planta_Origen", "Tarima_Origen_Excel", "Fecha_Creacion", "Ubicacion_Actual", "Creado_Por", "Tipo_Tarima", "Estatus", "Es_Nueva"])
+else:
+    if not st.session_state.BD_Tarimas.empty and "Planta_Origen" not in st.session_state.BD_Tarimas.columns:
+        st.session_state.BD_Tarimas["Planta_Origen"] = "Planta 1 - Sigrama Diagonal"
 
 # --- Detalle Granular de Contenido por Tarima ---
 if "BD_Detalle_Tarimas" not in st.session_state or st.session_state.get("BD_Detalle_Tarimas") is None:
