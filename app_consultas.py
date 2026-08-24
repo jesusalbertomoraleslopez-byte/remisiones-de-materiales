@@ -163,6 +163,28 @@ def cargar_excel_desde_github(file_name):
             pass
     return pd.DataFrame()
 
+# Helper de estandarización unificada de fechas a formato DD/MM/YYYY
+def normalizar_fecha_display(val):
+    """Convierte cualquier formato de fecha (ISO YYYY-MM-DD, DD/MM/YYYY, Timestamp) al formato unificado DD/MM/YYYY."""
+    if pd.isna(val) or val is None:
+        return "N/A"
+    val_str = str(val).strip()
+    if not val_str or val_str.upper() in ['N/A', 'NONE', 'NAN', 'S/N']:
+        return "N/A"
+    if ' ' in val_str:
+        val_str = val_str.split()[0]
+    try:
+        # Formato ISO YYYY-MM-DD -> DD/MM/YYYY
+        if len(val_str) == 10 and val_str[4] == '-' and val_str[7] == '-':
+            parts = val_str.split('-')
+            return f"{parts[2]}/{parts[1]}/{parts[0]}"
+        dt = pd.to_datetime(val_str, errors='coerce', dayfirst=True)
+        if pd.notna(dt):
+            return dt.strftime('%d/%m/%Y')
+    except Exception:
+        pass
+    return val_str
+
 # Helper de resolución de imágenes
 @st.cache_data(ttl=300, max_entries=50)
 def obtener_imagen_sku(sku):
@@ -454,13 +476,15 @@ with tab_sgp_piezas:
                     df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].fillna("Metales")
                     df_sub_det['Estatus'] = df_sub_det['Estatus'].fillna("Disponible")
                     df_sub_det['Cantidad'] = pd.to_numeric(df_sub_det['Cantidad'], errors='coerce').fillna(0).astype(int)
+                    if 'Fecha_Creacion' in df_sub_det.columns:
+                        df_sub_det['Fecha_Creacion'] = df_sub_det['Fecha_Creacion'].apply(normalizar_fecha_display)
 
                     rem_map = {}
                     if not df_remisiones.empty:
                         import ast
                         for _, r_row in df_remisiones.iterrows():
                             fol = str(r_row.get('Folio_Remision', ''))
-                            fec = str(r_row.get('Fecha_Hora_Salida', '')).split()[0]
+                            fec = normalizar_fecha_display(r_row.get('Fecha_Hora_Salida', ''))
                             rec = str(r_row.get('Nombre_Receptor', ''))
                             dir_rec = str(r_row.get('Direccion_Receptor', ''))
                             asoc = r_row.get('Tarimas_Asociadas', '')
