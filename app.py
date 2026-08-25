@@ -300,7 +300,7 @@ def cargar_excel_desde_github(file_name):
         if token:
             headers["Authorization"] = f"token {token}"
             
-        res = requests.get(url, headers=headers)
+        res = requests.get(url, headers=headers, timeout=5)
         if res.status_code == 200:
             archivo_bytes = res.content
             try:
@@ -334,7 +334,7 @@ def leer_github_fresco(file_name):
         if token:
             headers["Authorization"] = f"token {token}"
             
-        res = requests.get(url, headers=headers)
+        res = requests.get(url, headers=headers, timeout=5)
         if res.status_code == 200:
             archivo_bytes = res.content
             try:
@@ -372,7 +372,7 @@ def subir_excel_a_github(file_name, dataframe_to_save):
         base64_content = base64.b64encode(buffer_git.getvalue()).decode("utf-8")
         
         # Obtener el SHA del archivo existente para poder reemplazarlo
-        res_get = requests.get(url, headers=headers)
+        res_get = requests.get(url, headers=headers, timeout=5)
         sha = res_get.json().get("sha") if res_get.status_code == 200 else None
 
         payload = {
@@ -418,7 +418,7 @@ def obtener_skus_con_imagen():
             GITHUB_TOKEN = obtener_secret("github_token")
             url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
             headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-            res = requests.get(url_list, headers=headers)
+            res = requests.get(url_list, headers=headers, timeout=5)
             if res.status_code == 200:
                 for item in res.json():
                     if "(" in item["name"]:
@@ -445,7 +445,7 @@ def renderizar_explorador_imagenes():
                 GITHUB_TOKEN = obtener_secret("github_token")
                 url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
                 headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-                res_list = requests.get(url_list, headers=headers)
+                res_list = requests.get(url_list, headers=headers, timeout=5)
                 if res_list.status_code == 200:
                     items_git = res_list.json()
                     downloaded_count = 0
@@ -635,7 +635,7 @@ def generar_pdf_catalogo_articulos(df_articulos):
             GITHUB_TOKEN = obtener_secret("github_token")
             url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
             headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-            res_list = requests.get(url_list, headers=headers)
+            res_list = requests.get(url_list, headers=headers, timeout=5)
             if res_list.status_code == 200:
                 github_items = res_list.json()
         except Exception:
@@ -719,7 +719,7 @@ def subir_imagen_a_github(file_path):
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
         
-        res_get = requests.get(url, headers=headers)
+        res_get = requests.get(url, headers=headers, timeout=5)
         sha = res_get.json().get("sha") if res_get.status_code == 200 else None
         
         payload = {
@@ -730,7 +730,7 @@ def subir_imagen_a_github(file_path):
         if sha:
             payload["sha"] = sha
             
-        res_put = requests.put(url, json=payload, headers=headers)
+        res_put = requests.put(url, json=payload, headers=headers, timeout=5)
         return res_put.status_code in [200, 201]
     except Exception as e:
         st.warning(f"⚠️ No se pudo sincronizar la imagen {file_path} con GitHub: {e}")
@@ -750,7 +750,7 @@ def descargar_imagen_desde_github(file_path):
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}?ref={BRANCH}"
         headers = {"Authorization": f"token {obtener_secret('github_token')}", "Accept": "application/vnd.github.v3+json"}
         
-        res = requests.get(url, headers=headers)
+        res = requests.get(url, headers=headers, timeout=5)
         if res.status_code == 200:
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             datos_json = res.json()
@@ -781,7 +781,7 @@ def eliminar_imagen_de_github(file_path):
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
         
-        res_get = requests.get(url, headers=headers)
+        res_get = requests.get(url, headers=headers, timeout=5)
         if res_get.status_code == 200:
             sha = res_get.json().get("sha")
             payload = {

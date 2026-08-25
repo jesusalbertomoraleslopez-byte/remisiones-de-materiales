@@ -315,7 +315,7 @@ def cargar_excel_desde_github(file_name):
         if token:
             headers["Authorization"] = f"token {token}"
             
-        res = requests.get(url, headers=headers)
+        res = requests.get(url, headers=headers, timeout=5)
         if res.status_code == 200:
             archivo_bytes = res.content
             try:
@@ -756,7 +756,7 @@ def obtener_imagen_sku(sku):
         try:
             url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
             headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
-            res = requests.get(url_list, headers=headers)
+            res = requests.get(url_list, headers=headers, timeout=5)
             if res.status_code == 200:
                 for item in res.json():
                     name_upper = item["name"].upper()
@@ -765,7 +765,7 @@ def obtener_imagen_sku(sku):
                         if not download_url:
                             download_url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/imagenes_articulos/{urllib.parse.quote(item['name'])}"
                         
-                        img_res = requests.get(download_url)
+                        img_res = requests.get(download_url, timeout=5)
                         if img_res.status_code == 200:
                             local_save_path = os.path.join("imagenes_articulos", item["name"])
                             with open(local_save_path, "wb") as f_out:
@@ -928,7 +928,7 @@ with c_banner2:
     else:
         try:
             url_b = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/REMISIONES%20APP.png"
-            res_b = requests.get(url_b)
+            res_b = requests.get(url_b, timeout=5)
             if res_b.status_code == 200:
                 with open("REMISIONES APP.png", "wb") as f_b:
                     f_b.write(res_b.content)
