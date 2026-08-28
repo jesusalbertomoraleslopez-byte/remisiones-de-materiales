@@ -2377,6 +2377,7 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
             t_val = rem_row['Tarimas_Asociadas']
             receptor = rem_row.get('Nombre_Receptor', 'Desconocido')
             fecha_salida = rem_row.get('Fecha_Hora_Salida', '')
+            folio_rem = str(rem_row.get('Folio_Remision', '')).strip()
             t_list = []
             if isinstance(t_val, str):
                 try:
@@ -2387,7 +2388,7 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
                 t_list = t_val
                 
             for t in t_list:
-                mapa_remisiones[str(t).strip()] = {"Receptor": receptor, "Fecha": fecha_salida}
+                mapa_remisiones[str(t).strip()] = {"Receptor": receptor, "Fecha": fecha_salida, "Folio": folio_rem}
     
     for _, row in df_resultado_piezas.iterrows():
     
@@ -2423,6 +2424,59 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
                 descripcion_final = "Articulo No Registrado en BD Remisiones"
         else:
             descripcion_final = "Articulo No Registrado en BD Remisiones"
+
+        # Buscar si existe una imagen cargada para este SKU
+        import glob
+        img_encontrada = None
+        matching_imgs = glob.glob(f"imagenes_articulos/{sku_actual}(*.*")
+        if matching_imgs:
+            img_encontrada = matching_imgs[0]
+        else:
+            if obtener_secret("github_token"):
+                try:
+                    GITHUB_TOKEN = obtener_secret("github_token")
+                    url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+                    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+                    res_list = requests.get(url_list, headers=headers)
+                    if res_list.status_code == 200:
+                        items_git = res_list.json()
+                        for it in items_git:
+                            if it["name"].startswith(f"{sku_actual}("):
+                                github_file_path = f"imagenes_articulos/{it['name']}"
+                                if descargar_imagen_desde_github(github_file_path):
+                                    img_encontrada = github_file_path
+                                    break
+                except Exception:
+                    pass
+
+        desc_paragraph = Paragraph(f"{row['SKU']}<br/><font color='#616161'>{descripcion_final}</font>", style_normal_text)
+        if img_encontrada and os.path.exists(img_encontrada):
+            from reportlab.platypus import Image as RLImage
+            img_flowable = RLImage(img_encontrada, width=75, height=75, hAlign='LEFT')
+            sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[80, 2.3 * inch - 80])
+            sub_t.setStyle(TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ('TOPPADDING', (0,0), (-1,-1), 0),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 0)
+            ]))
+            desc_cell_flowables = sub_t
+        else:
+            desc_cell_flowables = desc_paragraph
+
+        # Generar texto de estatus extendido
+        estatus_texto = str(row['Estatus_Envio'])
+        if "remesado" in estatus_texto.lower():
+            t_id = str(row['ID_Tarima']).strip()
+            if t_id in mapa_remisiones:
+                receptor_info = str(mapa_remisiones[t_id]["Receptor"])
+                fecha_info = str(mapa_remisiones[t_id]["Fecha"]).split()[0] if mapa_remisiones[t_id]["Fecha"] else ""
+                folio_info = str(mapa_remisiones[t_id].get("Folio", ""))
+                if len(receptor_info) > 18:
+                    receptor_info = receptor_info[:15] + "..."
+                folio_tag = f"<b>Remisión: {folio_info}</b><br/>" if folio_info else ""
+                estatus_texto = f"<b>Remesado</b><br/>{folio_tag}<font color='#555555' size='7'>{receptor_info}<br/>{fecha_info}</font>"
 
 
 
@@ -3262,11 +3316,12 @@ elif opcion_menu == "🔍 Centro de Consultas":
         if not df_resultado.empty:
             df_rep = df_resultado[["ID_Tarima", "PO", "Proyecto", "Parcialidad", "Descripcion", "SKU", "Cantidad", "Estatus_Envio", "Fecha_Creacion"]].copy()
             
-            # Enriquecer con Receptor y Fecha de Envío
+            # Enriquecer con Receptor, Folio de Remisión y Fecha de Envío
             mapa_remisiones_ui = {}
             if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
                 import ast
                 for _, rem_row in st.session_state.BD_Datos_Generales_Remision.iterrows():
+                    folio_rem = str(rem_row.get('Folio_Remision', 'N/A')).strip()
                     t_val = rem_row['Tarimas_Asociadas']
                     receptor = rem_row.get('Nombre_Receptor', 'N/A')
                     fecha_salida = rem_row.get('Fecha_Hora_Salida', 'N/A')
@@ -3279,22 +3334,30 @@ elif opcion_menu == "🔍 Centro de Consultas":
                     elif isinstance(t_val, list):
                         t_list = t_val
                     for t in t_list:
-                        mapa_remisiones_ui[str(t).strip()] = {"Receptor": receptor, "Fecha_Salida": str(fecha_salida).split()[0] if fecha_salida else "N/A"}
+                        mapa_remisiones_ui[str(t).strip()] = {
+                            "Receptor": receptor, 
+                            "Fecha_Salida": str(fecha_salida).split()[0] if fecha_salida else "N/A",
+                            "Folio_Remision": folio_rem
+                        }
             
+            df_rep['Número de Remisión'] = "N/A"
             df_rep['Enviado a (Receptor)'] = "N/A"
             df_rep['Fecha de Envío'] = "N/A"
             for idx, row in df_rep.iterrows():
                 if row['Estatus_Envio'] == 'Remesado':
                     t_id = str(row['ID_Tarima']).strip()
                     info = mapa_remisiones_ui.get(t_id, {})
+                    fol_num = info.get("Folio_Remision", "N/A")
+                    df_rep.at[idx, 'Número de Remisión'] = fol_num
                     df_rep.at[idx, 'Enviado a (Receptor)'] = info.get("Receptor", "N/A")
                     df_rep.at[idx, 'Fecha de Envío'] = info.get("Fecha_Salida", "N/A")
-            
-            df_rep = df_rep[["ID_Tarima", "PO", "Proyecto", "Parcialidad", "Descripcion", "SKU", "Cantidad", "Estatus_Envio", "Enviado a (Receptor)", "Fecha de Envío", "Fecha_Creacion"]]
-            df_rep.columns = ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Cantidad (Pzs)", "Estatus de Envío", "Enviado a (Receptor)", "Fecha de Envío", "Fecha de Ingreso"]
+
+            cols_export_inv = ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Cantidad (Pzs)", "Estatus de Envío", "Número de Remisión", "Enviado a (Receptor)", "Fecha de Envío", "Fecha de Ingreso"]
+            df_rep = df_rep[["ID_Tarima", "PO", "Proyecto", "Parcialidad", "Descripcion", "SKU", "Cantidad", "Estatus_Envio", "Número de Remisión", "Enviado a (Receptor)", "Fecha de Envío", "Fecha_Creacion"]]
+            df_rep.columns = cols_export_inv
             
             # Normalizar tipos para evitar error pyarrow.lib.ArrowInvalid al serializar DataFrame mixto
-            for col in ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Estatus de Envío", "Enviado a (Receptor)", "Fecha de Envío", "Fecha de Ingreso"]:
+            for col in cols_export_inv:
                 if col in df_rep.columns:
                     df_rep[col] = df_rep[col].astype(str)
             df_rep["Cantidad (Pzs)"] = pd.to_numeric(df_rep["Cantidad (Pzs)"], errors='coerce').fillna(0).astype(int)
@@ -3358,7 +3421,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
                     df_exportar_inventario = df_rep.copy()
                 else:
                     # Si no hay datos, creamos una tabla vacía segura con los encabezados oficiales
-                    df_exportar_inventario = pd.DataFrame(columns=["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Cantidad (Pzs)", "Estatus de Envío", "Enviado a (Receptor)", "Fecha de Envío", "Fecha de Ingreso"])
+                    df_exportar_inventario = pd.DataFrame(columns=cols_export_inv)
                     df_metadatos.loc[len(df_metadatos)] = {"Concepto": "AVISO", "Valor": "No se encontraron registros con los filtros seleccionados."}
         
                 # 3. Escritura segura y directa en el archivo Excel
@@ -3370,8 +3433,8 @@ elif opcion_menu == "🔍 Centro de Consultas":
                     df_exportar_inventario = df_exportar_inventario.sort_values(by="ID Tarima", ascending=True)
                     
                     df_temp = df_exportar_inventario.copy()
-                    df_temp['Cant_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if str(r['Estatus de Envío']).strip() == 'Remesado' else 0, axis=1)
-                    df_temp['Cant_No_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if str(r['Estatus de Envío']).strip() != 'Remesado' else 0, axis=1)
+                    df_temp['Cant_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if 'Remesado' in str(r['Estatus de Envío']) else 0, axis=1)
+                    df_temp['Cant_No_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if 'Remesado' not in str(r['Estatus de Envío']) else 0, axis=1)
                     
                     df_resumen = df_temp.groupby('SKU / Producto').agg({
                         'Orden de Compra (PO)': lambda x: ', '.join(x.astype(str).dropna().unique()),
@@ -3390,8 +3453,8 @@ elif opcion_menu == "🔍 Centro de Consultas":
                     }])
                     df_resumen = pd.concat([df_resumen, total_row], ignore_index=True)
                     
-                    df_remesados = df_exportar_inventario[df_exportar_inventario['Estatus de Envío'].astype(str).str.strip() == 'Remesado'].copy()
-                    df_no_remesados = df_exportar_inventario[df_exportar_inventario['Estatus de Envío'].astype(str).str.strip() != 'Remesado'].copy()
+                    df_remesados = df_exportar_inventario[df_exportar_inventario['Estatus de Envío'].astype(str).str.contains('Remesado', case=False, na=False)].copy()
+                    df_no_remesados = df_exportar_inventario[~df_exportar_inventario['Estatus de Envío'].astype(str).str.contains('Remesado', case=False, na=False)].copy()
                 else:
                     df_resumen = pd.DataFrame(columns=["No. SKU", "PO'S", "Cantidad Remesada", "Cantidad No Remesada", "Total Fabricado"])
                     df_remesados = df_exportar_inventario.copy()
