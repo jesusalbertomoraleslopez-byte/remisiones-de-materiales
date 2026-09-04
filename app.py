@@ -2626,7 +2626,53 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         ('BACKGROUND', (2,0), (2,-1), colors.HexColor("#F5F5F5"))
     ]))
     story.append(t_panel)
-    story.append(Spacer(1, 0.2 * inch))
+    story.append(Spacer(1, 0.12 * inch))
+    
+    # --- PANEL INTERMEDIO: RESUMEN DE TARIMAS Y CANTIDADES EN DESPACHO ---
+    tarimas_ids = []
+    if 'Tarimas_Asociadas' in datos_remision and pd.notna(datos_remision['Tarimas_Asociadas']):
+        try:
+            import ast
+            t_list = ast.literal_eval(str(datos_remision['Tarimas_Asociadas']))
+            if isinstance(t_list, list):
+                tarimas_ids = [str(x).strip() for x in t_list if str(x).strip()]
+        except Exception:
+            pass
+            
+    if not tarimas_ids and 'ID_Tarima' in df_detalles_remision.columns:
+        tarimas_ids = df_detalles_remision['ID_Tarima'].dropna().unique().tolist()
+        
+    total_tarimas = len(tarimas_ids)
+    total_piezas = int(df_detalles_remision['Cantidad'].sum()) if 'Cantidad' in df_detalles_remision.columns and not df_detalles_remision.empty else 0
+    tarimas_display_str = ", ".join([f"<b>{t}</b>" for t in tarimas_ids]) if tarimas_ids else "N/A"
+
+    t_sum_header = Table([[Paragraph("RESUMEN DE TARIMAS Y CANTIDADES EN EMBARQUE", style_blanco_bold)]], colWidths=[7.5 * inch])
+    t_sum_header.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#455A64")),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER')
+    ]))
+    story.append(t_sum_header)
+    
+    datos_resumen = [
+        [
+            Paragraph(f"<b>CANTIDAD DE TARIMAS:</b><br/><font size='10' color='#EC2024'><b>{total_tarimas} Tarima(s)</b></font>", style_normal_text),
+            Paragraph(f"<b>TOTAL DE PIEZAS:</b><br/><font size='10' color='#111111'><b>{total_piezas} Pzs</b></font>", style_normal_text),
+            Paragraph(f"<b>RELACIÓN DE TARIMAS ENVIADAS:</b><br/>{tarimas_display_str}", style_normal_text)
+        ]
+    ]
+    t_panel_resumen = Table(datos_resumen, colWidths=[1.8 * inch, 1.5 * inch, 4.2 * inch])
+    t_panel_resumen.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDBDBD")),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BACKGROUND', (0,0), (1,-1), colors.HexColor("#F5F5F5")),
+        ('BACKGROUND', (2,0), (2,-1), colors.HexColor("#FFFFFF")),
+        ('LEFTPADDING', (0,0), (-1,-1), 6),
+        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4)
+    ]))
+    story.append(t_panel_resumen)
+    story.append(Spacer(1, 0.15 * inch))
     
     # --- PANEL 2: TABLA DE MATERIALES ASOCIADOS EN DESPACHO ---
     tabla_materiales = [[
