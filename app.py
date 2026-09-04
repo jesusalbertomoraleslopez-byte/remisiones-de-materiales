@@ -2636,18 +2636,23 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
     ]]
     
     for _, row in df_detalles_remision.iterrows():
-        # Búsqueda segura del nombre comercial del artículo
-        sku_partida = row.get('SKU', '')
+        sku_partida = str(row.get('SKU', '')).strip()
         concepto_remision = "Material de Embarque"
+        sku_cliente = ""
         
+        # Búsqueda de información de catálogo y SKU Cliente en BD_Articulos
         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-            df_match_rem = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'] == sku_partida]
+            df_match_rem = st.session_state.BD_Articulos[st.session_state.BD_Articulos['SKU'].astype(str).str.strip() == sku_partida]
             if not df_match_rem.empty:
                 art_info = df_match_rem.iloc[0]
                 nombre_com = str(art_info.get('Nombre', '')).strip()
                 calibre = str(art_info.get('Calibre_Espesor', '')).strip()
                 dims = str(art_info.get('Dimensiones_Pieza', '')).strip()
                 acabado = str(art_info.get('Acabado_Superficial', '')).strip()
+                if 'SKU_Cliente' in art_info and pd.notna(art_info.get('SKU_Cliente')):
+                    sc = str(art_info.get('SKU_Cliente')).strip()
+                    if sc and sc.upper() not in ['N/A', 'NONE', 'NAN', 'S/N']:
+                        sku_cliente = sc
                 
                 detalles = []
                 if calibre and calibre.lower() != 'nan' and calibre != '': detalles.append(f"<b>Calibre/Espesor:</b> {calibre}")
@@ -2664,10 +2669,36 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         else:
             concepto_remision = "Articulo No Registrado en BD Remisiones"
 
+        # Búsqueda complementaria de SKU Cliente en BD_Requerimientos_POs si no estaba en BD_Articulos
+        if not sku_cliente and "BD_Requerimientos_POs" in st.session_state and not st.session_state.BD_Requerimientos_POs.empty:
+            po_upper = str(row.get('PO', '')).strip().upper()
+            df_req_match = st.session_state.BD_Requerimientos_POs[
+                (st.session_state.BD_Requerimientos_POs['SKU'].astype(str).str.strip().str.upper() == sku_partida.upper()) &
+                (st.session_state.BD_Requerimientos_POs['PO'].astype(str).str.strip().str.upper() == po_upper)
+            ]
+            if not df_req_match.empty and 'SKU_Cliente' in df_req_match.columns:
+                sc = str(df_req_match.iloc[0].get('SKU_Cliente', '')).strip()
+                if sc and sc.upper() not in ['N/A', 'NONE', 'NAN', 'S/N']:
+                    sku_cliente = sc
 
+        # Búsqueda de ID Interno y Proyecto en BD_POs_Cabecera
+        id_interno_po = ""
+        proyecto_po = str(row.get('Proyecto', '')).strip()
+        po_val = str(row.get('PO', '')).strip()
+        po_upper = po_val.upper()
+        
+        if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+            df_pos_cab = st.session_state.BD_POs_Cabecera
+            po_rows = df_pos_cab[df_pos_cab['PO'].astype(str).str.strip().str.upper() == po_upper]
+            if not po_rows.empty:
+                r_cab = po_rows.iloc[0]
+                if 'ID_Interno' in r_cab and pd.notna(r_cab.get('ID_Interno')):
+                    id_int = str(r_cab.get('ID_Interno')).strip()
+                    if id_int and id_int.upper() not in ['N/A', 'NONE', 'NAN', 'S/N']:
+                        id_interno_po = id_int
+                if not proyecto_po and 'Proyecto' in r_cab and pd.notna(r_cab.get('Proyecto')):
+                    proyecto_po = str(r_cab.get('Proyecto')).strip()
 
-        
-        
         # Buscar si existe una imagen cargada para este SKU
         import glob
         img_encontrada = None
@@ -2680,7 +2711,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                     GITHUB_TOKEN = obtener_secret("github_token")
                     url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
                     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-                    res_list = requests.get(url_list, headers=headers)
+                    res_list = requests.get(url_list, headers=headers, timeout=5)
                     if res_list.status_code == 200:
                         items = res_list.json()
                         for item in items:
@@ -2692,7 +2723,14 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                 except Exception:
                     pass
 
-        desc_paragraph = Paragraph(f"{row['SKU']}<br/><font color='#616161'>{concepto_remision}</font>", style_normal_text)
+        # Formatear la celda de SKU / PRODUCTO destacando el SKU CLIENTE
+        if sku_cliente:
+            sku_html_block = f"<b><font color='#000000' size='8.5'>SKU CLIENTE: {sku_cliente}</font></b><br/><font color='#EC2024' size='8'>SKU Planta: {sku_partida}</font>"
+        else:
+            sku_html_block = f"<b><font color='#EC2024' size='8.5'>SKU Planta: {sku_partida}</font></b>"
+
+        desc_paragraph = Paragraph(f"{sku_html_block}<br/>{concepto_remision}", style_normal_text)
+        
         if img_encontrada and os.path.exists(img_encontrada):
             from reportlab.platypus import Image as RLImage
             img_flowable = RLImage(img_encontrada, width=75, height=75, hAlign='LEFT')
@@ -2708,10 +2746,12 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         else:
             desc_cell_flowables = desc_paragraph
             
-        # Construir celda de PO con posible badge de color
-        po_val = str(row['PO'])
-        po_upper = po_val.strip().upper()
-        po_cell_flowable = Paragraph(po_val, style_normal_text)
+        # Construir celda de PO con posible ID Interno y badge de color
+        po_display_text = f"<b>{po_val}</b>"
+        if id_interno_po:
+            po_display_text += f"<br/><font color='#64748B' size='7'>ID Int: {id_interno_po}</font>"
+            
+        po_cell_flowable = Paragraph(po_display_text, style_normal_text)
         
         if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
             df_pos_cab = st.session_state.BD_POs_Cabecera
@@ -2745,7 +2785,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                     ]))
                     
                     po_cell_table = Table([
-                        [Paragraph(po_val, style_normal_text)],
+                        [Paragraph(po_display_text, style_normal_text)],
                         [badge_table]
                     ], colWidths=[1.2 * inch])
                     po_cell_table.setStyle(TableStyle([
@@ -2757,11 +2797,13 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                         ('BOTTOMPADDING', (0,0), (-1,-1), 2)
                     ]))
                     po_cell_flowable = po_cell_table
+
+        proy_cell_flowable = Paragraph(f"<b>{proyecto_po}</b>", style_normal_text)
                     
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             po_cell_flowable,
-            Paragraph(str(row['Proyecto']), style_normal_text),
+            proy_cell_flowable,
             desc_cell_flowables,
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
         ])
@@ -2804,25 +2846,40 @@ def generar_excel_remision(datos_remision, df_detalles_remision):
     # 2. Preparar tabla de materiales
     df_mats = df_detalles_remision.copy()
     
-    # Enriquecer con Nombre del Catálogo
+    # Enriquecer con Nombre del Catálogo y SKU Cliente
     if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-        df_art = st.session_state.BD_Articulos[['SKU', 'Nombre']].copy()
+        cols_art = [c for c in ['SKU', 'Nombre', 'SKU_Cliente'] if c in st.session_state.BD_Articulos.columns]
+        df_art = st.session_state.BD_Articulos[cols_art].copy()
         df_art['SKU'] = df_art['SKU'].astype(str).str.strip()
         df_mats['SKU'] = df_mats['SKU'].astype(str).str.strip()
         df_mats = pd.merge(df_mats, df_art, on='SKU', how='left')
         df_mats['Nombre'] = df_mats['Nombre'].fillna("Articulo No Registrado")
+        if 'SKU_Cliente' not in df_mats.columns:
+            df_mats['SKU_Cliente'] = "N/A"
+        df_mats['SKU_Cliente'] = df_mats['SKU_Cliente'].fillna("N/A")
     else:
         df_mats['Nombre'] = "Articulo No Registrado"
-        
-    df_export = df_mats[['ID_Tarima', 'PO', 'Proyecto', 'SKU', 'Nombre', 'Cantidad']].copy()
-    df_export.columns = ["ID TARIMA", "ORDEN COMPRA (PO)", "PROYECTO", "SKU / PRODUCTO", "DESCRIPCION", "CANTIDAD (PZS)"]
+        df_mats['SKU_Cliente'] = "N/A"
+
+    # Enriquecer con ID_Interno de BD_POs_Cabecera
+    df_mats['ID_Interno'] = "N/A"
+    if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+        df_pos_c = st.session_state.BD_POs_Cabecera
+        if 'PO' in df_pos_c.columns and 'ID_Interno' in df_pos_c.columns:
+            map_int = dict(zip(df_pos_c['PO'].astype(str).str.strip().str.upper(), df_pos_c['ID_Interno'].astype(str).str.strip()))
+            df_mats['ID_Interno'] = df_mats['PO'].astype(str).str.strip().str.upper().map(lambda x: map_int.get(x, "N/A"))
+
+    df_export = df_mats[['ID_Tarima', 'PO', 'ID_Interno', 'Proyecto', 'SKU_Cliente', 'SKU', 'Nombre', 'Cantidad']].copy()
+    df_export.columns = ["ID TARIMA", "ORDEN COMPRA (PO)", "ID INTERNO PO", "PROYECTO", "SKU CLIENTE", "SKU PLANTA", "DESCRIPCION", "CANTIDAD (PZS)"]
     
     # Agregar fila de total
     total_row = {
         "ID TARIMA": "TOTALES",
         "ORDEN COMPRA (PO)": "",
+        "ID INTERNO PO": "",
         "PROYECTO": "",
-        "SKU / PRODUCTO": "",
+        "SKU CLIENTE": "",
+        "SKU PLANTA": "",
         "DESCRIPCION": "",
         "CANTIDAD (PZS)": df_export["CANTIDAD (PZS)"].sum()
     }
