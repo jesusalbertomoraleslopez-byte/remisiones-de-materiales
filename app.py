@@ -2598,8 +2598,10 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
     
     # Estilos tipográficos especializados
     style_blanco_bold = ParagraphStyle('WB_Rem', parent=styles['Normal'], textColor=colors.white, fontName="Helvetica-Bold", alignment=1, fontSize=9)
-    style_normal_bold = ParagraphStyle('NB_Rem', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=8)
+    style_normal_bold = ParagraphStyle('NB_Rem', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=8, alignment=1)
     style_normal_text = ParagraphStyle('NT_Rem', parent=styles['Normal'], fontSize=8)
+    style_center_text = ParagraphStyle('CT_Rem', parent=styles['Normal'], fontSize=8, alignment=1)
+    style_cantidad = ParagraphStyle('Cant_Rem', parent=styles['Normal'], fontName="Helvetica-Bold", fontSize=13, leading=15, alignment=1, textColor=colors.HexColor("#111111"))
     
     story.append(Spacer(1, 0.1 * inch))
     
@@ -2660,7 +2662,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                 if dims and dims.lower() != 'nan' and dims != '': detalles.append(f"<b>Dimensiones:</b> {dims}")
                 if acabado and acabado.lower() != 'nan' and acabado != '': detalles.append(f"<b>Material/Acabado:</b> {acabado}")
                 
-                espec_str = f" | ".join(detalles)
+                espec_str = "<br/>".join(detalles)
                 if espec_str:
                     concepto_remision = f"<b>{nombre_com}</b><br/><font color='#555555' size='7.5'>{espec_str}</font>"
                 else:
@@ -2727,8 +2729,8 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         
         if img_encontrada and os.path.exists(img_encontrada):
             from reportlab.platypus import Image as RLImage
-            img_flowable = RLImage(img_encontrada, width=65, height=65, hAlign='LEFT')
-            sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[70, 2.3 * inch - 70])
+            img_flowable = RLImage(img_encontrada, width=60, height=60, hAlign='LEFT')
+            sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[65, 2.6 * inch - 65])
             sub_t.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('LEFTPADDING', (0,0), (-1,-1), 0),
@@ -2745,7 +2747,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         if id_interno_po:
             po_display_text += f"<br/><font color='#64748B' size='7'>ID Int: {id_interno_po}</font>"
             
-        po_cell_flowable = Paragraph(po_display_text, style_normal_text)
+        po_cell_flowable = Paragraph(po_display_text, style_center_text)
         
         if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
             df_pos_cab = st.session_state.BD_POs_Cabecera
@@ -2768,7 +2770,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                         textColor=colors.HexColor(fg)
                     )
                     badge_p = Paragraph(txt, style_badge)
-                    badge_table = Table([[badge_p]], colWidths=[1.0 * inch], rowHeights=[0.18 * inch])
+                    badge_table = Table([[badge_p]], colWidths=[0.95 * inch], rowHeights=[0.18 * inch])
                     badge_table.setStyle(TableStyle([
                         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor(bg)),
                         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -2779,9 +2781,9 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                     ]))
                     
                     po_cell_table = Table([
-                        [Paragraph(po_display_text, style_normal_text)],
+                        [Paragraph(po_display_text, style_center_text)],
                         [badge_table]
-                    ], colWidths=[1.1 * inch])
+                    ], colWidths=[1.05 * inch])
                     po_cell_table.setStyle(TableStyle([
                         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -2792,7 +2794,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                     ]))
                     po_cell_flowable = po_cell_table
 
-        proy_cell_flowable = Paragraph(f"<b>{proyecto_po}</b>", style_normal_text)
+        proy_cell_flowable = Paragraph(f"<b>{proyecto_po}</b>", style_center_text)
         
         # Celda independiente para SKU CLIENTE con fallback inteligente
         if not sku_cliente or sku_cliente.upper() in ['N/A', 'NONE', 'NAN', 'S/N']:
@@ -2801,22 +2803,28 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
             sku_cliente_str = sku_cliente
             
         sku_cliente_flowable = Paragraph(f"<b>{sku_cliente_str}</b>", style_normal_bold)
+        cantidad_flowable = Paragraph(f"<b>{int(row['Cantidad'])}</b><br/><font size='7' color='#64748B'>Pzs</font>", style_cantidad)
                     
         tabla_materiales.append([
-            Paragraph(str(row['ID_Tarima']), style_normal_text),
+            Paragraph(str(row['ID_Tarima']), style_center_text),
             po_cell_flowable,
             proy_cell_flowable,
             sku_cliente_flowable,
             desc_cell_flowables,
-            Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
+            cantidad_flowable
         ])
 
         
-    t_mat = Table(tabla_materiales, colWidths=[1.0 * inch, 1.1 * inch, 1.0 * inch, 1.2 * inch, 2.3 * inch, 0.9 * inch])
+    t_mat = Table(tabla_materiales, colWidths=[0.95 * inch, 1.05 * inch, 0.85 * inch, 1.15 * inch, 2.60 * inch, 0.90 * inch])
     t_mat.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#D32F2F")),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#757575")),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (0,0), (3,-1), 'CENTER'),
+        ('ALIGN', (4,0), (4,-1), 'LEFT'),
+        ('ALIGN', (5,0), (5,-1), 'CENTER'),
+        ('LEFTPADDING', (0,0), (-1,-1), 3),
+        ('RIGHTPADDING', (0,0), (-1,-1), 3)
     ]))
     story.append(t_mat)
     
