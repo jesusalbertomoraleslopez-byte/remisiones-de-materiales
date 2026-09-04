@@ -2672,10 +2672,8 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
 
         # Búsqueda complementaria de SKU Cliente en BD_Requerimientos_POs si no estaba en BD_Articulos
         if not sku_cliente and "BD_Requerimientos_POs" in st.session_state and not st.session_state.BD_Requerimientos_POs.empty:
-            po_upper = str(row.get('PO', '')).strip().upper()
             df_req_match = st.session_state.BD_Requerimientos_POs[
-                (st.session_state.BD_Requerimientos_POs['SKU'].astype(str).str.strip().str.upper() == sku_partida.upper()) &
-                (st.session_state.BD_Requerimientos_POs['PO'].astype(str).str.strip().str.upper() == po_upper)
+                st.session_state.BD_Requerimientos_POs['SKU'].astype(str).str.strip().str.upper() == sku_partida.upper()
             ]
             if not df_req_match.empty and 'SKU_Cliente' in df_req_match.columns:
                 sc = str(df_req_match.iloc[0].get('SKU_Cliente', '')).strip()
@@ -2796,11 +2794,13 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
 
         proy_cell_flowable = Paragraph(f"<b>{proyecto_po}</b>", style_normal_text)
         
-        # Celda independiente para SKU CLIENTE
-        if sku_cliente:
-            sku_cliente_flowable = Paragraph(f"<b>{sku_cliente}</b>", style_normal_bold)
+        # Celda independiente para SKU CLIENTE con fallback inteligente
+        if not sku_cliente or sku_cliente.upper() in ['N/A', 'NONE', 'NAN', 'S/N']:
+            sku_cliente_str = sku_partida
         else:
-            sku_cliente_flowable = Paragraph("N/A", style_normal_text)
+            sku_cliente_str = sku_cliente
+            
+        sku_cliente_flowable = Paragraph(f"<b>{sku_cliente_str}</b>", style_normal_bold)
                     
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
