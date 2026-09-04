@@ -2662,11 +2662,17 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                 if dims and dims.lower() != 'nan' and dims != '': detalles.append(f"<b>Dimensiones:</b> {dims}")
                 if acabado and acabado.lower() != 'nan' and acabado != '': detalles.append(f"<b>Material/Acabado:</b> {acabado}")
                 
+                # Formatear nombre comercial separando paréntesis largos en nueva línea para cero empalmes
+                nombre_com_fmt = nombre_com
+                if '(' in nombre_com and not nombre_com.startswith('('):
+                    p_parts = nombre_com.split('(', 1)
+                    nombre_com_fmt = f"{p_parts[0].strip()}<br/><font color='#555555' size='7.5'>({p_parts[1].strip()}</font>"
+
                 espec_str = "<br/>".join(detalles)
                 if espec_str:
-                    concepto_remision = f"<b>{nombre_com}</b><br/><font color='#555555' size='7.5'>{espec_str}</font>"
+                    concepto_remision = f"<b>{nombre_com_fmt}</b><br/><font color='#555555' size='7.5'>{espec_str}</font>"
                 else:
-                    concepto_remision = f"<b>{nombre_com}</b>"
+                    concepto_remision = f"<b>{nombre_com_fmt}</b>"
             else:
                 concepto_remision = "Articulo No Registrado en BD Remisiones"
         else:
@@ -2729,8 +2735,8 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         
         if img_encontrada and os.path.exists(img_encontrada):
             from reportlab.platypus import Image as RLImage
-            img_flowable = RLImage(img_encontrada, width=60, height=60, hAlign='LEFT')
-            sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[60, 2.45 * inch - 60])
+            img_flowable = RLImage(img_encontrada, width=55, height=55, hAlign='LEFT')
+            sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[55, 2.80 * inch - 55])
             sub_t.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('LEFTPADDING', (0,0), (-1,-1), 0),
@@ -2770,7 +2776,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                         textColor=colors.HexColor(fg)
                     )
                     badge_p = Paragraph(txt, style_badge)
-                    badge_table = Table([[badge_p]], colWidths=[0.95 * inch], rowHeights=[0.18 * inch])
+                    badge_table = Table([[badge_p]], colWidths=[0.88 * inch], rowHeights=[0.18 * inch])
                     badge_table.setStyle(TableStyle([
                         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor(bg)),
                         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -2783,7 +2789,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                     po_cell_table = Table([
                         [Paragraph(po_display_text, style_center_text)],
                         [badge_table]
-                    ], colWidths=[1.05 * inch])
+                    ], colWidths=[0.95 * inch])
                     po_cell_table.setStyle(TableStyle([
                         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -2842,7 +2848,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         ])
 
         
-    t_mat = Table(tabla_materiales, colWidths=[0.90 * inch, 1.05 * inch, 0.80 * inch, 1.40 * inch, 2.45 * inch, 0.90 * inch])
+    t_mat = Table(tabla_materiales, colWidths=[0.80 * inch, 0.95 * inch, 0.70 * inch, 1.40 * inch, 2.80 * inch, 0.85 * inch])
     t_mat.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#D32F2F")),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#757575")),
@@ -2850,8 +2856,8 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         ('ALIGN', (0,0), (3,-1), 'CENTER'),
         ('ALIGN', (4,0), (4,-1), 'LEFT'),
         ('ALIGN', (5,0), (5,-1), 'CENTER'),
-        ('LEFTPADDING', (0,0), (-1,-1), 3),
-        ('RIGHTPADDING', (0,0), (-1,-1), 3)
+        ('LEFTPADDING', (0,0), (-1,-1), 2),
+        ('RIGHTPADDING', (0,0), (-1,-1), 2)
     ]))
     story.append(t_mat)
     
