@@ -2631,7 +2631,8 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         Paragraph("ID TARIMA", style_blanco_bold),
         Paragraph("ORDEN COMPRA", style_blanco_bold),
         Paragraph("PROYECTO", style_blanco_bold),
-        Paragraph("SKU / PRODUCTO", style_blanco_bold),
+        Paragraph("SKU CLIENTE", style_blanco_bold),
+        Paragraph("SKU PLANTA / PRODUCTO", style_blanco_bold),
         Paragraph("CANTIDAD", style_blanco_bold)
     ]]
     
@@ -2723,18 +2724,13 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                 except Exception:
                     pass
 
-        # Formatear la celda de SKU / PRODUCTO destacando el SKU CLIENTE
-        if sku_cliente:
-            sku_html_block = f"<b><font color='#000000' size='8.5'>SKU CLIENTE: {sku_cliente}</font></b><br/><font color='#EC2024' size='8'>SKU Planta: {sku_partida}</font>"
-        else:
-            sku_html_block = f"<b><font color='#EC2024' size='8.5'>SKU Planta: {sku_partida}</font></b>"
-
-        desc_paragraph = Paragraph(f"{sku_html_block}<br/>{concepto_remision}", style_normal_text)
+        # Formatear celda de SKU PLANTA / PRODUCTO
+        desc_paragraph = Paragraph(f"<b><font color='#EC2024' size='8.5'>{sku_partida}</font></b><br/>{concepto_remision}", style_normal_text)
         
         if img_encontrada and os.path.exists(img_encontrada):
             from reportlab.platypus import Image as RLImage
-            img_flowable = RLImage(img_encontrada, width=75, height=75, hAlign='LEFT')
-            sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[80, 2.7 * inch - 80])
+            img_flowable = RLImage(img_encontrada, width=65, height=65, hAlign='LEFT')
+            sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[70, 2.3 * inch - 70])
             sub_t.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('LEFTPADDING', (0,0), (-1,-1), 0),
@@ -2774,7 +2770,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                         textColor=colors.HexColor(fg)
                     )
                     badge_p = Paragraph(txt, style_badge)
-                    badge_table = Table([[badge_p]], colWidths=[1.1 * inch], rowHeights=[0.18 * inch])
+                    badge_table = Table([[badge_p]], colWidths=[1.0 * inch], rowHeights=[0.18 * inch])
                     badge_table.setStyle(TableStyle([
                         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor(bg)),
                         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -2787,7 +2783,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                     po_cell_table = Table([
                         [Paragraph(po_display_text, style_normal_text)],
                         [badge_table]
-                    ], colWidths=[1.2 * inch])
+                    ], colWidths=[1.1 * inch])
                     po_cell_table.setStyle(TableStyle([
                         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -2799,17 +2795,24 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                     po_cell_flowable = po_cell_table
 
         proy_cell_flowable = Paragraph(f"<b>{proyecto_po}</b>", style_normal_text)
+        
+        # Celda independiente para SKU CLIENTE
+        if sku_cliente:
+            sku_cliente_flowable = Paragraph(f"<b>{sku_cliente}</b>", style_normal_bold)
+        else:
+            sku_cliente_flowable = Paragraph("N/A", style_normal_text)
                     
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_normal_text),
             po_cell_flowable,
             proy_cell_flowable,
+            sku_cliente_flowable,
             desc_cell_flowables,
             Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text)
         ])
 
         
-    t_mat = Table(tabla_materiales, colWidths=[1.2 * inch, 1.3 * inch, 1.3 * inch, 2.7 * inch, 1.0 * inch])
+    t_mat = Table(tabla_materiales, colWidths=[1.0 * inch, 1.1 * inch, 1.0 * inch, 1.2 * inch, 2.3 * inch, 0.9 * inch])
     t_mat.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#D32F2F")),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#757575")),
