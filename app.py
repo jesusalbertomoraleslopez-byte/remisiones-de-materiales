@@ -2730,7 +2730,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         if img_encontrada and os.path.exists(img_encontrada):
             from reportlab.platypus import Image as RLImage
             img_flowable = RLImage(img_encontrada, width=60, height=60, hAlign='LEFT')
-            sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[65, 2.6 * inch - 65])
+            sub_t = Table([[img_flowable, desc_paragraph]], colWidths=[60, 2.45 * inch - 60])
             sub_t.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('LEFTPADDING', (0,0), (-1,-1), 0),
@@ -2796,7 +2796,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
 
         proy_cell_flowable = Paragraph(f"<b>{proyecto_po}</b>", style_center_text)
         
-        # Celda independiente para SKU CLIENTE con Código de Barras Code128 incorporado
+        # Celda independiente para SKU CLIENTE con Código de Barras Code128 incorporado y escalado inteligente
         if not sku_cliente or sku_cliente.upper() in ['N/A', 'NONE', 'NAN', 'S/N']:
             sku_cliente_str = sku_partida
         else:
@@ -2806,8 +2806,19 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         
         try:
             from reportlab.graphics.barcode import code128
-            bc_dwg = code128.Code128(str(sku_cliente_str).strip(), barHeight=20, barWidth=0.7, humanReadable=False)
-            sku_table = Table([[sku_text_p], [bc_dwg]], colWidths=[1.15 * inch])
+            clean_sku_bc = str(sku_cliente_str).strip()
+            
+            # Cálculo dinámico de barWidth para garantía absoluta de no desbordamiento
+            max_bc_width = 85.0  # pt max width para la celda de 1.40 inches (100.8 pt)
+            selected_bw = 0.22
+            for bw in [0.45, 0.40, 0.35, 0.30, 0.28, 0.25, 0.22, 0.20, 0.18, 0.15]:
+                bc_test = code128.Code128(clean_sku_bc, barHeight=18, barWidth=bw, humanReadable=False)
+                if bc_test.width <= max_bc_width:
+                    selected_bw = bw
+                    break
+                    
+            bc_dwg = code128.Code128(clean_sku_bc, barHeight=18, barWidth=selected_bw, humanReadable=False)
+            sku_table = Table([[sku_text_p], [bc_dwg]], colWidths=[1.40 * inch])
             sku_table.setStyle(TableStyle([
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -2831,7 +2842,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         ])
 
         
-    t_mat = Table(tabla_materiales, colWidths=[0.95 * inch, 1.05 * inch, 0.85 * inch, 1.15 * inch, 2.60 * inch, 0.90 * inch])
+    t_mat = Table(tabla_materiales, colWidths=[0.90 * inch, 1.05 * inch, 0.80 * inch, 1.40 * inch, 2.45 * inch, 0.90 * inch])
     t_mat.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#D32F2F")),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#757575")),
