@@ -2796,13 +2796,29 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
 
         proy_cell_flowable = Paragraph(f"<b>{proyecto_po}</b>", style_center_text)
         
-        # Celda independiente para SKU CLIENTE con fallback inteligente
+        # Celda independiente para SKU CLIENTE con Código de Barras Code128 incorporado
         if not sku_cliente or sku_cliente.upper() in ['N/A', 'NONE', 'NAN', 'S/N']:
             sku_cliente_str = sku_partida
         else:
             sku_cliente_str = sku_cliente
             
-        sku_cliente_flowable = Paragraph(f"<b>{sku_cliente_str}</b>", style_normal_bold)
+        sku_text_p = Paragraph(f"<b>{sku_cliente_str}</b>", style_normal_bold)
+        
+        try:
+            from reportlab.graphics.barcode import code128
+            bc_dwg = code128.Code128(str(sku_cliente_str).strip(), barHeight=20, barWidth=0.7, humanReadable=False)
+            sku_table = Table([[sku_text_p], [bc_dwg]], colWidths=[1.15 * inch])
+            sku_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ('TOPPADDING', (0,0), (-1,-1), 1),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 1)
+            ]))
+            sku_cliente_flowable = sku_table
+        except Exception:
+            sku_cliente_flowable = sku_text_p
         cantidad_flowable = Paragraph(f"<b>{int(row['Cantidad'])}</b><br/><font size='7' color='#64748B'>Pzs</font>", style_cantidad)
                     
         tabla_materiales.append([
