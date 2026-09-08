@@ -6500,28 +6500,31 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 df_art_editable = st.data_editor(
                     df_con_num,
                     use_container_width=True,
-                    disabled=["#", "SKU"],
+                    disabled=["#"],
                     hide_index=True,
                     num_rows="dynamic",
-                    key="editor_mantenimiento_articulos_directo_v3",
+                    key="editor_mantenimiento_articulos_directo_v4",
                     column_config={
-                        "#": st.column_config.NumberColumn("#", width="small"),
-                        "SKU": st.column_config.TextColumn("SKU (Bloqueado/Llave)"),
-                        "Nombre": st.column_config.TextColumn("Descripción Comercial"),
-                        "Calibre_Espesor": st.column_config.SelectboxColumn("Calibre / Espesor", options=["10GA", "12GA", "14GA", "16GA", "10GACR", "12GACR", "14GACR", "16GACR", "125AL", "250AL", "188AL"]),
-                        "Dimensiones_Pieza": st.column_config.TextColumn("Dimensiones"),
-                        "Acabado_Superficial": st.column_config.SelectboxColumn("Acabado Superficial", options=["Decapado", "Ansi 61", "Galvanizado", "Otro"])
+                        "#": st.column_config.NumberColumn("#", width="small", disabled=True),
+                        "SKU": st.column_config.TextColumn("SKU (Código Planta)", required=True, width="medium"),
+                        "Nombre": st.column_config.TextColumn("Descripción Comercial (Acrónimo)", width="large"),
+                        "Calibre_Espesor": st.column_config.TextColumn("Calibre / Espesor", width="medium"),
+                        "Dimensiones_Pieza": st.column_config.TextColumn("Dimensiones", width="medium"),
+                        "Acabado_Superficial": st.column_config.SelectboxColumn("Acabado Superficial", options=["Ansi 61", "Decapado", "Galvanizado", "Inox", "Aluminio", "Otro"], width="medium"),
+                        "SKU_Cliente": st.column_config.TextColumn("SKU Cliente (Código de Barras)", width="medium")
                     }
                 )
-                if st.button("💾 Guardar Cambios del Catálogo Maestro en GitHub", use_container_width=True):
+                if st.button("💾 Guardar Cambios del Catálogo Maestro en GitHub", use_container_width=True, type="primary"):
                     # Remover la columna # antes de guardar (es solo visual)
                     df_art_final = df_art_editable.drop(columns=["#"], errors="ignore").dropna(subset=["SKU"])
                     df_art_final["SKU"] = df_art_final["SKU"].astype(str).str.strip().str.upper()
+                    if "SKU_Cliente" in df_art_final.columns:
+                        df_art_final["SKU_Cliente"] = df_art_final["SKU_Cliente"].fillna("").astype(str).str.strip()
                     # Recalcular # correctamente antes de guardar
                     df_art_final = df_art_final.reset_index(drop=True)
                     st.session_state.BD_Articulos = df_art_final
                     if subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos):
-                        st.success(f"✅ Catálogo maestro sincronizado en GitHub. Total: **{len(df_art_final)} artículos**.")
+                        st.success(f"✅ ¡Catálogo maestro sincronizado en GitHub con éxito! Total: **{len(df_art_final)} artículos**.")
                         st.rerun()
                     else:
                         st.error("❌ Error de comunicación con GitHub.")
