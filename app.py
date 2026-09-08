@@ -2851,6 +2851,8 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
         # Celda independiente para SKU CLIENTE con Código de Barras Code128 incorporado y escalado inteligente
         if not sku_cliente or sku_cliente.upper() in ['N/A', 'NONE', 'NAN', 'S/N']:
             sku_cliente_str = sku_partida
+        elif str(sku_cliente).strip().upper().startswith('CLI-'):
+            sku_cliente_str = str(sku_cliente).strip()[4:].strip() or sku_partida
         else:
             sku_cliente_str = sku_cliente
             
@@ -2947,6 +2949,7 @@ def generar_excel_remision(datos_remision, df_detalles_remision):
         if 'SKU_Cliente' not in df_mats.columns:
             df_mats['SKU_Cliente'] = "N/A"
         df_mats['SKU_Cliente'] = df_mats['SKU_Cliente'].fillna("N/A")
+        df_mats['SKU_Cliente'] = df_mats['SKU_Cliente'].astype(str).str.replace(r'^CLI-', '', regex=True)
     else:
         df_mats['Nombre'] = "Articulo No Registrado"
         df_mats['SKU_Cliente'] = "N/A"
