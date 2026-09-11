@@ -25,6 +25,28 @@ st.set_page_config(
     page_icon="📦"
 )
 
+# --- EARLY SSO DETECTION DESDE CONCENTRADORA SIGRAMA ---
+try:
+    _qp = dict(st.query_params) if hasattr(st, "query_params") else {}
+    _token = _qp.get("sso_token")
+    if isinstance(_token, list): _token = _token[0] if _token else ""
+    _user = _qp.get("sso_user")
+    if isinstance(_user, list): _user = _user[0] if _user else ""
+    _role = _qp.get("sso_role", "Usuario")
+    if isinstance(_role, list): _role = _role[0] if _role else "Usuario"
+
+    if _token and str(_token).strip() == "SIGRAMA_AUTH_TOKEN" and _user:
+        st.session_state["logged_in"] = True
+        st.session_state["usuario_actual"] = str(_user).strip()
+        _r_str = str(_role).strip().lower()
+        _u_str = str(_user).strip().lower()
+        if _r_str in ["admin", "administrador"] or any(x in _u_str for x in ["admin", "morales", "jesus", "jesús", "jmorales", "quintana", "lquintana"]):
+            st.session_state["rol"] = "Administrador"
+        else:
+            st.session_state["rol"] = "Operador"
+except Exception:
+    pass
+
 # --- HELPER DE LECTURA SEGURA DE SECRETS ---
 def obtener_secret(key, default=None):
     try:
