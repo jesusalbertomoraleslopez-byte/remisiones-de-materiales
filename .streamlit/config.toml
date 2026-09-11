@@ -1,6 +1,10 @@
 [server]
-maxUploadSize = 25
-enableCORS = false
+maxUploadSize = 1024
+maxMessageSize = 1024
 
-[client]
-showErrorDetails = false
+[theme]
+primaryColor = "#EC2024"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F8F9FA"
+textColor = "#111111"
+font = "sans serif"

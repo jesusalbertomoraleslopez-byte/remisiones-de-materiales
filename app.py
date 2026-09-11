@@ -3152,6 +3152,21 @@ def mostrar_pantalla_login():
                 else:
                     st.error("Credenciales incorrectas. Verifique el usuario y la contraseña.")
 
+# Soporte SSO desde Concentradora SIGRAMA
+try:
+    sso_token = st.query_params.get("sso_token")
+    sso_user = st.query_params.get("sso_user")
+    if sso_token == "SIGRAMA_AUTH_TOKEN" and sso_user:
+        st.session_state.logged_in = True
+        st.session_state.usuario_actual = sso_user
+        sso_role = st.query_params.get("sso_role", "Usuario")
+        if sso_role in ["Admin", "Administrador"] or sso_user.lower() in ["admin", "administrador"]:
+            st.session_state.rol = "Administrador"
+        else:
+            st.session_state.rol = "Operador"
+except Exception:
+    pass
+
 # Ejecutar control de acceso
 if not st.session_state.get("logged_in", False):
     mostrar_pantalla_login()
