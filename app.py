@@ -2050,6 +2050,41 @@ def generar_pdf_etiqueta(t_imp):
 # 3. CAPA DE INICIALIZACIÓN GLOBAL SECTORIZADA (BLINDAJE DE SEGURIDAD)
 # =============================================================================
 
+# --- Soporte SSO desde Concentradora SIGRAMA (Robusto y Universal) ---
+def _obtener_sso_param(key):
+    try:
+        # Modo st.query_params moderno
+        if hasattr(st, "query_params"):
+            val = st.query_params.get(key)
+            if isinstance(val, list):
+                val = val[0] if val else None
+            if val is not None and str(val).strip() != "":
+                return str(val).strip()
+        # Modo st.experimental_get_query_params legado
+        if hasattr(st, "experimental_get_query_params"):
+            val = st.experimental_get_query_params().get(key)
+            if isinstance(val, list):
+                val = val[0] if val else None
+            if val is not None and str(val).strip() != "":
+                return str(val).strip()
+    except Exception:
+        pass
+    return None
+
+try:
+    _tok = _obtener_sso_param("sso_token")
+    _usr = _obtener_sso_param("sso_user")
+    _rol = _obtener_sso_param("sso_role") or "Usuario"
+    if _tok == "SIGRAMA_AUTH_TOKEN" and _usr:
+        st.session_state.logged_in = True
+        st.session_state.usuario_actual = _usr
+        if _rol.lower() in ["admin", "administrador"] or "admin" in _usr.lower() or "morales" in _usr.lower():
+            st.session_state.rol = "Administrador"
+        else:
+            st.session_state.rol = "Operador"
+except Exception:
+    pass
+
 # --- Estado de Inicio de Sesión ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False

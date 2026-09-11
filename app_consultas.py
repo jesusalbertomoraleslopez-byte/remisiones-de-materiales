@@ -919,6 +919,8 @@ df_tarimas = cargar_excel_desde_github("BD_Tarimas.xlsx")
 df_detalle = cargar_excel_desde_github("BD_Detalle_Tarimas.xlsx")
 df_remisiones = cargar_excel_desde_github("BD_Datos_Generales_Remision.xlsx")
 df_actividad = cargar_excel_desde_github("BD_Actividad_Log.xlsx")
+df_pos_cab = cargar_excel_desde_github("BD_POs_Cabecera.xlsx")
+df_pos_req = cargar_excel_desde_github("BD_Requerimientos_POs.xlsx")
 
 # --- RENDERIZADO DEL BANNER OFICIAL ESCALADO A 0.8X (80%) ---
 c_banner1, c_banner2, c_banner3 = st.columns([0.1, 0.8, 0.1])
@@ -1063,14 +1065,15 @@ with tab_sgp_piezas:
                 df_sub_det['Cantidad'] = pd.to_numeric(df_sub_det['Cantidad'], errors='coerce').fillna(0).astype(int)
 
                 rem_map = {}
+                folio_map = {}
                 if not df_remisiones.empty:
                     import ast
                     for _, r_row in df_remisiones.iterrows():
-                        fol = str(r_row.get('Folio_Remision', ''))
+                        fol = str(r_row.get('Folio_Remision', '')).strip()
                         fec_raw = r_row.get('Fecha_Hora_Salida', '')
                         fec = normalizar_fecha_display(fec_raw)
-                        rec = str(r_row.get('Nombre_Receptor', ''))
-                        dir_rec = str(r_row.get('Direccion_Receptor', ''))
+                        rec = str(r_row.get('Nombre_Receptor', '')).strip()
+                        dir_rec = str(r_row.get('Direccion_Receptor', '')).strip()
                         asoc = r_row.get('Tarimas_Asociadas', '')
                         if isinstance(asoc, str):
                             try: asoc = ast.literal_eval(asoc)
@@ -1079,9 +1082,25 @@ with tab_sgp_piezas:
                             for t_id in asoc:
                                 t_str = str(t_id).strip()
                                 rem_map[t_str] = f"Remisión {fol} ({fec}) ➡️ {rec} [{dir_rec}]"
+                                folio_map[t_str] = fol
                                 rem_date_map[t_str] = fec_raw
 
                 df_sub_det['Detalle_Remision'] = df_sub_det['ID_Tarima'].astype(str).str.strip().map(lambda x: rem_map.get(x, "En Planta / Almacén"))
+                df_sub_det['Numero_Remision'] = df_sub_det['ID_Tarima'].astype(str).str.strip().map(lambda x: folio_map.get(x, "N/A"))
+
+                # Mapeo de SKU Cliente desde BD_Articulos o BD_Requerimientos_POs
+                map_sku_cli = {}
+                if not df_articulos.empty and 'SKU' in df_articulos.columns and 'SKU_Cliente' in df_articulos.columns:
+                    map_sku_cli = dict(zip(df_articulos['SKU'].astype(str).str.strip().str.upper(), df_articulos['SKU_Cliente'].astype(str).str.strip()))
+                
+                df_sub_det['SKU_Cliente'] = df_sub_det['SKU'].astype(str).str.strip().str.upper().map(lambda x: map_sku_cli.get(x, "N/A"))
+
+                # Mapeo de ID Interno PO desde BD_POs_Cabecera
+                map_po_int = {}
+                if 'df_pos_cab' in locals() and not df_pos_cab.empty and 'PO' in df_pos_cab.columns and 'ID_Interno' in df_pos_cab.columns:
+                    map_po_int = dict(zip(df_pos_cab['PO'].astype(str).str.strip().str.upper(), df_pos_cab['ID_Interno'].astype(str).str.strip()))
+
+                df_sub_det['ID_Interno'] = df_sub_det['PO'].astype(str).str.strip().str.upper().map(lambda x: map_po_int.get(x, "N/A"))
 
                 def get_latest_dt(row):
                     t_id = str(row.get('ID_Tarima', '')).strip()
@@ -1172,7 +1191,7 @@ with tab_sgp_piezas:
             if df_sub_det.empty:
                 st.info(f"ℹ️ El SKU **{sku_actual}** está registrado en el catálogo master, pero **aún no cuenta con tarimas físicamente registradas en planta**.")
             else:
-                cols_mostrar = ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus', 'Cantidad', 'Proyecto', 'PO', 'Parcialidad', 'Descripcion', 'Detalle_Remision']
+                cols_mostrar = ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus', 'Cantidad', 'SKU_Cliente', 'Proyecto', 'PO', 'ID_Interno', 'Numero_Remision', 'Parcialidad', 'Descripcion', 'Detalle_Remision']
                 df_tabla_export = df_sub_det[[c for c in cols_mostrar if c in df_sub_det.columns]].copy()
                 df_tabla_export = df_tabla_export.rename(columns={
                     'ID_Tarima': 'ID Tarima (TPM)',
@@ -1182,6 +1201,9 @@ with tab_sgp_piezas:
                     'Ubicacion_Actual': 'Ubicación Actual',
                     'Estatus': 'Estatus Tarima',
                     'Cantidad': 'Piezas',
+                    'SKU_Cliente': 'SKU Cliente',
+                    'ID_Interno': 'ID Interno PO',
+                    'Numero_Remision': 'Número de Remisión',
                     'Descripcion': 'Descripción Proyecto',
                     'Detalle_Remision': 'Estatus de Remisión / Destino'
                 })
