@@ -18,6 +18,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+from pathlib import Path
 # 1. CONFIGURACIÓN E INTERFAZ BASE RESPONSIVA (Build 2026.08.05-v2)
 st.set_page_config(
     page_title="Remisiones de Materiales",
@@ -241,12 +242,27 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Renderizado de Banner Corporativo Adaptable
-try:
-    banner_img = Image.open("REMISIONES APP.png")
-    st.image(banner_img, use_container_width=True)
-except FileNotFoundError:
-    st.warning("⚠️ Cargando interfaz gráfica del banner superior corporativo...")
+components.html("""
+<script>
+(function() {
+  function hideFooter() {
+    document.querySelectorAll('footer').forEach(function(el) { el.style.display='none'; });
+    ['stFooter','stDecoration','stViewerBadge'].forEach(function(id) {
+      document.querySelectorAll('[data-testid="'+id+'"]').forEach(function(el) { el.style.display='none'; });
+    });
+    document.querySelectorAll('div[class*="viewerBadge"],div[class*="ProfileButton"],a[href*="streamlit.io"]').forEach(function(el) { el.style.display='none'; });
+  }
+  var observer = new MutationObserver(hideFooter);
+  observer.observe(document.documentElement, {childList:true, subtree:true});
+  hideFooter();
+})();
+</script>
+""", height=0)
+
+# === BANNER SIGRAMA ===
+_banner_path = Path(__file__).resolve().parent / "banner_sigrama.png"
+if _banner_path.exists():
+    st.image(str(_banner_path), use_container_width=True)
 
 # Slogan de Resultados / Transformación Principal
 st.markdown('<p style="text-align: center; font-size: 16px; font-weight: bold; color: #EC2024; font-family: \'Montserrat\', sans-serif; margin-top: 15px; text-transform: uppercase; letter-spacing: 1px;">SOLUCIONES QUE TRANSFORMAN TU EMPRESA</p>', unsafe_allow_html=True)
