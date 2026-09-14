@@ -68,6 +68,10 @@ st.markdown("""
         background: transparent !important;
         display: none !important;
     }
+    footer, [data-testid="stFooter"], [data-testid="stDecoration"], #MainMenu {
+        display: none !important;
+        visibility: hidden !important;
+    }
 
     /* BANNER INDUSTRIAL INTEGRADO ARMONIOSAMENTE */
     .banner-container {
