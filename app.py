@@ -841,16 +841,21 @@ def obtener_emails_config():
     cfg_path = "config_emails.json"
     default_cfg = {
         "dest_to": "Victor Montoya Martinez <victor.montoya@sigrama.com.mx>; Luis Domingo Garcia Gracia <luis.garcia@sigrama.com.mx>; Josue Mesta <josue.mesta@sigrama.com.mx>; Alejandra Arellano Machado <sarellano@sigrama.com.mx>; Mydory Noehmi Gonzalez Leon <abastecimientos@sigrama.com.mx>; Luis Alberto Sianez Moreno <almacen@sigrama.com.mx>",
-        "dest_cc": "Calidad <calidad@sigrama.com.mx>; Jesus Alberto Morales Lopez <jesus.morales@sigrama.com.mx>; Edgar Sosa Suarez <edgar.sosa@sigrama.com.mx>; Lorena Hernandez Cuellar <lhernandez@sigrama.com.mx>; Armando Woo Vazquez <armando.vazquez@sigrama.com.mx>; Bryan Alejandro Flores Mancinas <bryan.mancinas@sigrama.com.mx>; Cruz Eduardo Carreon Rios <cruz.carreon@sigrama.com.mx>; Luis Alfredo Quintana Palma <luis.quintana@sigrama.com.mx>; hluis.garcia@sigrama.com.mx; juan.ortiz@sigrama.com.mx; miguel.ramos@sigrama.com.mx; fgarcia@sigrama.com.mx"
+        "dest_cc": "Jesus Alberto Morales Lopez <jesus.morales@sigrama.com.mx>; Edgar Sosa Suarez <edgar.sosa@sigrama.com.mx>; Lorena Hernandez Cuellar <lhernandez@sigrama.com.mx>; Armando Woo Vazquez <armando.vazquez@sigrama.com.mx>; Bryan Alejandro Flores Mancinas <bryan.mancinas@sigrama.com.mx>; Cruz Eduardo Carreon Rios <cruz.carreon@sigrama.com.mx>; Luis Alfredo Quintana Palma <luis.quintana@sigrama.com.mx>; hluis.garcia@sigrama.com.mx; juan.ortiz@sigrama.com.mx; miguel.ramos@sigrama.com.mx; fgarcia@sigrama.com.mx"
     }
     if os.path.exists(cfg_path):
         try:
             with open(cfg_path, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
-            # Asegurar que los correos nuevos estén presentes en CC
+            # Asegurar que Calidad esté removido de CC
             cc_val = cfg.get("dest_cc", "")
-            correos_nuevos = ["hluis.garcia@sigrama.com.mx", "juan.ortiz@sigrama.com.mx", "miguel.ramos@sigrama.com.mx", "fgarcia@sigrama.com.mx"]
             modificado = False
+            if "calidad@sigrama.com.mx" in cc_val:
+                import re
+                cc_val = re.sub(r'(?:Calidad\s*<calidad@sigrama\.com\.mx>|calidad@sigrama\.com\.mx)\s*;?\s*', '', cc_val, flags=re.IGNORECASE).strip().rstrip(';')
+                modificado = True
+            # Asegurar que los correos nuevos estén presentes en CC
+            correos_nuevos = ["hluis.garcia@sigrama.com.mx", "juan.ortiz@sigrama.com.mx", "miguel.ramos@sigrama.com.mx", "fgarcia@sigrama.com.mx"]
             for correo in correos_nuevos:
                 if correo not in cc_val:
                     cc_val = f"{cc_val}; {correo}" if cc_val else correo
@@ -6866,7 +6871,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
         cfg_actual = obtener_emails_config()
         
         cfg_to = st.text_area("Destinatarios Principales (Para):", value=cfg_actual.get("dest_to", ""), help="Ejemplo: logistica@sigrama.com.mx; almacen@sigrama.com.mx")
-        cfg_cc = st.text_area("Con Copia (CC):", value=cfg_actual.get("dest_cc", ""), help="Ejemplo: calidad@sigrama.com.mx")
+        cfg_cc = st.text_area("Con Copia (CC):", value=cfg_actual.get("dest_cc", ""), help="Ejemplo: logistica@sigrama.com.mx")
         
         if st.button("💾 Guardar Listas de Distribución", use_container_width=True):
             if guardar_emails_config(cfg_to, cfg_cc):
