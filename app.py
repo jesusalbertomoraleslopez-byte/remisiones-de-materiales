@@ -5663,26 +5663,53 @@ elif opcion_menu == "📦 Catálogo de Artículos":
         st.write("---")
         st.subheader("🖼️ Detalle e Imagen del Artículo")
         
-        filtro_estado_img = st.radio(
-            "Filtrar artículos por estado de imagen:",
-            ["Todos", "Sin imagen", "Con imagen"],
-            horizontal=True,
-            key="filtro_estado_imagen_select"
-        )
+        c_filt_img1, c_filt_img2 = st.columns([2, 1])
+        with c_filt_img1:
+            filtro_estado_img = st.radio(
+                "Filtrar artículos por estado de imagen:",
+                ["Todos", "Sin imagen", "Con imagen"],
+                horizontal=True,
+                key="filtro_estado_imagen_select"
+            )
+        with c_filt_img2:
+            ver_todo_catalogo = st.checkbox(
+                "Mostrar todo el catálogo (ignorar filtros superiores)",
+                value=True,
+                help="Permite buscar y seleccionar cualquier artículo del catálogo maestro o de tarimas sin importar los filtros de búsqueda aplicados a la tabla superior.",
+                key="chk_ignorar_filtros_img"
+            )
         
         skus_con_img = obtener_skus_con_imagen()
-        lista_skus_filtrados = df_art_filtrado['SKU'].dropna().tolist()
+        
+        # Base de SKUs a mostrar: catálogo completo o filtrado
+        if ver_todo_catalogo:
+            base_skus_set = set(df_articulos_base['SKU'].dropna().astype(str).str.strip().unique())
+        else:
+            base_skus_set = set(df_art_filtrado['SKU'].dropna().astype(str).str.strip().unique())
+            
+        # Además, asegurar que cualquier SKU presente en tarimas/remisiones esté disponible para subir imagen
+        if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+            skus_tarimas = set(st.session_state.BD_Detalle_Tarimas['SKU'].dropna().astype(str).str.strip().unique())
+            base_skus_set = base_skus_set | skus_tarimas
+            
+        lista_skus_disponibles = sorted([s for s in base_skus_set if s])
         
         if filtro_estado_img == "Sin imagen":
-            lista_skus_filtrados = [s for s in lista_skus_filtrados if s not in skus_con_img]
+            lista_skus_filtrados = [s for s in lista_skus_disponibles if s not in skus_con_img]
         elif filtro_estado_img == "Con imagen":
-            lista_skus_filtrados = [s for s in lista_skus_filtrados if s in skus_con_img]
+            lista_skus_filtrados = [s for s in lista_skus_disponibles if s in skus_con_img]
+        else:
+            lista_skus_filtrados = lista_skus_disponibles
             
         opc_skus_img = ["Seleccione un SKU..."] + lista_skus_filtrados
         sku_sel = st.selectbox("Seleccione un SKU para administrar su imagen:", opc_skus_img, key="sku_select_img")
         
         if sku_sel != "Seleccione un SKU...":
-            art_row = df_art_filtrado[df_art_filtrado['SKU'] == sku_sel].iloc[0]
+            match_art = df_articulos_base[df_articulos_base['SKU'].astype(str).str.strip() == sku_sel]
+            if not match_art.empty:
+                art_row = match_art.iloc[0]
+            else:
+                art_row = pd.Series({'SKU': sku_sel, 'Nombre': sku_sel, 'Calibre_Espesor': 'N/A', 'Dimensiones_Pieza': 'N/A', 'Acabado_Superficial': 'N/A'})
             
             import glob
             os.makedirs("imagenes_articulos", exist_ok=True)
@@ -5836,6 +5863,19 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                                 
                                 if subir_imagen_a_github(nuevo_path):
                                     obtener_skus_con_imagen.clear()
+                                    # Si el SKU no estaba en BD_Articulos, registrarlo automáticamente
+                                    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                                        if sku_sel not in st.session_state.BD_Articulos['SKU'].astype(str).str.strip().tolist():
+                                            n_art = pd.DataFrame([{
+                                                'SKU': sku_sel,
+                                                'Nombre': sku_sel,
+                                                'Calibre_Espesor': None,
+                                                'Dimensiones_Pieza': None,
+                                                'Acabado_Superficial': 'Ansi 61',
+                                                'SKU_Cliente': sku_sel
+                                            }])
+                                            st.session_state.BD_Articulos = pd.concat([st.session_state.BD_Articulos, n_art], ignore_index=True)
+                                            subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
                                     st.success("¡Imagen guardada y sincronizada correctamente en GitHub!")
                                     st.rerun()
                                 else:
