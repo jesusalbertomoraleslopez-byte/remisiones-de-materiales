@@ -239,6 +239,11 @@ st.markdown("""
     header {visibility: hidden;}
     .stAppDeployButton {display: none !important;}
     [data-testid="stViewerBadge"] {display: none !important;}
+    
+    /* Espaciado inferior generoso para evitar recortes en pantallas y laptops */
+    .main .block-container {
+        padding-bottom: 300px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -5432,463 +5437,402 @@ elif opcion_menu == "🚚 Módulo Remisiones":
 # =============================================================================
 elif opcion_menu == "📦 Catálogo de Artículos":
     st.title("📦 Catálogo Maestro de Artículos")
-    st.markdown("Consulte y filtre de forma dinámica el catálogo oficial de productos cargados en el sistema:")
+    st.markdown("Consulte, filtre y administre las fotografías y fichas técnicas del catálogo oficial de productos:")
 
     if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
         df_articulos_base = st.session_state.BD_Articulos.copy()
 
-        # Cuadrícula de filtros dinámicos (3 columnas en paralelo para optimizar espacio)
-        art_col1, art_col2, art_col3 = st.columns(3)
-        
-        with art_col1:
-            # Filtro por SKU
-            opc_art_sku = ["Todos"] + sorted(df_articulos_base['SKU'].dropna().unique().tolist())
-            f_art_sku = st.selectbox("Filtrar por SKU:", opc_art_sku, key="filter_art_sku")
-            
-            # Filtro por Dimensiones
-            opc_art_dim = ["Todos"] + sorted(df_articulos_base['Dimensiones_Pieza'].dropna().unique().tolist())
-            f_art_dim = st.selectbox("Filtrar por Dimensiones:", opc_art_dim, key="filter_art_dim")
+        tab_cat_img, tab_cat_exp, tab_cat_aud = st.tabs([
+            "🖼️ Carga y Detalle de Imágenes",
+            "📋 Consulta y Filtros del Catálogo",
+            "🔍 Auditoría de Información Faltante"
+        ])
 
-        with art_col2:
-            # Filtro por Nombre / Descripción Comercial
-            opc_art_nom = ["Todos"] + sorted(df_articulos_base['Nombre'].dropna().unique().tolist())
-            f_art_nom = st.selectbox("Filtrar por Nombre:", opc_art_nom, key="filter_art_nom")
+        # =============================================================================
+        # PESTAÑA 1: CARGA Y DETALLE DE IMÁGENES
+        # =============================================================================
+        with tab_cat_img:
+            st.subheader("🖼️ Detalle e Imagen del Artículo")
+            st.markdown("Seleccione un artículo de la lista o escriba el SKU directamente para ver su foto, ficha técnica o cargar una nueva imagen:")
+            
+            c_filt_img1, c_filt_img2 = st.columns([2, 1])
+            with c_filt_img1:
+                filtro_estado_img = st.radio(
+                    "Filtrar artículos por estado de imagen:",
+                    ["Todos", "Sin imagen", "Con imagen"],
+                    horizontal=True,
+                    key="filtro_estado_imagen_select_v2"
+                )
+            with c_filt_img2:
+                st.write("")
+                st.caption("💡 Se incluyen todos los artículos del catálogo maestro y tarimas activas.")
 
-        with art_col3:
-            # Filtro por Calibre / Espesor
-            opc_art_cal = ["Todos"] + sorted(df_articulos_base['Calibre_Espesor'].dropna().unique().tolist())
-            f_art_cal = st.selectbox("Filtrar por Calibre / Espesor:", opc_art_cal, key="filter_art_cal")
-            
-            # Filtro por Acabado Superficial
-            opc_art_acab = ["Todos"] + sorted(df_articulos_base['Acabado_Superficial'].dropna().unique().tolist())
-            f_art_acab = st.selectbox("Filtrar por Acabado Superficial:", opc_art_acab, key="filter_art_acab")
+            skus_con_img = obtener_skus_con_imagen()
+            base_skus_set = set(df_articulos_base['SKU'].dropna().astype(str).str.strip().unique())
+            if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                skus_tarimas = set(st.session_state.BD_Detalle_Tarimas['SKU'].dropna().astype(str).str.strip().unique())
+                base_skus_set = base_skus_set | skus_tarimas
 
-        # Aplicación en cascada de los filtros seleccionados
-        df_art_filtrado = df_articulos_base.copy()
-        if f_art_sku != "Todos":
-            df_art_filtrado = df_art_filtrado[df_art_filtrado['SKU'] == f_art_sku]
-        if f_art_nom != "Todos":
-            df_art_filtrado = df_art_filtrado[df_art_filtrado['Nombre'] == f_art_nom]
-        if f_art_cal != "Todos":
-            df_art_filtrado = df_art_filtrado[df_art_filtrado['Calibre_Espesor'] == f_art_cal]
-        if f_art_dim != "Todos":
-            df_art_filtrado = df_art_filtrado[df_art_filtrado['Dimensiones_Pieza'] == f_art_dim]
-        if f_art_acab != "Todos":
-            df_art_filtrado = df_art_filtrado[df_art_filtrado['Acabado_Superficial'] == f_art_acab]
+            lista_skus_disponibles = sorted([s for s in base_skus_set if s])
 
-        st.write("---")
-        
-        # Despliegue de métricas rápidas de la consulta
-        col_metric, col_pdf = st.columns([2, 1])
-        with col_metric:
-            st.metric("🔢 Artículos en Selección:", f"{len(df_art_filtrado)} Items")
-        with col_pdf:
-            st.write("") # Alineación vertical
-            pdf_data = generar_pdf_catalogo_articulos(df_art_filtrado)
-            st.download_button(
-                label="📄 Descargar Catálogo (PDF)",
-                data=pdf_data,
-                file_name="Reporte_Catalogo_Articulos.pdf",
-                mime="application/pdf",
-                key="btn_download_catalogo_pdf_tab",
-                use_container_width=True
-            )
-        
-        # Despliegue de la tabla de datos estructurada
-        st.dataframe(
-            df_art_filtrado, 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "SKU": st.column_config.TextColumn("SKU / Código"),
-                "Nombre": st.column_config.TextColumn("Descripción Comercial"),
-                "Calibre_Espesor": st.column_config.TextColumn("Calibre / Espesor"),
-                "Dimensiones_Pieza": st.column_config.TextColumn("Dimensiones de la Pieza"),
-                "Acabado_Superficial": st.column_config.TextColumn("Acabado Superficial")
-            }
-        )
+            if filtro_estado_img == "Sin imagen":
+                lista_skus_filtrados = [s for s in lista_skus_disponibles if s not in skus_con_img]
+            elif filtro_estado_img == "Con imagen":
+                lista_skus_filtrados = [s for s in lista_skus_disponibles if s in skus_con_img]
+            else:
+                lista_skus_filtrados = lista_skus_disponibles
 
-        # --- SECCIÓN DE AUDITORÍA DE INFORMACIÓN FALTANTE ---
-        st.write("---")
-        st.subheader("🔍 Auditoría de Información Faltante en el Catálogo")
-        
-        # Definir las columnas que deben tener información completa
-        columnas_auditadas = ["Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
-        etiquetas_col = {
-            "Nombre": "Descripción Comercial",
-            "Calibre_Espesor": "Calibre / Espesor", 
-            "Dimensiones_Pieza": "Dimensiones",
-            "Acabado_Superficial": "Acabado Superficial"
-        }
-        
-        df_auditoria = df_articulos_base.copy()
-        
-        # Detectar campos vacíos: None, NaN, "None", cadena vacía, "N/A"
-        def campo_vacio(val):
-            if pd.isna(val):
-                return True
-            s = str(val).strip().upper()
-            return s in ["", "NONE", "N/A", "NAN", "NA", "-"]
-        
-        # Crear columna de conteo de campos faltantes por artículo
-        df_auditoria["_campos_faltantes"] = 0
-        df_auditoria["_detalle_faltante"] = ""
-        
-        for _, row in df_auditoria.iterrows():
-            faltantes = []
-            for col in columnas_auditadas:
-                if col in row.index and campo_vacio(row[col]):
-                    faltantes.append(etiquetas_col.get(col, col))
-            df_auditoria.at[row.name, "_campos_faltantes"] = len(faltantes)
-            df_auditoria.at[row.name, "_detalle_faltante"] = ", ".join(faltantes) if faltantes else "✅ Completo"
-        
-        df_incompletos = df_auditoria[df_auditoria["_campos_faltantes"] > 0].copy()
-        df_completos = df_auditoria[df_auditoria["_campos_faltantes"] == 0].copy()
-        
-        # Métricas de auditoría
-        col_aud1, col_aud2, col_aud3, col_aud4 = st.columns(4)
-        with col_aud1:
-            st.metric("📦 Total Artículos", len(df_auditoria))
-        with col_aud2:
-            st.metric("✅ Completos", len(df_completos))
-        with col_aud3:
-            st.metric("⚠️ Incompletos", len(df_incompletos))
-        with col_aud4:
-            pct = round((len(df_completos) / max(len(df_auditoria), 1)) * 100, 1)
-            st.metric("📊 % Cumplimiento", f"{pct}%")
-        
-        if not df_incompletos.empty:
-            # Desglose por campo faltante
-            st.write("")
-            st.markdown("**Desglose de campos faltantes:**")
-            col_det1, col_det2, col_det3, col_det4 = st.columns(4)
-            for i, col in enumerate(columnas_auditadas):
-                cnt = sum(1 for _, r in df_incompletos.iterrows() if campo_vacio(r.get(col, "")))
-                with [col_det1, col_det2, col_det3, col_det4][i]:
-                    st.metric(f"Sin {etiquetas_col[col]}", cnt)
+            c_sel1, c_sel2 = st.columns([2, 1])
+            with c_sel1:
+                opc_skus_img = ["Seleccione un SKU..."] + lista_skus_filtrados
+                sku_sel_dropdown = st.selectbox("Seleccione un SKU de la lista:", opc_skus_img, key="sku_select_img_v2")
+            with c_sel2:
+                sku_manual = st.text_input("O escriba el SKU directamente:", placeholder="Ej. 12-D-6083-05 o 13-D-6328-01", key="sku_input_manual_v2").strip().upper()
+
+            sku_sel = sku_manual if sku_manual else (sku_sel_dropdown if sku_sel_dropdown != "Seleccione un SKU..." else None)
+
+            if sku_sel:
+                match_art = df_articulos_base[df_articulos_base['SKU'].astype(str).str.strip() == sku_sel]
+                if not match_art.empty:
+                    art_row = match_art.iloc[0]
+                else:
+                    art_row = pd.Series({'SKU': sku_sel, 'Nombre': sku_sel, 'Calibre_Espesor': 'N/A', 'Dimensiones_Pieza': 'N/A', 'Acabado_Superficial': 'N/A', 'SKU_Cliente': sku_sel})
+
+                import glob
+                os.makedirs("imagenes_articulos", exist_ok=True)
+                matching_files_local = glob.glob(f"imagenes_articulos/{sku_sel}(*.*")
+
+                imagen_final_path = None
+                if matching_files_local:
+                    imagen_final_path = matching_files_local[0]
+                else:
+                    if obtener_secret("github_token"):
+                        try:
+                            GITHUB_TOKEN = obtener_secret("github_token")
+                            url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
+                            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+                            res_list = requests.get(url_list, headers=headers)
+                            if res_list.status_code == 200:
+                                items = res_list.json()
+                                for item in items:
+                                    if item["name"].startswith(f"{sku_sel}("):
+                                        github_file_path = f"imagenes_articulos/{item['name']}"
+                                        if descargar_imagen_desde_github(github_file_path):
+                                            imagen_final_path = github_file_path
+                                            break
+                        except Exception:
+                            pass
+
+                col_ficha, col_cargar = st.columns(2)
+                with col_ficha:
+                    st.write("##### Ficha Técnica del Artículo")
+                    copiar_html = f"""
+                        <div style="margin-bottom: 12px; font-family: sans-serif; display: flex; align-items: center; gap: 8px;">
+                            <button id="btn-copiar-sku" style="background-color: #EC2024; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px;">📋 Copiar SKU</button>
+                            <span id="msg-copiado" style="color: #2E7D32; font-weight: bold; display: none; font-size: 13px;">¡Copiado!</span>
+                        </div>
+                        <script>
+                            function copiarTexto() {{
+                                navigator.clipboard.writeText("{sku_sel}").then(function() {{
+                                    var msg = document.getElementById("msg-copiado");
+                                    msg.style.display = "inline";
+                                    setTimeout(function() {{ msg.style.display = "none"; }}, 2000);
+                                }});
+                            }}
+                            document.getElementById("btn-copiar-sku").addEventListener("click", copiarTexto);
+                        </script>
+                    """
+                    components.html(copiar_html, height=45)
+                    st.markdown(f"**SKU / Código:** `{sku_sel}`")
+                    st.markdown(f"**Nombre / Descripción:** {art_row.get('Nombre', sku_sel)}")
+                    st.markdown(f"**Calibre / Espesor:** {art_row.get('Calibre_Espesor', 'N/A')}")
+                    st.markdown(f"**Dimensiones:** {art_row.get('Dimensiones_Pieza', 'N/A')}")
+                    st.markdown(f"**Acabado Superficial:** {art_row.get('Acabado_Superficial', 'N/A')}")
+                    if 'SKU_Cliente' in art_row and pd.notna(art_row['SKU_Cliente']):
+                        st.markdown(f"**SKU Cliente:** `{art_row['SKU_Cliente']}`")
+
+                    st.write("")
+                    if imagen_final_path and os.path.exists(imagen_final_path):
+                        st.image(imagen_final_path, caption=f"Imagen cargada para {sku_sel}", use_container_width=True)
+                        if st.button("🗑️ Eliminar Imagen de Artículo", use_container_width=True, key=f"btn_del_img_{sku_sel}"):
+                            if eliminar_imagen_de_github(imagen_final_path):
+                                obtener_skus_con_imagen.clear()
+                                st.success("¡Imagen eliminada correctamente!")
+                                st.rerun()
+                            else:
+                                st.error("Error al eliminar la imagen en GitHub.")
+                    else:
+                        st.info("Este artículo no cuenta con una imagen asociada actualmente.")
+
+                with col_cargar:
+                    st.write("##### Cargar / Reemplazar Imagen")
+                    file_uploaded = st.file_uploader("Subir archivo de imagen (PNG, JPG, JPEG):", type=["png", "jpg", "jpeg"], key=f"file_uploader_{sku_sel}")
+
+                    paste_result = None
+                    try:
+                        from streamlit_paste_button import paste_image_button as pbutton
+                        paste_result = pbutton("📋 Pegar captura de pantalla desde el portapapeles", key=f"paste_button_{sku_sel}")
+                    except Exception:
+                        paste_result = None
+
+                    nueva_imagen_data = None
+                    img_ext = ".png"
+                    if file_uploaded:
+                        nueva_imagen_data = Image.open(file_uploaded)
+                        _, ext = os.path.splitext(file_uploaded.name)
+                        if ext.lower() in [".png", ".jpg", ".jpeg"]:
+                            img_ext = ext.lower()
+                    elif paste_result is not None and getattr(paste_result, 'image_data', None) is not None:
+                        nueva_imagen_data = paste_result.image_data
+                        img_ext = ".png"
+
+                    if nueva_imagen_data is not None:
+                        st.write("---")
+                        st.warning("⚠️ Vista Previa de la Nueva Imagen (Aún no se ha guardado):")
+                        st.image(nueva_imagen_data, caption="Vista Previa de la Carga", use_container_width=True)
+
+                        c_save, c_cancel = st.columns(2)
+                        with c_save:
+                            if st.button("💾 Guardar y Sincronizar Imagen", use_container_width=True, key=f"btn_save_img_{sku_sel}"):
+                                meses_en = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
+                                hoy = datetime.date.today()
+                                fecha_ingles = f"{hoy.day:02d}-{meses_en[hoy.month]}-{str(hoy.year)[-2:]}"
+                                nombre_archivo = f"{sku_sel}({fecha_ingles}){img_ext}"
+                                nuevo_path = f"imagenes_articulos/{nombre_archivo}"
+
+                                if imagen_final_path and os.path.exists(imagen_final_path):
+                                    eliminar_imagen_de_github(imagen_final_path)
+
+                                try:
+                                    if img_ext in [".jpg", ".jpeg"] and nueva_imagen_data.mode in ("RGBA", "P"):
+                                        nueva_imagen_data = nueva_imagen_data.convert("RGB")
+                                    nueva_imagen_data.save(nuevo_path)
+
+                                    if subir_imagen_a_github(nuevo_path):
+                                        obtener_skus_con_imagen.clear()
+                                        if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
+                                            if sku_sel not in st.session_state.BD_Articulos['SKU'].astype(str).str.strip().tolist():
+                                                n_art = pd.DataFrame([{'SKU': sku_sel, 'Nombre': sku_sel, 'Calibre_Espesor': None, 'Dimensiones_Pieza': None, 'Acabado_Superficial': 'Ansi 61', 'SKU_Cliente': sku_sel}])
+                                                st.session_state.BD_Articulos = pd.concat([st.session_state.BD_Articulos, n_art], ignore_index=True)
+                                                subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
+                                        st.success("¡Imagen guardada y sincronizada correctamente en GitHub!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Error al sincronizar la imagen con el repositorio de GitHub.")
+                                except Exception as ex_save:
+                                    st.error(f"Error al guardar el archivo localmente: {ex_save}")
+                        with c_cancel:
+                            if st.button("❌ Descartar", use_container_width=True, key=f"btn_discard_img_{sku_sel}"):
+                                st.rerun()
+            else:
+                st.info("👆 Seleccione un SKU de la lista desplegable o escriba un código en el recuadro para comenzar a cargar su fotografía.")
+
+            st.markdown("<div style='height: 250px;'></div>", unsafe_allow_html=True)
+
+        # =============================================================================
+        # PESTAÑA 2: CONSULTA Y FILTROS DEL CATÁLOGO
+        # =============================================================================
+        with tab_cat_exp:
+            st.subheader("📋 Explorador y Consulta Dinámica de Artículos")
             
-            st.write("")
-            
-            # Tabla de artículos incompletos
-            st.warning(f"⚠️ Se detectaron **{len(df_incompletos)} artículos** con información faltante. Revise la tabla y descargue el Excel para completar los datos.")
-            
-            df_mostrar = df_incompletos[["SKU"] + columnas_auditadas + ["_detalle_faltante"]].copy()
-            df_mostrar = df_mostrar.rename(columns={"_detalle_faltante": "Campos Faltantes"})
-            
+            # Cuadrícula de filtros dinámicos (3 columnas en paralelo para optimizar espacio)
+            art_col1, art_col2, art_col3 = st.columns(3)
+            with art_col1:
+                opc_art_sku = ["Todos"] + sorted(df_articulos_base['SKU'].dropna().unique().tolist())
+                f_art_sku = st.selectbox("Filtrar por SKU:", opc_art_sku, key="filter_art_sku_tab")
+                opc_art_dim = ["Todos"] + sorted(df_articulos_base['Dimensiones_Pieza'].dropna().unique().tolist())
+                f_art_dim = st.selectbox("Filtrar por Dimensiones:", opc_art_dim, key="filter_art_dim_tab")
+
+            with art_col2:
+                opc_art_nom = ["Todos"] + sorted(df_articulos_base['Nombre'].dropna().unique().tolist())
+                f_art_nom = st.selectbox("Filtrar por Nombre:", opc_art_nom, key="filter_art_nom_tab")
+
+            with art_col3:
+                opc_art_cal = ["Todos"] + sorted(df_articulos_base['Calibre_Espesor'].dropna().unique().tolist())
+                f_art_cal = st.selectbox("Filtrar por Calibre / Espesor:", opc_art_cal, key="filter_art_cal_tab")
+                opc_art_acab = ["Todos"] + sorted(df_articulos_base['Acabado_Superficial'].dropna().unique().tolist())
+                f_art_acab = st.selectbox("Filtrar por Acabado Superficial:", opc_art_acab, key="filter_art_acab_tab")
+
+            df_art_filtrado = df_articulos_base.copy()
+            if f_art_sku != "Todos":
+                df_art_filtrado = df_art_filtrado[df_art_filtrado['SKU'] == f_art_sku]
+            if f_art_nom != "Todos":
+                df_art_filtrado = df_art_filtrado[df_art_filtrado['Nombre'] == f_art_nom]
+            if f_art_cal != "Todos":
+                df_art_filtrado = df_art_filtrado[df_art_filtrado['Calibre_Espesor'] == f_art_cal]
+            if f_art_dim != "Todos":
+                df_art_filtrado = df_art_filtrado[df_art_filtrado['Dimensiones_Pieza'] == f_art_dim]
+            if f_art_acab != "Todos":
+                df_art_filtrado = df_art_filtrado[df_art_filtrado['Acabado_Superficial'] == f_art_acab]
+
+            st.write("---")
+            col_metric, col_pdf = st.columns([2, 1])
+            with col_metric:
+                st.metric("🔢 Artículos en Selección:", f"{len(df_art_filtrado)} Items")
+            with col_pdf:
+                st.write("")
+                pdf_data = generar_pdf_catalogo_articulos(df_art_filtrado)
+                st.download_button(
+                    label="📄 Descargar Catálogo (PDF)",
+                    data=pdf_data,
+                    file_name="Reporte_Catalogo_Articulos.pdf",
+                    mime="application/pdf",
+                    key="btn_download_catalogo_pdf_tab",
+                    use_container_width=True
+                )
+
             st.dataframe(
-                df_mostrar,
-                use_container_width=True,
+                df_art_filtrado, 
+                use_container_width=True, 
                 hide_index=True,
                 column_config={
                     "SKU": st.column_config.TextColumn("SKU / Código"),
                     "Nombre": st.column_config.TextColumn("Descripción Comercial"),
                     "Calibre_Espesor": st.column_config.TextColumn("Calibre / Espesor"),
-                    "Dimensiones_Pieza": st.column_config.TextColumn("Dimensiones"),
-                    "Acabado_Superficial": st.column_config.TextColumn("Acabado Superficial"),
-                    "Campos Faltantes": st.column_config.TextColumn("Campos Faltantes")
+                    "Dimensiones_Pieza": st.column_config.TextColumn("Dimensiones de la Pieza"),
+                    "Acabado_Superficial": st.column_config.TextColumn("Acabado Superficial")
                 }
             )
-            
-            # Generar Excel descargable con los artículos incompletos (formato de plantilla oficial)
-            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-            from openpyxl.utils import get_column_letter
-            
-            buf_aud = io.BytesIO()
-            df_export_aud = df_incompletos[["SKU"] + columnas_auditadas].copy()
-            # Limpiar valores vacíos para que el usuario vea celdas vacías claras
-            for col in columnas_auditadas:
-                df_export_aud[col] = df_export_aud[col].apply(lambda x: "" if campo_vacio(x) else x)
-            
-            with pd.ExcelWriter(buf_aud, engine='openpyxl') as wr_aud:
-                df_export_aud.to_excel(wr_aud, index=False, sheet_name='Articulos_Incompletos')
-                ws_aud = wr_aud.sheets['Articulos_Incompletos']
-                
-                # Formato de encabezado corporativo
-                fill_header = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
-                font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-                fill_vacio = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="solid")  # Amarillo claro para celdas vacías
-                font_normal = Font(name="Calibri", size=11)
-                thin_border = Border(
-                    left=Side(style='thin'), right=Side(style='thin'),
-                    top=Side(style='thin'), bottom=Side(style='thin')
-                )
-                
-                for cell in ws_aud[1]:
-                    cell.fill = fill_header
-                    cell.font = font_header
-                    cell.alignment = Alignment(horizontal='center', vertical='center')
-                    cell.border = thin_border
-                
-                # Formatear celdas de datos: resaltar en amarillo las vacías
-                for row in ws_aud.iter_rows(min_row=2, max_row=ws_aud.max_row, max_col=ws_aud.max_column):
-                    for cell in row:
-                        cell.font = font_normal
-                        cell.border = thin_border
-                        if cell.column > 1 and (cell.value is None or str(cell.value).strip() == ""):
-                            cell.fill = fill_vacio
-                
-                # Ajustar anchos
-                ws_aud.column_dimensions['A'].width = 20
-                ws_aud.column_dimensions['B'].width = 35
-                ws_aud.column_dimensions['C'].width = 18
-                ws_aud.column_dimensions['D'].width = 28
-                ws_aud.column_dimensions['E'].width = 22
-                
-                # Agregar validaciones de datos (Calibre y Acabado)
-                opciones_calibres = '"10GA,12GA,14GA,16GA,10GACR,12GACR,14GACR,16GACR,125AL,250AL,188AL"'
-                dv_cal = DataValidation(type="list", formula1=opciones_calibres, allow_blank=True)
-                ws_aud.add_data_validation(dv_cal)
-                dv_cal.add(f"C2:C{ws_aud.max_row + 1}")
-                
-                opciones_acabados = '"Decapado,Ansi 61,Galvanizado,Otro"'
-                dv_acab = DataValidation(type="list", formula1=opciones_acabados, allow_blank=True)
-                ws_aud.add_data_validation(dv_acab)
-                dv_acab.add(f"E2:E{ws_aud.max_row + 1}")
-                
-            buf_aud.seek(0)
-            
-            st.download_button(
-                label="📥 Descargar Artículos Incompletos (Excel para completar)",
-                data=buf_aud.getvalue(),
-                file_name="Articulos_Informacion_Faltante.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="btn_download_auditoria_faltantes",
-                use_container_width=True
-            )
-            st.info("💡 **Instrucciones:** Descargue el archivo, complete las celdas amarillas vacías y vuelva a subirlo en **Mantenimiento y Catálogos → Catálogo Maestro Detallado → Carga Masiva**. El sistema actualizará automáticamente los registros existentes con la nueva información.")
-        else:
-            st.success("🎉 ¡Excelente! Todos los artículos del catálogo tienen su información al 100%. No hay campos vacíos.")
 
-        # --- SECCIÓN ADICIONAL: CARGA Y DETALLE DE IMAGEN DE ARTÍCULO ---
-        st.write("---")
-        st.subheader("🖼️ Detalle e Imagen del Artículo")
-        
-        c_filt_img1, c_filt_img2 = st.columns([2, 1])
-        with c_filt_img1:
-            filtro_estado_img = st.radio(
-                "Filtrar artículos por estado de imagen:",
-                ["Todos", "Sin imagen", "Con imagen"],
-                horizontal=True,
-                key="filtro_estado_imagen_select"
-            )
-        with c_filt_img2:
-            ver_todo_catalogo = st.checkbox(
-                "Mostrar todo el catálogo (ignorar filtros superiores)",
-                value=True,
-                help="Permite buscar y seleccionar cualquier artículo del catálogo maestro o de tarimas sin importar los filtros de búsqueda aplicados a la tabla superior.",
-                key="chk_ignorar_filtros_img"
-            )
-        
-        skus_con_img = obtener_skus_con_imagen()
-        
-        # Base de SKUs a mostrar: catálogo completo o filtrado
-        if ver_todo_catalogo:
-            base_skus_set = set(df_articulos_base['SKU'].dropna().astype(str).str.strip().unique())
-        else:
-            base_skus_set = set(df_art_filtrado['SKU'].dropna().astype(str).str.strip().unique())
+        # =============================================================================
+        # PESTAÑA 3: AUDITORÍA DE INFORMACIÓN FALTANTE
+        # =============================================================================
+        with tab_cat_aud:
+            st.subheader("🔍 Auditoría de Información Faltante en el Catálogo")
             
-        # Además, asegurar que cualquier SKU presente en tarimas/remisiones esté disponible para subir imagen
-        if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
-            skus_tarimas = set(st.session_state.BD_Detalle_Tarimas['SKU'].dropna().astype(str).str.strip().unique())
-            base_skus_set = base_skus_set | skus_tarimas
+            columnas_auditadas = ["Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]
+            etiquetas_col = {
+                "Nombre": "Descripción Comercial",
+                "Calibre_Espesor": "Calibre / Espesor", 
+                "Dimensiones_Pieza": "Dimensiones",
+                "Acabado_Superficial": "Acabado Superficial"
+            }
             
-        lista_skus_disponibles = sorted([s for s in base_skus_set if s])
-        
-        if filtro_estado_img == "Sin imagen":
-            lista_skus_filtrados = [s for s in lista_skus_disponibles if s not in skus_con_img]
-        elif filtro_estado_img == "Con imagen":
-            lista_skus_filtrados = [s for s in lista_skus_disponibles if s in skus_con_img]
-        else:
-            lista_skus_filtrados = lista_skus_disponibles
+            df_auditoria = df_articulos_base.copy()
             
-        opc_skus_img = ["Seleccione un SKU..."] + lista_skus_filtrados
-        sku_sel = st.selectbox("Seleccione un SKU para administrar su imagen:", opc_skus_img, key="sku_select_img")
-        
-        if sku_sel != "Seleccione un SKU...":
-            match_art = df_articulos_base[df_articulos_base['SKU'].astype(str).str.strip() == sku_sel]
-            if not match_art.empty:
-                art_row = match_art.iloc[0]
-            else:
-                art_row = pd.Series({'SKU': sku_sel, 'Nombre': sku_sel, 'Calibre_Espesor': 'N/A', 'Dimensiones_Pieza': 'N/A', 'Acabado_Superficial': 'N/A'})
+            def campo_vacio(val):
+                if pd.isna(val):
+                    return True
+                s = str(val).strip().upper()
+                return s in ["", "NONE", "N/A", "NAN", "NA", "-"]
             
-            import glob
-            os.makedirs("imagenes_articulos", exist_ok=True)
+            df_auditoria["_campos_faltantes"] = 0
+            df_auditoria["_detalle_faltante"] = ""
             
-            # Escanear localmente
-            matching_files_local = glob.glob(f"imagenes_articulos/{sku_sel}(*.*")
+            for _, row in df_auditoria.iterrows():
+                faltantes = []
+                for col in columnas_auditadas:
+                    if col in row.index and campo_vacio(row[col]):
+                        faltantes.append(etiquetas_col.get(col, col))
+                df_auditoria.at[row.name, "_campos_faltantes"] = len(faltantes)
+                df_auditoria.at[row.name, "_detalle_faltante"] = ", ".join(faltantes) if faltantes else "✅ Completo"
             
-            imagen_final_path = None
-            if matching_files_local:
-                imagen_final_path = matching_files_local[0]
-            else:
-                # Buscar en GitHub si el token está disponible
-                if obtener_secret("github_token"):
-                    try:
-                        GITHUB_TOKEN = obtener_secret("github_token")
-                        url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-                        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-                        res_list = requests.get(url_list, headers=headers)
-                        if res_list.status_code == 200:
-                            items = res_list.json()
-                            for item in items:
-                                if item["name"].startswith(f"{sku_sel}("):
-                                    github_file_path = f"imagenes_articulos/{item['name']}"
-                                    if descargar_imagen_desde_github(github_file_path):
-                                        imagen_final_path = github_file_path
-                                        break
-                    except Exception:
-                        pass
+            df_incompletos = df_auditoria[df_auditoria["_campos_faltantes"] > 0].copy()
+            df_completos = df_auditoria[df_auditoria["_campos_faltantes"] == 0].copy()
             
-            col_ficha, col_cargar = st.columns(2)
+            col_aud1, col_aud2, col_aud3, col_aud4 = st.columns(4)
+            with col_aud1:
+                st.metric("📦 Total Artículos", len(df_auditoria))
+            with col_aud2:
+                st.metric("✅ Completos", len(df_completos))
+            with col_aud3:
+                st.metric("⚠️ Incompletos", len(df_incompletos))
+            with col_aud4:
+                pct = round((len(df_completos) / max(len(df_auditoria), 1)) * 100, 1)
+                st.metric("📊 % Cumplimiento", f"{pct}%")
             
-            with col_ficha:
-                st.write("##### Ficha Técnica del Artículo")
-                
-                # Widget HTML/JS para copiar SKU automáticamente al seleccionar, con botón físico de respaldo
-                copiar_html = f"""
-                    <div style="margin-bottom: 12px; font-family: sans-serif; display: flex; align-items: center; gap: 8px;">
-                        <button id="btn-copiar-sku" style="
-                            background-color: #EC2024;
-                            color: white;
-                            border: none;
-                            padding: 8px 16px;
-                            border-radius: 4px;
-                            cursor: pointer;
-                            font-weight: bold;
-                            font-size: 13px;
-                            display: inline-flex;
-                            align-items: center;
-                            gap: 8px;
-                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                        ">
-                            📋 Copiar SKU
-                        </button>
-                        <span id="msg-copiado" style="color: #2E7D32; font-weight: bold; display: none; font-size: 13px; animation: fadeIn 0.3s;">¡Copiado al portapapeles!</span>
-                    </div>
-                    <script>
-                        function copiarTexto() {{
-                            navigator.clipboard.writeText("{sku_sel}").then(function() {{
-                                var msg = document.getElementById("msg-copiado");
-                                msg.style.display = "inline";
-                                setTimeout(function() {{
-                                    msg.style.display = "none";
-                                }}, 2000);
-                            }}).catch(function(err) {{
-                                console.error("Error al copiar: ", err);
-                            }});
-                        }}
-                        // Ejecución inmediata
-                        try {{
-                            copiarTexto();
-                        }} catch(e) {{}}
-                        // Listener del botón
-                        document.getElementById("btn-copiar-sku").addEventListener("click", copiarTexto);
-                    </script>
-                """
-                components.html(copiar_html, height=45)
-                
-                st.markdown(f"**SKU / Código:** `{sku_sel}`")
-                st.markdown(f"**Nombre:** {art_row['Nombre']}")
-                st.markdown(f"**Calibre / Espesor:** {art_row['Calibre_Espesor']}")
-                st.markdown(f"**Dimensiones:** {art_row['Dimensiones_Pieza']}")
-                st.markdown(f"**Acabado Superficial:** {art_row['Acabado_Superficial']}")
+            if not df_incompletos.empty:
+                st.write("")
+                st.markdown("**Desglose de campos faltantes:**")
+                col_det1, col_det2, col_det3, col_det4 = st.columns(4)
+                for i, col in enumerate(columnas_auditadas):
+                    cnt = sum(1 for _, r in df_incompletos.iterrows() if campo_vacio(r.get(col, "")))
+                    with [col_det1, col_det2, col_det3, col_det4][i]:
+                        st.metric(f"Sin {etiquetas_col[col]}", cnt)
                 
                 st.write("")
-                if imagen_final_path and os.path.exists(imagen_final_path):
-                    st.image(imagen_final_path, caption=f"Imagen cargada para {sku_sel}", use_container_width=True)
+                st.warning(f"⚠️ Se detectaron **{len(df_incompletos)} artículos** con información faltante. Revise la tabla y descargue el Excel para completar los datos.")
+                
+                df_mostrar = df_incompletos[["SKU"] + columnas_auditadas + ["_detalle_faltante"]].copy()
+                df_mostrar = df_mostrar.rename(columns={"_detalle_faltante": "Campos Faltantes"})
+                
+                st.dataframe(
+                    df_mostrar,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "SKU": st.column_config.TextColumn("SKU / Código"),
+                        "Nombre": st.column_config.TextColumn("Descripción Comercial"),
+                        "Calibre_Espesor": st.column_config.TextColumn("Calibre / Espesor"),
+                        "Dimensiones_Pieza": st.column_config.TextColumn("Dimensiones"),
+                        "Acabado_Superficial": st.column_config.TextColumn("Acabado Superficial"),
+                        "Campos Faltantes": st.column_config.TextColumn("Campos Faltantes")
+                    }
+                )
+                
+                # Descargar Excel para completar
+                df_descarga = df_incompletos[["SKU", "Nombre", "Calibre_Espesor", "Dimensiones_Pieza", "Acabado_Superficial"]].copy()
+                buf_aud = io.BytesIO()
+                with pd.ExcelWriter(buf_aud, engine='openpyxl') as wr_aud:
+                    df_descarga.to_excel(wr_aud, index=False, sheet_name='Articulos_Incompletos')
+                    ws_aud = wr_aud.sheets['Articulos_Incompletos']
                     
-                    if st.button("🗑️ Eliminar Imagen de Artículo", use_container_width=True, key=f"btn_del_img_{sku_sel}"):
-                        if eliminar_imagen_de_github(imagen_final_path):
-                            obtener_skus_con_imagen.clear()
-                            st.success("¡Imagen eliminada correctamente del servidor y GitHub!")
-                            st.rerun()
-                        else:
-                            st.error("Error al eliminar la imagen en GitHub.")
-                else:
-                    st.info("Este artículo no cuenta con una imagen asociada actualmente.")
-            
-            with col_cargar:
-                st.write("##### Cargar / Reemplazar Imagen")
-                
-                file_uploaded = st.file_uploader("Subir archivo de imagen (PNG, JPG, JPEG):", type=["png", "jpg", "jpeg"], key=f"file_uploader_{sku_sel}")
-                
-                paste_result = None
-                try:
-                    from streamlit_paste_button import paste_image_button as pbutton
-                    paste_result = pbutton(
-                        "📋 Pegar captura de pantalla desde el portapapeles",
-                        key=f"paste_button_{sku_sel}"
+                    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+                    fill_hdr = PatternFill(start_color="111111", end_color="111111", fill_type="solid")
+                    font_hdr = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                    fill_yellow = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+                    thin_border = Border(
+                        left=Side(style='thin', color='D2D3D5'),
+                        right=Side(style='thin', color='D2D3D5'),
+                        top=Side(style='thin', color='D2D3D5'),
+                        bottom=Side(style='thin', color='D2D3D5')
                     )
-                except Exception:
-                    paste_result = None
-                
-                nueva_imagen_data = None
-                img_ext = ".png"
-                
-                if file_uploaded:
-                    nueva_imagen_data = Image.open(file_uploaded)
-                    _, ext = os.path.splitext(file_uploaded.name)
-                    if ext.lower() in [".png", ".jpg", ".jpeg"]:
-                        img_ext = ext.lower()
-                elif paste_result is not None and getattr(paste_result, 'image_data', None) is not None:
-                    nueva_imagen_data = paste_result.image_data
-                    img_ext = ".png"
                     
-                if nueva_imagen_data is not None:
-                    st.write("---")
-                    st.warning("⚠️ Vista Previa de la Nueva Imagen (Aún no se ha guardado):")
-                    st.image(nueva_imagen_data, caption="Vista Previa de la Carga", use_container_width=True)
+                    for col_idx in range(1, 6):
+                        c = ws_aud.cell(row=1, column=col_idx)
+                        c.font = font_hdr
+                        c.fill = fill_hdr
+                        c.alignment = Alignment(horizontal='center', vertical='center')
                     
-                    c_save, c_cancel = st.columns(2)
+                    for row_idx in range(2, len(df_descarga) + 2):
+                        for col_idx in range(1, 6):
+                            c = ws_aud.cell(row=row_idx, column=col_idx)
+                            c.border = thin_border
+                            if col_idx >= 2 and campo_vacio(c.value):
+                                c.fill = fill_yellow
                     
-                    with c_save:
-                        if st.button("💾 Guardar y Sincronizar Imagen", use_container_width=True, key=f"btn_save_img_{sku_sel}"):
-                            # 1. Crear nombre final en inglés: SKU(dd-Mon-yy)
-                            meses_en = {
-                                1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
-                                7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"
-                            }
-                            hoy = datetime.date.today()
-                            fecha_ingles = f"{hoy.day:02d}-{meses_en[hoy.month]}-{str(hoy.year)[-2:]}"
-                            nombre_archivo = f"{sku_sel}({fecha_ingles}){img_ext}"
-                            nuevo_path = f"imagenes_articulos/{nombre_archivo}"
-                            
-                            if imagen_final_path and os.path.exists(imagen_final_path):
-                                eliminar_imagen_de_github(imagen_final_path)
-                            
-                            try:
-                                if img_ext in [".jpg", ".jpeg"] and nueva_imagen_data.mode in ("RGBA", "P"):
-                                    nueva_imagen_data = nueva_imagen_data.convert("RGB")
-                                nueva_imagen_data.save(nuevo_path)
-                                
-                                if subir_imagen_a_github(nuevo_path):
-                                    obtener_skus_con_imagen.clear()
-                                    # Si el SKU no estaba en BD_Articulos, registrarlo automáticamente
-                                    if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
-                                        if sku_sel not in st.session_state.BD_Articulos['SKU'].astype(str).str.strip().tolist():
-                                            n_art = pd.DataFrame([{
-                                                'SKU': sku_sel,
-                                                'Nombre': sku_sel,
-                                                'Calibre_Espesor': None,
-                                                'Dimensiones_Pieza': None,
-                                                'Acabado_Superficial': 'Ansi 61',
-                                                'SKU_Cliente': sku_sel
-                                            }])
-                                            st.session_state.BD_Articulos = pd.concat([st.session_state.BD_Articulos, n_art], ignore_index=True)
-                                            subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
-                                    st.success("¡Imagen guardada y sincronizada correctamente en GitHub!")
-                                    st.rerun()
-                                else:
-                                    st.error("Error al sincronizar la imagen con el repositorio de GitHub.")
-                            except Exception as ex_save:
-                                st.error(f"Error al guardar el archivo localmente: {ex_save}")
-                                
-                    with c_cancel:
-                        if st.button("❌ Descartar", use_container_width=True, key=f"btn_discard_img_{sku_sel}"):
-                            st.rerun()
+                    ws_aud.column_dimensions['A'].width = 20
+                    ws_aud.column_dimensions['B'].width = 35
+                    ws_aud.column_dimensions['C'].width = 18
+                    ws_aud.column_dimensions['D'].width = 28
+                    ws_aud.column_dimensions['E'].width = 22
+                    
+                    opciones_calibres = '"10GA,12GA,14GA,16GA,10GACR,12GACR,14GACR,16GACR,125AL,250AL,188AL"'
+                    dv_cal = DataValidation(type="list", formula1=opciones_calibres, allow_blank=True)
+                    ws_aud.add_data_validation(dv_cal)
+                    dv_cal.add(f"C2:C{ws_aud.max_row + 1}")
+                    
+                    opciones_acabados = '"Decapado,Ansi 61,Galvanizado,Otro"'
+                    dv_acab = DataValidation(type="list", formula1=opciones_acabados, allow_blank=True)
+                    ws_aud.add_data_validation(dv_acab)
+                    dv_acab.add(f"E2:E{ws_aud.max_row + 1}")
+                    
+                buf_aud.seek(0)
+                st.download_button(
+                    label="📥 Descargar Artículos Incompletos (Excel para completar)",
+                    data=buf_aud.getvalue(),
+                    file_name="Articulos_Informacion_Faltante.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_download_auditoria_faltantes",
+                    use_container_width=True
+                )
+                st.info("💡 **Instrucciones:** Descargue el archivo, complete las celdas amarillas vacías y vuelva a subirlo en **Mantenimiento y Catálogos → Catálogo Maestro Detallado → Carga Masiva**.")
+            else:
+                st.success("🎉 ¡Excelente! Todos los artículos del catálogo tienen su información al 100%. No hay campos vacíos.")
 
     else:
         st.info("ℹ️ No hay artículos registrados en el catálogo maestro actualmente o el archivo en GitHub está vacío.")
+
 
 elif opcion_menu == "🏭 Industria 4.0":
     st.title("🏭 Manufactura Inteligente e Industria 4.0")
