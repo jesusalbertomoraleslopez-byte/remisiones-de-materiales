@@ -449,13 +449,15 @@ def obtener_skus_con_imagen():
     import os
     import requests
     skus = set()
+    valid_exts = ('.png', '.jpg', '.jpeg', '.webp')
     
     # 1. Escaneo local
     if os.path.exists("imagenes_articulos"):
         for f in os.listdir("imagenes_articulos"):
-            if "(" in f:
-                sku = f.split("(")[0]
-                skus.add(sku)
+            if f.lower().endswith(valid_exts):
+                sku = f.split("(")[0].strip() if "(" in f else os.path.splitext(f)[0].strip()
+                if sku:
+                    skus.add(sku)
                 
     # 2. Escaneo remoto (GitHub)
     if obtener_secret("github_token"):
@@ -466,9 +468,11 @@ def obtener_skus_con_imagen():
             res = requests.get(url_list, headers=headers, timeout=5)
             if res.status_code == 200:
                 for item in res.json():
-                    if "(" in item["name"]:
-                        sku = item["name"].split("(")[0]
-                        skus.add(sku)
+                    name = item.get("name", "")
+                    if name.lower().endswith(valid_exts):
+                        sku = name.split("(")[0].strip() if "(" in name else os.path.splitext(name)[0].strip()
+                        if sku:
+                            skus.add(sku)
         except Exception:
             pass
             
@@ -5455,23 +5459,33 @@ elif opcion_menu == "📦 Catálogo de Artículos":
             st.subheader("🖼️ Detalle e Imagen del Artículo")
             st.markdown("Seleccione un artículo de la lista o escriba el SKU directamente para ver su foto, ficha técnica o cargar una nueva imagen:")
             
-            c_filt_img1, c_filt_img2 = st.columns([2, 1])
+            c_filt_img1, c_filt_img2 = st.columns([1.5, 1.5])
             with c_filt_img1:
+                filtro_alcance_img = st.radio(
+                    "Ámbito de artículos:",
+                    ["Solo en Tarimas / Remisiones (Producidos)", "Todo el Catálogo Maestro"],
+                    index=0,
+                    horizontal=True,
+                    key="filtro_alcance_articulos_v3"
+                )
+            with c_filt_img2:
                 filtro_estado_img = st.radio(
-                    "Filtrar artículos por estado de imagen:",
+                    "Filtrar por estado de imagen:",
                     ["Todos", "Sin imagen", "Con imagen"],
+                    index=0,
                     horizontal=True,
                     key="filtro_estado_imagen_select_v2"
                 )
-            with c_filt_img2:
-                st.write("")
-                st.caption("💡 Se incluyen todos los artículos del catálogo maestro y tarimas activas.")
 
             skus_con_img = obtener_skus_con_imagen()
-            base_skus_set = set(df_articulos_base['SKU'].dropna().astype(str).str.strip().unique())
+            skus_tarimas = set()
             if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
                 skus_tarimas = set(st.session_state.BD_Detalle_Tarimas['SKU'].dropna().astype(str).str.strip().unique())
-                base_skus_set = base_skus_set | skus_tarimas
+            
+            if filtro_alcance_img == "Solo en Tarimas / Remisiones (Producidos)":
+                base_skus_set = {s for s in skus_tarimas if s and s.upper() not in ["NONE", "NAN", "", "NULL"]}
+            else:
+                base_skus_set = set(df_articulos_base['SKU'].dropna().astype(str).str.strip().unique()) | skus_tarimas
 
             lista_skus_disponibles = sorted([s for s in base_skus_set if s])
 
@@ -5481,6 +5495,15 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                 lista_skus_filtrados = [s for s in lista_skus_disponibles if s in skus_con_img]
             else:
                 lista_skus_filtrados = lista_skus_disponibles
+
+            n_tot = len(lista_skus_disponibles)
+            n_con = len([s for s in lista_skus_disponibles if s in skus_con_img])
+            n_sin = len([s for s in lista_skus_disponibles if s not in skus_con_img])
+            
+            if filtro_alcance_img == "Solo en Tarimas / Remisiones (Producidos)":
+                st.caption(f"📦 **Artículos activos en Tarimas / Remisiones:** Total: **{n_tot}** | Con imagen: **{n_con}** | ⚠️ Pendientes sin imagen: **{n_sin}**")
+            else:
+                st.caption(f"🌐 **Catálogo Maestro Completo:** Total: **{n_tot}** | Con imagen: **{n_con}** | Sin imagen: **{n_sin}**")
 
             c_sel1, c_sel2 = st.columns([2, 1])
             with c_sel1:
@@ -5500,7 +5523,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
 
                 import glob
                 os.makedirs("imagenes_articulos", exist_ok=True)
-                matching_files_local = glob.glob(f"imagenes_articulos/{sku_sel}(*.*")
+                matching_files_local = glob.glob(f"imagenes_articulos/{sku_sel}(*.*") + [f for f in glob.glob(f"imagenes_articulos/{sku_sel}.*") if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
 
                 imagen_final_path = None
                 if matching_files_local:
