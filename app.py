@@ -59,6 +59,14 @@ def obtener_secret(key, default=None):
         pass
     return default
 
+def safe_int_cantidad(val, default=0):
+    try:
+        if pd.isna(val):
+            return default
+        return int(float(val))
+    except Exception:
+        return default
+
 
 # Inyectar CSS de Imagen Corporativa Oficial (Industria SIGRAMA)
 st.markdown("""
@@ -2083,7 +2091,7 @@ def generar_pdf_etiqueta(t_imp):
             Paragraph(str(item['PO']), style_normal_text),
             Paragraph(str(item['SKU']), style_normal_text),
             desc_comercial_flowables,
-            Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
+            Paragraph(f"<b>{safe_int_cantidad(item.get('Cantidad', 0))}</b> PZS", style_normal_bold)
         ])
     
     t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
@@ -2189,9 +2197,14 @@ if "BD_Detalle_Tarimas" not in st.session_state or st.session_state.get("BD_Deta
     if df_git_detalles is not None:
         if "SKU" in df_git_detalles.columns:
             df_git_detalles["SKU"] = df_git_detalles["SKU"].astype(str).str.strip().str.upper()
+        if "Cantidad" in df_git_detalles.columns:
+            df_git_detalles["Cantidad"] = pd.to_numeric(df_git_detalles["Cantidad"], errors="coerce").fillna(0)
         st.session_state.BD_Detalle_Tarimas = df_git_detalles
     else:
         st.session_state.BD_Detalle_Tarimas = pd.DataFrame(columns=["ID_Detalle", "ID_Tarima", "SKU", "PO", "Proyecto", "Parcialidad", "Descripcion", "Cantidad"])
+else:
+    if not st.session_state.BD_Detalle_Tarimas.empty and "Cantidad" in st.session_state.BD_Detalle_Tarimas.columns:
+        st.session_state.BD_Detalle_Tarimas["Cantidad"] = pd.to_numeric(st.session_state.BD_Detalle_Tarimas["Cantidad"], errors="coerce").fillna(0)
 
 # --- Datos Históricos de Remisiones Oficiales ---
 if "BD_Datos_Generales_Remision" not in st.session_state or st.session_state.get("BD_Datos_Generales_Remision") is None:
@@ -2630,7 +2643,7 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
             Paragraph(str(row['PO']), style_normal_text),
             Paragraph(str(row['Proyecto']), style_normal_text),
             desc_cell_flowables,
-            Paragraph(f"<b>{int(row['Cantidad'])}</b> Pzs", style_normal_text),
+            Paragraph(f"<b>{safe_int_cantidad(row.get('Cantidad', 0))}</b> Pzs", style_normal_text),
             Paragraph(estatus_texto, style_normal_text)
         ])
         
@@ -2973,7 +2986,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
             sku_cliente_flowable = sku_table
         except Exception:
             sku_cliente_flowable = sku_text_p
-        cantidad_flowable = Paragraph(f"<b>{int(row['Cantidad'])}</b><br/><font size='7' color='#64748B'>Pzs</font>", style_cantidad)
+        cantidad_flowable = Paragraph(f"<b>{safe_int_cantidad(row.get('Cantidad', 0))}</b><br/><font size='7' color='#64748B'>Pzs</font>", style_cantidad)
                     
         tabla_materiales.append([
             Paragraph(str(row['ID_Tarima']), style_center_text),
@@ -3159,7 +3172,7 @@ def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
         sub_det = df_detalles_remision[df_detalles_remision['ID_Tarima'] == t_id]
         tabla_anexo = [[Paragraph("PO ASOCIADA", style_b), Paragraph("SKU / PRODUCTO", style_b), Paragraph("CANTIDAD", style_b)]]
         for _, s_row in sub_det.iterrows():
-            tabla_anexo.append([Paragraph(str(s_row['PO']), style_t), Paragraph(str(s_row['SKU']), style_t), Paragraph(str(int(s_row['Cantidad'])), style_t)])
+            tabla_anexo.append([Paragraph(str(s_row['PO']), style_t), Paragraph(str(s_row['SKU']), style_t), Paragraph(str(safe_int_cantidad(s_row.get('Cantidad', 0))), style_t)])
             
         t_det = Table(tabla_anexo, colWidths=[2.5 * inch, 2.5 * inch, 2.5 * inch])
         t_det.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")), ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#F5F5F5")), ('GRID', (0,0), (-1,-1), 1, colors.white), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
@@ -4339,7 +4352,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                     Paragraph(str(item['PO']), style_normal_text),
                                     Paragraph(str(item['SKU']), style_normal_text),
                                     desc_comercial_flowables,
-                                    Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
+                                    Paragraph(f"<b>{safe_int_cantidad(item.get('Cantidad', 0))}</b> PZS", style_normal_bold)
                                 ])
                                 
                             t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
@@ -4582,7 +4595,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                 Paragraph(str(item['PO']), style_normal_text),
                                 Paragraph(str(item['SKU']), style_normal_text),
                                 desc_comercial_flowables,
-                                Paragraph(f"<b>{int(item['Cantidad'])}</b> PZS", style_normal_bold)
+                                Paragraph(f"<b>{safe_int_cantidad(item.get('Cantidad', 0))}</b> PZS", style_normal_bold)
                             ])
                             
                         t_grid = Table(tabla_detalles, colWidths=[1.3 * inch, 1.5 * inch, 3.5 * inch, 1.2 * inch])
@@ -5459,18 +5472,48 @@ elif opcion_menu == "📦 Catálogo de Artículos":
             st.subheader("🖼️ Detalle e Imagen del Artículo")
             st.markdown("Seleccione un artículo de la lista o escriba el SKU directamente para ver su foto, ficha técnica o cargar una nueva imagen:")
             
-            c_filt_img1, c_filt_img2 = st.columns([1.5, 1.5])
-            with c_filt_img1:
+            c_f_rem, c_f_alcance, c_f_img = st.columns([1.6, 1.2, 1.2])
+            with c_f_rem:
+                opciones_remisiones = ["Todas las Remisiones"]
+                dict_rem_skus = {}
+                dict_rem_tarimas = {}
+                if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty and "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
+                    df_rems_disp = st.session_state.BD_Datos_Generales_Remision.copy()
+                    df_det_disp = st.session_state.BD_Detalle_Tarimas.copy()
+                    import re
+                    for _, r_row in df_rems_disp.iloc[::-1].iterrows():
+                        fol = str(r_row.get("Folio_Remision", "")).strip()
+                        if not fol or fol.upper() in ["NAN", "NONE"]:
+                            continue
+                        fec = str(r_row.get("Fecha_Hora_Salida", "")).split()[0].strip()
+                        tar_str = str(r_row.get("Tarimas_Asociadas", "")).upper()
+                        t_found = re.findall(r"TPM-\d+", tar_str)
+                        sub_skus = df_det_disp[df_det_disp["ID_Tarima"].astype(str).str.strip().str.upper().isin(t_found)]
+                        skus_in_rem = set(sub_skus["SKU"].dropna().astype(str).str.strip().unique())
+                        label = f"{fol} ({fec}) - {len(skus_in_rem)} SKUs" if fec else f"{fol} - {len(skus_in_rem)} SKUs"
+                        opciones_remisiones.append(label)
+                        dict_rem_skus[label] = skus_in_rem
+                        dict_rem_tarimas[label] = t_found
+
+                filtro_remision_sel = st.selectbox(
+                    "🚚 Filtrar por Remisión:",
+                    opciones_remisiones,
+                    index=0,
+                    key="filtro_remision_para_imagenes_v3"
+                )
+
+            with c_f_alcance:
                 filtro_alcance_img = st.radio(
-                    "Ámbito de artículos:",
-                    ["Solo en Tarimas / Remisiones (Producidos)", "Todo el Catálogo Maestro"],
+                    "Ámbito:",
+                    ["En Tarimas/Remisiones", "Todo el Catálogo"],
                     index=0,
                     horizontal=True,
                     key="filtro_alcance_articulos_v3"
                 )
-            with c_filt_img2:
+
+            with c_f_img:
                 filtro_estado_img = st.radio(
-                    "Filtrar por estado de imagen:",
+                    "Estado de imagen:",
                     ["Todos", "Sin imagen", "Con imagen"],
                     index=0,
                     horizontal=True,
@@ -5482,7 +5525,12 @@ elif opcion_menu == "📦 Catálogo de Artículos":
             if "BD_Detalle_Tarimas" in st.session_state and not st.session_state.BD_Detalle_Tarimas.empty:
                 skus_tarimas = set(st.session_state.BD_Detalle_Tarimas['SKU'].dropna().astype(str).str.strip().unique())
             
-            if filtro_alcance_img == "Solo en Tarimas / Remisiones (Producidos)":
+            tarimas_txt = ""
+            if filtro_remision_sel != "Todas las Remisiones":
+                base_skus_set = dict_rem_skus.get(filtro_remision_sel, set())
+                tarimas_asoc = dict_rem_tarimas.get(filtro_remision_sel, [])
+                tarimas_txt = ", ".join(tarimas_asoc) if tarimas_asoc else "N/A"
+            elif filtro_alcance_img == "En Tarimas/Remisiones":
                 base_skus_set = {s for s in skus_tarimas if s and s.upper() not in ["NONE", "NAN", "", "NULL"]}
             else:
                 base_skus_set = set(df_articulos_base['SKU'].dropna().astype(str).str.strip().unique()) | skus_tarimas
@@ -5500,7 +5548,12 @@ elif opcion_menu == "📦 Catálogo de Artículos":
             n_con = len([s for s in lista_skus_disponibles if s in skus_con_img])
             n_sin = len([s for s in lista_skus_disponibles if s not in skus_con_img])
             
-            if filtro_alcance_img == "Solo en Tarimas / Remisiones (Producidos)":
+            if filtro_remision_sel != "Todas las Remisiones":
+                if n_sin > 0:
+                    st.warning(f"🚚 **Remisión {filtro_remision_sel}:** Contiene **{n_tot}** SKUs (Tarimas: `{tarimas_txt}`) | Con imagen: **{n_con}** | ⚠️ **{n_sin} SKU(s) pendientes de imagen**")
+                else:
+                    st.success(f"🚚 **Remisión {filtro_remision_sel}:** ¡Todos los artículos tienen fotografía! (**{n_tot}** SKUs, Tarimas: `{tarimas_txt}`)")
+            elif filtro_alcance_img == "En Tarimas/Remisiones":
                 st.caption(f"📦 **Artículos activos en Tarimas / Remisiones:** Total: **{n_tot}** | Con imagen: **{n_con}** | ⚠️ Pendientes sin imagen: **{n_sin}**")
             else:
                 st.caption(f"🌐 **Catálogo Maestro Completo:** Total: **{n_tot}** | Con imagen: **{n_con}** | Sin imagen: **{n_sin}**")
