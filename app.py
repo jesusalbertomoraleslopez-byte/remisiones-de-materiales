@@ -857,30 +857,17 @@ def eliminar_imagen_de_github(file_path):
 def obtener_emails_config():
     cfg_path = "config_emails.json"
     default_cfg = {
-        "dest_to": "Victor Montoya Martinez <victor.montoya@sigrama.com.mx>; Luis Domingo Garcia Gracia <luis.garcia@sigrama.com.mx>; Josue Mesta <josue.mesta@sigrama.com.mx>; Alejandra Arellano Machado <sarellano@sigrama.com.mx>; Mydory Noehmi Gonzalez Leon <abastecimientos@sigrama.com.mx>; Luis Alberto Sianez Moreno <almacen@sigrama.com.mx>",
-        "dest_cc": "Jesus Alberto Morales Lopez <jesus.morales@sigrama.com.mx>; Edgar Sosa Suarez <edgar.sosa@sigrama.com.mx>; Lorena Hernandez Cuellar <lhernandez@sigrama.com.mx>; Armando Woo Vazquez <armando.vazquez@sigrama.com.mx>; Bryan Alejandro Flores Mancinas <bryan.mancinas@sigrama.com.mx>; Cruz Eduardo Carreon Rios <cruz.carreon@sigrama.com.mx>; Luis Alfredo Quintana Palma <luis.quintana@sigrama.com.mx>; hluis.garcia@sigrama.com.mx; juan.ortiz@sigrama.com.mx; miguel.ramos@sigrama.com.mx; fgarcia@sigrama.com.mx"
+        "dest_to": "Josue Mesta <josue.mesta@sigrama.com.mx>",
+        "dest_cc": ""
     }
     if os.path.exists(cfg_path):
         try:
             with open(cfg_path, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
-            # Asegurar que Calidad esté removido de CC
-            cc_val = cfg.get("dest_cc", "")
-            modificado = False
-            if "calidad@sigrama.com.mx" in cc_val:
-                import re
-                cc_val = re.sub(r'(?:Calidad\s*<calidad@sigrama\.com\.mx>|calidad@sigrama\.com\.mx)\s*;?\s*', '', cc_val, flags=re.IGNORECASE).strip().rstrip(';')
-                modificado = True
-            # Asegurar que los correos nuevos estén presentes en CC
-            correos_nuevos = ["hluis.garcia@sigrama.com.mx", "juan.ortiz@sigrama.com.mx", "miguel.ramos@sigrama.com.mx", "fgarcia@sigrama.com.mx"]
-            for correo in correos_nuevos:
-                if correo not in cc_val:
-                    cc_val = f"{cc_val}; {correo}" if cc_val else correo
-                    modificado = True
-            if modificado:
-                cfg["dest_cc"] = cc_val
-                with open(cfg_path, "w", encoding="utf-8") as f:
-                    json.dump(cfg, f, indent=4)
+            if "dest_to" not in cfg:
+                cfg["dest_to"] = default_cfg["dest_to"]
+            if "dest_cc" not in cfg:
+                cfg["dest_cc"] = default_cfg["dest_cc"]
             return cfg
         except Exception:
             return default_cfg
