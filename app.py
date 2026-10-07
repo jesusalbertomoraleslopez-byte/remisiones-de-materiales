@@ -48,6 +48,15 @@ try:
 except Exception:
     pass
 
+# --- SINCRONIZACIÓN INICIAL CON GOOGLE CLOUD STORAGE (Cloud Run) ---
+if "gcs_synced" not in st.session_state:
+    try:
+        import gcs_sync
+        gcs_sync.sync_from_gcs()
+        st.session_state["gcs_synced"] = True
+    except Exception as _egcs:
+        print(f"[GCS] Error en sincronización inicial: {_egcs}")
+
 # --- HELPER DE LECTURA SEGURA DE SECRETS ---
 def obtener_secret(key, default=None):
     try:
@@ -407,11 +416,18 @@ def subir_excel_a_github(file_name, dataframe_to_save):
     except Exception as e:
         st.error(f"⚠️ Error al guardar archivo localmente {file_name}: {e}")
         
+    # Sincronizar con Google Cloud Storage (Persistencia Cloud Run)
+    try:
+        import gcs_sync
+        gcs_sync.push_excel_to_gcs(file_name)
+    except Exception as _egcs_up:
+        print(f"[GCS] Error al sincronizar {file_name}: {_egcs_up}")
+
     # 2. Sincronizar con GitHub si el token está disponible
     token = obtener_secret("github_token")
     if not token:
-        st.error(f"⚠️ ALERTA DE PERSISTENCIA: No hay un token de GitHub configurado (`github_token` en Secrets). Los datos de {file_name} se guardaron localmente en esta sesión pero SE PERDERÁN al reiniciar el servidor.")
-        return False
+        # En Google Cloud Run, la persistencia se gestiona automáticamente vía Google Cloud Storage
+        return True
         
     try:
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
@@ -760,11 +776,19 @@ def generar_pdf_catalogo_articulos(df_articulos):
 
 
 def subir_imagen_a_github(file_path):
-    """Sube una imagen local a GitHub utilizando API REST, codificando la ruta de forma segura."""
+    """Sube una imagen local a GCS y a GitHub utilizando API REST, codificando la ruta de forma segura."""
     import os
     import urllib.parse
     if not os.path.exists(file_path):
         return False
+
+    # Sincronizar con Google Cloud Storage
+    try:
+        import gcs_sync
+        gcs_sync.push_image_to_gcs(file_path)
+    except Exception as _egcs_img:
+        print(f"[GCS] Error subiendo imagen {file_path}: {_egcs_img}")
+
     if not obtener_secret("github_token"):
         return True
     try:

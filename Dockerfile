@@ -19,8 +19,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 ENV PORT=8080
+ENV GCS_BUCKET=sigrama-remisiones-storage
 EXPOSE 8080
 
 HEALTHCHECK CMD curl --fail http://localhost:${PORT}/_stcore/health || exit 1
 
-ENTRYPOINT ["sh", "-c", "streamlit run app_consultas.py --server.port=${PORT} --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false --server.fileWatcherType=none --browser.gatherUsageStats=false"]
+ENTRYPOINT ["sh", "-c", "streamlit run app.py --server.port=${PORT} --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false --server.fileWatcherType=none --browser.gatherUsageStats=false"]
