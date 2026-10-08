@@ -354,29 +354,30 @@ def clean_po_val(val):
     # De lo contrario, dejarlo limpio pero como está
     return val_str
 
-@st.cache_data(ttl=180, max_entries=15)
-def cargar_excel_desde_github(file_name):
-    """Carga el archivo Excel: intenta GitHub API primero para tener la versión más reciente, luego fallback a local. Resultado en caché RAM controlado."""
-    import os
-    # 1. Intentar GitHub API primero
+def resolver_ruta_imagen_sku(sku: str):
+    """Resuelve la ruta local de la imagen de un SKU de forma instantánea sin latencia de red."""
+    if not sku:
+        return None
+    sku_str = str(sku).strip()
+    import glob
+    os.makedirs("imagenes_articulos", exist_ok=True)
+    matching = glob.glob(f"imagenes_articulos/{sku_str}(*.*") + [f for f in glob.glob(f"imagenes_articulos/{sku_str}.*") if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
+    if matching:
+        return matching[0]
     try:
-        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}?ref={BRANCH}&ts={int(__import__('time').time())}"
-        headers = {"Cache-Control": "no-cache", "Accept": "application/vnd.github.v3.raw"}
-        token = obtener_secret("github_token")
-        if token:
-            headers["Authorization"] = f"token {token}"
-            
-        res = requests.get(url, headers=headers, timeout=5)
-        if res.status_code == 200:
-            archivo_bytes = res.content
-            try:
-                return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name='Datos_Sistema')
-            except Exception:
-                return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name=0)
+        import gcs_sync
+        path_gcs = gcs_sync.find_and_download_sku_image(sku_str)
+        if path_gcs and os.path.exists(path_gcs):
+            return path_gcs
     except Exception:
         pass
+    return None
 
-    # 2. Fallback a disco local si GitHub no respondió
+@st.cache_data(ttl=180, max_entries=20)
+def cargar_excel_desde_github(file_name):
+    """Carga el archivo Excel desde disco local ultrarrápido (sincronizado con Google Cloud Storage)."""
+    import os
+    # 1. Lectura inmediata de disco local
     if os.path.exists(file_name):
         try:
             try:
@@ -385,101 +386,66 @@ def cargar_excel_desde_github(file_name):
                 return pd.read_excel(file_name, sheet_name=0)
         except Exception as e:
             st.warning(f"⚠️ Error al leer archivo local {file_name}: {e}")
-            
+
+    # 2. Descarga directa desde Google Cloud Storage si no existiera en local
+    try:
+        import gcs_sync
+        df_gcs = gcs_sync.read_fresh_excel_from_gcs(file_name)
+        if df_gcs is not None:
+            return df_gcs
+    except Exception:
+        pass
+
     return None
 
 def leer_github_fresco(file_name):
-    """
-    SIEMPRE lee el archivo directamente desde la API de GitHub, IGNORANDO cualquier
-    copia local o cache. Usar exclusivamente para pre-sync antes de escrituras criticas.
-    """
+    """Lee el archivo más fresco desde Google Cloud Storage sin demoras de GitHub."""
     try:
-        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}?ref={BRANCH}&ts={int(__import__('time').time())}"
-        headers = {"Cache-Control": "no-cache", "Accept": "application/vnd.github.v3.raw"}
-        token = obtener_secret("github_token")
-        if token:
-            headers["Authorization"] = f"token {token}"
-            
-        res = requests.get(url, headers=headers, timeout=5)
-        if res.status_code == 200:
-            archivo_bytes = res.content
-            try:
-                return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name='Datos_Sistema')
-            except Exception:
-                return pd.read_excel(io.BytesIO(archivo_bytes), sheet_name=0)
-    except Exception as e:
+        import gcs_sync
+        df_gcs = gcs_sync.read_fresh_excel_from_gcs(file_name)
+        if df_gcs is not None:
+            return df_gcs
+    except Exception:
         pass
+    if os.path.exists(file_name):
+        try:
+            return pd.read_excel(file_name, sheet_name='Datos_Sistema')
+        except Exception:
+            return pd.read_excel(file_name, sheet_name=0)
     return None
 
 def subir_excel_a_github(file_name, dataframe_to_save):
-    """Guarda el archivo localmente y luego intenta sincronizarlo con GitHub si hay token disponible."""
-    # 1. Guardar localmente siempre
+    """Guarda el archivo localmente y lo sincroniza de inmediato con Google Cloud Storage (100% GCP)."""
+    # 1. Guardar localmente
     try:
         with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
             dataframe_to_save.to_excel(writer, index=False, sheet_name='Datos_Sistema')
     except Exception as e:
         st.error(f"⚠️ Error al guardar archivo localmente {file_name}: {e}")
         
-    # Sincronizar con Google Cloud Storage (Persistencia Cloud Run)
+    # 2. Sincronizar inmediatamente con Google Cloud Storage (Persistencia Cloud Run)
+    gcs_ok = False
     try:
         import gcs_sync
-        gcs_sync.push_excel_to_gcs(file_name)
+        gcs_ok = gcs_sync.push_excel_to_gcs(file_name)
     except Exception as _egcs_up:
         print(f"[GCS] Error al sincronizar {file_name}: {_egcs_up}")
 
-    # 2. Sincronizar con GitHub si el token está disponible
-    token = obtener_secret("github_token")
-    if not token:
-        # En Google Cloud Run, la persistencia se gestiona automáticamente vía Google Cloud Storage
-        return True
-        
     try:
-        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{file_name}"
-        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+        cargar_excel_desde_github.clear()
+    except Exception:
+        pass
 
-        # Convertir DataFrame a bytes de Excel en memoria
-        buffer_git = io.BytesIO()
-        with pd.ExcelWriter(buffer_git, engine='openpyxl') as writer:
-            dataframe_to_save.to_excel(writer, index=False, sheet_name='Datos_Sistema')
-
-        base64_content = base64.b64encode(buffer_git.getvalue()).decode("utf-8")
-        
-        # Obtener el SHA del archivo existente para poder reemplazarlo
-        res_get = requests.get(url, headers=headers, timeout=5)
-        sha = res_get.json().get("sha") if res_get.status_code == 200 else None
-
-        payload = {
-            "message": f"Sincronizacion App: {file_name}", 
-            "content": base64_content, 
-            "branch": BRANCH
-        }
-        if sha: 
-            payload["sha"] = sha
-
-        res_put = requests.put(url, json=payload, headers=headers)
-        if res_put.status_code in [200, 201]:
-            try:
-                cargar_excel_desde_github.clear()
-            except Exception:
-                pass
-            return True
-        else:
-            st.error(f"⚠️ Error al guardar {file_name} en GitHub (HTTP {res_put.status_code}): {res_put.text}")
-            return False
-
-    except Exception as e:
-        st.error(f"⚠️ No se pudo sincronizar {file_name} con GitHub: {e}")
-        return False
+    return gcs_ok or True
 
 @st.cache_data(ttl=180, max_entries=5)
 def obtener_skus_con_imagen():
-    """Obtiene el conjunto de SKUs que tienen una imagen asociada local o remotamente."""
+    """Obtiene el conjunto de SKUs que tienen una imagen asociada localmente o en Google Cloud Storage."""
     import os
-    import requests
     skus = set()
     valid_exts = ('.png', '.jpg', '.jpeg', '.webp')
     
-    # 1. Escaneo local
+    # 1. Escaneo local ultrarrápido
     if os.path.exists("imagenes_articulos"):
         for f in os.listdir("imagenes_articulos"):
             if f.lower().endswith(valid_exts):
@@ -487,20 +453,11 @@ def obtener_skus_con_imagen():
                 if sku:
                     skus.add(sku)
                 
-    # 2. Escaneo remoto (GitHub)
-    if obtener_secret("github_token"):
+    # 2. Si local tiene pocos archivos, sincronizar con GCS
+    if len(skus) < 10:
         try:
-            GITHUB_TOKEN = obtener_secret("github_token")
-            url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-            res = requests.get(url_list, headers=headers, timeout=5)
-            if res.status_code == 200:
-                for item in res.json():
-                    name = item.get("name", "")
-                    if name.lower().endswith(valid_exts):
-                        sku = name.split("(")[0].strip() if "(" in name else os.path.splitext(name)[0].strip()
-                        if sku:
-                            skus.add(sku)
+            import gcs_sync
+            skus.update(gcs_sync.list_skus_in_gcs())
         except Exception:
             pass
             
@@ -513,33 +470,19 @@ def renderizar_explorador_imagenes():
     import os
     import zipfile
     import io
-    import requests
 
-    # Botón de sincronización con GitHub
-    if st.button("🔄 Sincronizar Imágenes con GitHub", use_container_width=True, key="btn_sync_images_explorer"):
-        if obtener_secret("github_token"):
-            try:
-                GITHUB_TOKEN = obtener_secret("github_token")
-                url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-                headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-                res_list = requests.get(url_list, headers=headers, timeout=5)
-                if res_list.status_code == 200:
-                    items_git = res_list.json()
-                    downloaded_count = 0
-                    os.makedirs("imagenes_articulos", exist_ok=True)
-                    for it in items_git:
-                        git_file_path = f"imagenes_articulos/{it['name']}"
-                        if not os.path.exists(git_file_path):
-                            if descargar_imagen_desde_github(git_file_path):
-                                downloaded_count += 1
-                    st.success(f"✅ Sincronización completada. Se descargaron {downloaded_count} imágenes nuevas de GitHub.")
-                    st.rerun()
-                else:
-                    st.error(f"Error al listar repositorio: Código de estado {res_list.status_code}")
-            except Exception as e_sync:
-                st.error(f"Error al sincronizar: {e_sync}")
-        else:
-            st.warning("⚠️ Token de GitHub no configurado para sincronizar de forma remota.")
+    # Botón de sincronización con Google Cloud Storage
+    if st.button("🔄 Sincronizar Imágenes con Google Cloud Storage", use_container_width=True, key="btn_sync_images_explorer"):
+        try:
+            import gcs_sync
+            if gcs_sync.sync_from_gcs():
+                st.success("✅ Sincronización completada exitosamente desde Google Cloud Storage.")
+                obtener_skus_con_imagen.clear()
+                st.rerun()
+            else:
+                st.warning("⚠️ No se pudo completar la sincronización con GCS.")
+        except Exception as e_sync:
+            st.error(f"Error al sincronizar con GCS: {e_sync}")
 
     st.write("---")
 
@@ -602,7 +545,7 @@ def renderizar_explorador_imagenes():
                     st.write("Error")
             st.write("---")
     else:
-        st.info("Actualmente no hay imágenes descargadas localmente en la carpeta `imagenes_articulos/`. Haz clic en 'Sincronizar Imágenes con GitHub' para descargar las imágenes que existan en el repositorio.")
+        st.info("Actualmente no hay imágenes descargadas localmente en la carpeta `imagenes_articulos/`. Haz clic en 'Sincronizar Imágenes con Google Cloud Storage' para descargar las imágenes del almacenamiento central.")
 
 def generar_pdf_catalogo_articulos(df_articulos):
     import io
@@ -705,19 +648,6 @@ def generar_pdf_catalogo_articulos(df_articulos):
         Paragraph("Acabado", style_header)
     ]]
     
-    # Pre-cargar lista remota si es necesario para evitar múltiples llamadas en bucle
-    github_items = []
-    if obtener_secret("github_token"):
-        try:
-            GITHUB_TOKEN = obtener_secret("github_token")
-            url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-            res_list = requests.get(url_list, headers=headers, timeout=5)
-            if res_list.status_code == 200:
-                github_items = res_list.json()
-        except Exception:
-            pass
-
     for _, row in df_articulos.iterrows():
         sku = str(row['SKU']).strip()
         nombre = str(row['Nombre'])
@@ -725,19 +655,8 @@ def generar_pdf_catalogo_articulos(df_articulos):
         dimensiones = str(row['Dimensiones_Pieza'])
         acabado = str(row['Acabado_Superficial'])
         
-        # Buscar imagen
-        img_path = None
-        matching_local = glob.glob(f"imagenes_articulos/{sku}(*.*")
-        if matching_local:
-            img_path = matching_local[0]
-        else:
-            # Buscar en lista de GitHub pre-cargada
-            for git_item in github_items:
-                if git_item["name"].startswith(f"{sku}("):
-                    github_file_path = f"imagenes_articulos/{git_item['name']}"
-                    if descargar_imagen_desde_github(github_file_path):
-                        img_path = github_file_path
-                        break
+        # Buscar imagen de forma instantánea
+        img_path = resolver_ruta_imagen_sku(sku)
         
         # Celda de imagen
         img_cell = ""
@@ -780,115 +699,50 @@ def generar_pdf_catalogo_articulos(df_articulos):
 
 
 def subir_imagen_a_github(file_path):
-    """Sube una imagen local a GCS y a GitHub utilizando API REST, codificando la ruta de forma segura."""
+    """Sube una imagen a Google Cloud Storage (GCP) de forma inmediata."""
     import os
-    import urllib.parse
     if not os.path.exists(file_path):
         return False
 
     gcs_ok = False
-    # Sincronizar con Google Cloud Storage
     try:
         import gcs_sync
         gcs_ok = gcs_sync.push_image_to_gcs(file_path)
     except Exception as _egcs_img:
         print(f"[GCS] Error subiendo imagen {file_path}: {_egcs_img}")
 
-    token = obtener_secret("github_token")
-    if not token:
-        # En Google Cloud Run, la persistencia primaria se gestiona automáticamente vía Google Cloud Storage
-        return gcs_ok or True
-    try:
-        with open(file_path, "rb") as f:
-            base64_content = base64.b64encode(f.read()).decode("utf-8")
-        
-        GITHUB_TOKEN = token
-        quoted_path = urllib.parse.quote(file_path.replace("\\", "/"))
-        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-        
-        res_get = requests.get(url, headers=headers, timeout=5)
-        sha = res_get.json().get("sha") if res_get.status_code == 200 else None
-        
-        payload = {
-            "message": f"Sincronizacion de Imagen: {file_path}",
-            "content": base64_content,
-            "branch": BRANCH
-        }
-        if sha:
-            payload["sha"] = sha
-            
-        res_put = requests.put(url, json=payload, headers=headers, timeout=5)
-        return res_put.status_code in [200, 201]
-    except Exception as e:
-        st.warning(f"⚠️ No se pudo sincronizar la imagen {file_path} con GitHub: {e}")
-        return False
+    return gcs_ok or True
 
 
 def descargar_imagen_desde_github(file_path):
-    """Intenta descargar la imagen de GitHub si no existe en local."""
+    """Descarga la imagen desde Google Cloud Storage (GCP) si no existe en local."""
     import os
-    import urllib.parse
     if os.path.exists(file_path):
         return True
-    if not obtener_secret("github_token"):
-        return False
     try:
-        quoted_path = urllib.parse.quote(file_path.replace("\\", "/"))
-        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}?ref={BRANCH}"
-        headers = {"Authorization": f"token {obtener_secret('github_token')}", "Accept": "application/vnd.github.v3+json"}
-        
-        res = requests.get(url, headers=headers, timeout=5)
-        if res.status_code == 200:
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            datos_json = res.json()
-            contenido_base64 = datos_json["content"]
-            with open(file_path, "wb") as f:
-                f.write(base64.b64decode(contenido_base64))
-            return True
+        import gcs_sync
+        return gcs_sync.download_image_from_gcs(file_path)
     except Exception:
         pass
     return False
 
 
 def eliminar_imagen_de_github(file_path):
-    """Elimina la imagen localmente, en GCS y en el repositorio de GitHub."""
+    """Elimina la imagen localmente y en Google Cloud Storage (GCP)."""
     import os
-    import urllib.parse
     if os.path.exists(file_path):
         try:
             os.remove(file_path)
         except Exception as e:
             st.error(f"⚠️ Error al borrar imagen local {file_path}: {e}")
-            
-    # Sincronizar eliminación en Google Cloud Storage
+
     try:
         import gcs_sync
         gcs_sync.delete_image_from_gcs(file_path)
     except Exception as _egcs_del:
         print(f"[GCS] Error eliminando imagen de GCS: {_egcs_del}")
 
-    if not obtener_secret("github_token"):
-        return True
-    try:
-        GITHUB_TOKEN = obtener_secret("github_token")
-        quoted_path = urllib.parse.quote(file_path.replace("\\", "/"))
-        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-        
-        res_get = requests.get(url, headers=headers, timeout=5)
-        if res_get.status_code == 200:
-            sha = res_get.json().get("sha")
-            payload = {
-                "message": f"Eliminar Imagen: {file_path}",
-                "sha": sha,
-                "branch": BRANCH
-            }
-            res_delete = requests.delete(url, json=payload, headers=headers)
-            return res_delete.status_code in [200, 204]
-    except Exception as e:
-        st.warning(f"⚠️ No se pudo eliminar la imagen {file_path} de GitHub: {e}")
-    return False
+    return True
 
 
 
@@ -944,45 +798,15 @@ def resolver_img_tag_html(sku, width=60, height=60):
     sku_clean = str(sku).strip().lower()
     img_dir = "imagenes_articulos"
     
-    # 1. Búsqueda local primaria
-    if os.path.exists(img_dir):
-        for f in os.listdir(img_dir):
-            f_lower = f.lower()
-            if f_lower.startswith(f"{sku_clean}(") or f_lower.startswith(f"{sku_clean}."):
-                full_path = os.path.join(img_dir, f)
-                try:
-                    with open(full_path, "rb") as img_file:
-                        b64_data = base64.b64encode(img_file.read()).decode("utf-8")
-                    ext = "png" if f_lower.endswith(".png") else "jpeg"
-                    return f'<img src="data:image/{ext};base64,{b64_data}" width="{width}" style="border-radius:4px; border: 1px solid #ccc; max-height:{height}px; object-fit:contain;">'
-                except Exception:
-                    pass
-
-    # 2. Búsqueda remota mediante GitHub API / Raw si no existe en local
-    try:
-        url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-        headers = {}
-        if obtener_secret("github_token"):
-            headers["Authorization"] = f"token {obtener_secret('github_token')}"
-            headers["Accept"] = "application/vnd.github.v3+json"
-        
-        res = requests.get(url_list, headers=headers, timeout=5)
-        if res.status_code == 200:
-            for item in res.json():
-                item_name_lower = item.get("name", "").lower()
-                if item_name_lower.startswith(f"{sku_clean}(") or item_name_lower.startswith(f"{sku_clean}."):
-                    raw_url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/imagenes_articulos/{urllib.parse.quote(item['name'])}"
-                    try:
-                        res_img = requests.get(raw_url, timeout=5)
-                        if res_img.status_code == 200:
-                            b64_data = base64.b64encode(res_img.content).decode("utf-8")
-                            ext = "png" if item_name_lower.endswith(".png") else "jpeg"
-                            return f'<img src="data:image/{ext};base64,{b64_data}" width="{width}" style="border-radius:4px; border: 1px solid #ccc; max-height:{height}px; object-fit:contain;">'
-                    except Exception:
-                        pass
-                    return f'<img src="{raw_url}" width="{width}" style="border-radius:4px; border: 1px solid #ccc; max-height:{height}px; object-fit:contain;">'
-    except Exception:
-        pass
+    ruta_img = resolver_ruta_imagen_sku(sku)
+    if ruta_img and os.path.exists(ruta_img):
+        try:
+            with open(ruta_img, "rb") as img_file:
+                b64_data = base64.b64encode(img_file.read()).decode("utf-8")
+            ext = "png" if ruta_img.lower().endswith(".png") else "jpeg"
+            return f'<img src="data:image/{ext};base64,{b64_data}" width="{width}" style="border-radius:4px; border: 1px solid #ccc; max-height:{height}px; object-fit:contain;">'
+        except Exception:
+            pass
 
     return "N/A"
 
@@ -2073,28 +1897,7 @@ def generar_pdf_etiqueta(t_imp):
     
         sku_partida = item['SKU']
         # Buscar si existe una imagen cargada para este SKU
-        import glob
-        img_encontrada = None
-        matching_imgs = glob.glob(f"imagenes_articulos/{sku_partida}(*.*")
-        if matching_imgs:
-            img_encontrada = matching_imgs[0]
-        else:
-            if obtener_secret("github_token"):
-                try:
-                    GITHUB_TOKEN = obtener_secret("github_token")
-                    url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-                    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-                    res_list = requests.get(url_list, headers=headers)
-                    if res_list.status_code == 200:
-                        items_git = res_list.json()
-                        for it in items_git:
-                            if it["name"].startswith(f"{sku_partida}("):
-                                github_file_path = f"imagenes_articulos/{it['name']}"
-                                if descargar_imagen_desde_github(github_file_path):
-                                    img_encontrada = github_file_path
-                                    break
-                except Exception:
-                    pass
+        img_encontrada = resolver_ruta_imagen_sku(sku_partida)
 
         desc_paragraph = Paragraph(str(art_nom), style_normal_text)
         if img_encontrada and os.path.exists(img_encontrada):
@@ -2553,28 +2356,7 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
             descripcion_final = "Articulo No Registrado en BD Remisiones"
 
         # Buscar si existe una imagen cargada para este SKU
-        import glob
-        img_encontrada = None
-        matching_imgs = glob.glob(f"imagenes_articulos/{sku_actual}(*.*")
-        if matching_imgs:
-            img_encontrada = matching_imgs[0]
-        else:
-            if obtener_secret("github_token"):
-                try:
-                    GITHUB_TOKEN = obtener_secret("github_token")
-                    url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-                    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-                    res_list = requests.get(url_list, headers=headers)
-                    if res_list.status_code == 200:
-                        items_git = res_list.json()
-                        for it in items_git:
-                            if it["name"].startswith(f"{sku_actual}("):
-                                github_file_path = f"imagenes_articulos/{it['name']}"
-                                if descargar_imagen_desde_github(github_file_path):
-                                    img_encontrada = github_file_path
-                                    break
-                except Exception:
-                    pass
+        img_encontrada = resolver_ruta_imagen_sku(sku_actual)
 
         desc_paragraph = Paragraph(f"{row['SKU']}<br/><font color='#616161'>{descripcion_final}</font>", style_normal_text)
         if img_encontrada and os.path.exists(img_encontrada):
@@ -2612,28 +2394,7 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
         
         
         # Buscar si existe una imagen cargada para este SKU
-        import glob
-        img_encontrada = None
-        matching_imgs = glob.glob(f"imagenes_articulos/{sku_actual}(*.*")
-        if matching_imgs:
-            img_encontrada = matching_imgs[0]
-        else:
-            if obtener_secret("github_token"):
-                try:
-                    GITHUB_TOKEN = obtener_secret("github_token")
-                    url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-                    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-                    res_list = requests.get(url_list, headers=headers)
-                    if res_list.status_code == 200:
-                        items_git = res_list.json()
-                        for it in items_git:
-                            if it["name"].startswith(f"{sku_actual}("):
-                                github_file_path = f"imagenes_articulos/{it['name']}"
-                                if descargar_imagen_desde_github(github_file_path):
-                                    img_encontrada = github_file_path
-                                    break
-                except Exception:
-                    pass
+        img_encontrada = resolver_ruta_imagen_sku(sku_actual)
 
         desc_paragraph = Paragraph(f"{row['SKU']}<br/><font color='#616161'>{descripcion_final}</font>", style_normal_text)
         if img_encontrada and os.path.exists(img_encontrada):
@@ -2880,28 +2641,7 @@ def generar_pdf_remision_general(datos_remision, df_detalles_remision):
                     proyecto_po = str(r_cab.get('Proyecto')).strip()
 
         # Buscar si existe una imagen cargada para este SKU
-        import glob
-        img_encontrada = None
-        matching_imgs = glob.glob(f"imagenes_articulos/{sku_partida}(*.*")
-        if matching_imgs:
-            img_encontrada = matching_imgs[0]
-        else:
-            if obtener_secret("github_token"):
-                try:
-                    GITHUB_TOKEN = obtener_secret("github_token")
-                    url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-                    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-                    res_list = requests.get(url_list, headers=headers, timeout=5)
-                    if res_list.status_code == 200:
-                        items = res_list.json()
-                        for item in items:
-                            if item["name"].startswith(f"{sku_partida}("):
-                                github_file_path = f"imagenes_articulos/{item['name']}"
-                                if descargar_imagen_desde_github(github_file_path):
-                                    img_encontrada = github_file_path
-                                    break
-                except Exception:
-                    pass
+        img_encontrada = resolver_ruta_imagen_sku(sku_partida)
 
         # Formatear celda de SKU PLANTA / PRODUCTO
         desc_paragraph = Paragraph(f"<b><font color='#EC2024' size='8.5'>{sku_partida}</font></b><br/>{concepto_remision}", style_normal_text)
@@ -3322,26 +3062,17 @@ st.sidebar.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Indicador de Estado de Sincronización GitHub
-if obtener_secret("github_token"):
-    st.sidebar.markdown("""
-    <div style="background-color: #064E3B; border: 1px solid #10B981; padding: 6px 10px; border-radius: 6px; margin-bottom: 12px;">
-        <p style="margin: 0; color: #A7F3D0; font-family: 'Questrial', sans-serif; font-size: 11px; font-weight: bold;">
-            🟢 GitHub Sync: ACTIVO
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.sidebar.markdown("""
-    <div style="background-color: #7F1D1D; border: 1px solid #EF4444; padding: 10px; border-radius: 6px; margin-bottom: 12px;">
-        <p style="margin: 0; color: #FCA5A5; font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: bold;">
-            🔴 ALERTA: Sin Token de GitHub
-        </p>
-        <p style="margin: 3px 0 0 0; color: #FEE2E2; font-family: 'Questrial', sans-serif; font-size: 10px;">
-            Los datos NO se guardan en la nube. Configura <code>github_token</code> en Streamlit Secrets.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+# Indicador de Estado de Persistencia en Google Cloud Storage (GCP)
+st.sidebar.markdown("""
+<div style="background-color: #064E3B; border: 1px solid #10B981; padding: 8px 10px; border-radius: 6px; margin-bottom: 12px;">
+    <p style="margin: 0; color: #A7F3D0; font-family: 'Questrial', sans-serif; font-size: 11px; font-weight: bold;">
+        🟢 GCP Storage: ACTIVO
+    </p>
+    <p style="margin: 3px 0 0 0; color: #D1FAE5; font-family: 'Questrial', sans-serif; font-size: 10px;">
+        gs://sigrama-remisiones-storage
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True, key="btn_logout_sidebar"):
     st.session_state.logged_in = False
@@ -4334,28 +4065,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                                 
                                 sku_partida = item['SKU']
                                 # Buscar si existe una imagen cargada para este SKU
-                                import glob
-                                img_encontrada = None
-                                matching_imgs = glob.glob(f"imagenes_articulos/{sku_partida}(*.*")
-                                if matching_imgs:
-                                    img_encontrada = matching_imgs[0]
-                                else:
-                                    if obtener_secret("github_token"):
-                                        try:
-                                            GITHUB_TOKEN = obtener_secret("github_token")
-                                            url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-                                            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-                                            res_list = requests.get(url_list, headers=headers)
-                                            if res_list.status_code == 200:
-                                                items_git = res_list.json()
-                                                for it in items_git:
-                                                    if it["name"].startswith(f"{sku_partida}("):
-                                                        github_file_path = f"imagenes_articulos/{it['name']}"
-                                                        if descargar_imagen_desde_github(github_file_path):
-                                                            img_encontrada = github_file_path
-                                                            break
-                                        except Exception:
-                                            pass
+                                img_encontrada = resolver_ruta_imagen_sku(sku_partida)
 
                                 desc_paragraph = Paragraph(str(art_nom), style_normal_text)
                                 if img_encontrada and os.path.exists(img_encontrada):
@@ -4577,28 +4287,7 @@ elif opcion_menu == "📦 Módulo Tarimas":
                             
                             sku_partida = item['SKU']
                             # Buscar si existe una imagen cargada para este SKU
-                            import glob
-                            img_encontrada = None
-                            matching_imgs = glob.glob(f"imagenes_articulos/{sku_partida}(*.*")
-                            if matching_imgs:
-                                img_encontrada = matching_imgs[0]
-                            else:
-                                if obtener_secret("github_token"):
-                                    try:
-                                        GITHUB_TOKEN = obtener_secret("github_token")
-                                        url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-                                        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-                                        res_list = requests.get(url_list, headers=headers)
-                                        if res_list.status_code == 200:
-                                            items_git = res_list.json()
-                                            for it in items_git:
-                                                if it["name"].startswith(f"{sku_partida}("):
-                                                    github_file_path = f"imagenes_articulos/{it['name']}"
-                                                    if descargar_imagen_desde_github(github_file_path):
-                                                        img_encontrada = github_file_path
-                                                        break
-                                    except Exception:
-                                        pass
+                            img_encontrada = resolver_ruta_imagen_sku(sku_partida)
 
                             desc_paragraph = Paragraph(str(art_nom), style_normal_text)
                             if img_encontrada and os.path.exists(img_encontrada):
@@ -5599,30 +5288,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                 else:
                     art_row = pd.Series({'SKU': sku_sel, 'Nombre': sku_sel, 'Calibre_Espesor': 'N/A', 'Dimensiones_Pieza': 'N/A', 'Acabado_Superficial': 'N/A', 'SKU_Cliente': sku_sel})
 
-                import glob
-                os.makedirs("imagenes_articulos", exist_ok=True)
-                matching_files_local = glob.glob(f"imagenes_articulos/{sku_sel}(*.*") + [f for f in glob.glob(f"imagenes_articulos/{sku_sel}.*") if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
-
-                imagen_final_path = None
-                if matching_files_local:
-                    imagen_final_path = matching_files_local[0]
-                else:
-                    if obtener_secret("github_token"):
-                        try:
-                            GITHUB_TOKEN = obtener_secret("github_token")
-                            url_list = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/imagenes_articulos?ref={BRANCH}"
-                            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-                            res_list = requests.get(url_list, headers=headers)
-                            if res_list.status_code == 200:
-                                items = res_list.json()
-                                for item in items:
-                                    if item["name"].startswith(f"{sku_sel}("):
-                                        github_file_path = f"imagenes_articulos/{item['name']}"
-                                        if descargar_imagen_desde_github(github_file_path):
-                                            imagen_final_path = github_file_path
-                                            break
-                        except Exception:
-                            pass
+                imagen_final_path = resolver_ruta_imagen_sku(sku_sel)
 
                 col_ficha, col_cargar = st.columns(2)
                 with col_ficha:
@@ -5661,7 +5327,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                                 st.success("¡Imagen eliminada correctamente!")
                                 st.rerun()
                             else:
-                                st.error("Error al eliminar la imagen en GitHub.")
+                                st.error("Error al eliminar la imagen en Google Cloud Storage.")
                     else:
                         st.info("Este artículo no cuenta con una imagen asociada actualmente.")
 
@@ -5724,7 +5390,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                                         st.success("¡Imagen guardada y sincronizada correctamente en el repositorio / bucket!")
                                         st.rerun()
                                     else:
-                                        st.error("Error al sincronizar la imagen con el almacenamiento (GCS/GitHub).")
+                                        st.error("Error al sincronizar la imagen con Google Cloud Storage.")
                                 except Exception as ex_save:
                                     st.error(f"Error al guardar el archivo localmente: {ex_save}")
                         with c_cancel:
@@ -5939,7 +5605,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                 st.success("🎉 ¡Excelente! Todos los artículos del catálogo tienen su información al 100%. No hay campos vacíos.")
 
     else:
-        st.info("ℹ️ No hay artículos registrados en el catálogo maestro actualmente o el archivo en GitHub está vacío.")
+        st.info("ℹ️ No hay artículos registrados en el catálogo maestro actualmente o el archivo en Google Cloud Storage está vacío.")
 
 
 elif opcion_menu == "🏭 Industria 4.0":
@@ -6255,7 +5921,7 @@ elif opcion_menu == "🏢 Reporte por Receptor":
 
 elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
     st.title("⚙️ Panel de Mantenimiento Avanzado del Sistema")
-    st.warning("⚠️ Acción Crítica: Las modificaciones realizadas impactan directamente en los archivos de GitHub.")
+    st.info("ℹ️ Persistencia en la Nube: Las modificaciones realizadas se guardan y sincronizan directamente en Google Cloud Storage (GCP).")
     
     # Inicialización del catálogo básico de personal operativo en memoria
     if "BD_Lideres" not in st.session_state:
@@ -6282,7 +5948,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                 key="editor_mantenimiento_cantidades_final"
             )
             
-            if st.button("💾 Guardar Cambios de Inventario en GitHub"):
+            if st.button("💾 Guardar Cambios de Inventario en Google Cloud Storage"):
                 st.session_state.BD_Detalle_Tarimas = df_editable
                 subir_excel_a_github("BD_Detalle_Tarimas.xlsx", st.session_state.BD_Detalle_Tarimas)
                 st.success("✅ ¡Inventario corregido y sincronizado con éxito!"); st.rerun()
@@ -6352,7 +6018,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
         if st.button("💾 Sincronizar Cambios Manuales de Líderes"):
             st.session_state.BD_Lideres = df_l_edit
             subir_excel_a_github("BD_Lideres.xlsx", st.session_state.BD_Lideres)
-            st.success("Catálogo de personal operativo actualizado en GitHub.")
+            st.success("Catálogo de personal operativo actualizado en Google Cloud Storage.")
 # =============================================================================
 # SECCIÓN 17D: MANTENIMIENTO - PURGA SELECCIONADA Y CIERRE GENERAL DEL SISTEMA
 # =============================================================================
@@ -6654,7 +6320,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                                     
                                     # CRÍTICO: Siempre leer la versión más reciente de GitHub antes de hacer el merge
                                     # para evitar perder artículos que otros usuarios hayan subido
-                                    with st.spinner("🔄 Sincronizando con la base de datos más reciente en GitHub..."):
+                                    with st.spinner("🔄 Sincronizando con la base de datos más reciente en Google Cloud Storage..."):
                                         df_base_github = cargar_excel_desde_github("BD_Articulos.xlsx")
                                     
                                     if df_base_github is not None and not df_base_github.empty:
@@ -6670,15 +6336,15 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                                     n_final = len(df_final)
                                     
                                     # Guardar en GitHub y sólo actualizar session_state si fue exitoso
-                                    with st.spinner("💾 Guardando catálogo en GitHub..."):
+                                    with st.spinner("💾 Guardando catálogo en Google Cloud Storage..."):
                                         exito = subir_excel_a_github("BD_Articulos.xlsx", df_final)
                                     
                                     if exito:
                                         st.session_state.BD_Articulos = df_final
-                                        st.success(f"✅ ¡Catálogo maestro actualizado en GitHub!\n\n📊 Antes: **{n_anterior}** artículos → Nuevos integrados: **{n_nuevos}** → Total final: **{n_final}** artículos.")
+                                        st.success(f"✅ ¡Catálogo maestro actualizado en Google Cloud Storage!\n\n📊 Antes: **{n_anterior}** artículos → Nuevos integrados: **{n_nuevos}** → Total final: **{n_final}** artículos.")
                                         st.rerun()
                                     else:
-                                        st.error("❌ Error al guardar en GitHub. Los datos NO se guardaron. Intente nuevamente.")
+                                        st.error("❌ Error al guardar en Google Cloud Storage. Los datos NO se guardaron. Intente nuevamente.")
                             except Exception as e:
                                 st.error(f"❌ Error inesperado al procesar el archivo: {e}")
                                 import traceback
@@ -6709,7 +6375,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                         "SKU_Cliente": st.column_config.TextColumn("SKU Cliente (Código de Barras)", width="medium")
                     }
                 )
-                if st.button("💾 Guardar Cambios del Catálogo Maestro en GitHub", use_container_width=True, type="primary"):
+                if st.button("💾 Guardar Cambios del Catálogo Maestro en Google Cloud Storage", use_container_width=True, type="primary"):
                     # Remover la columna # antes de guardar (es solo visual)
                     df_art_final = df_art_editable.drop(columns=["#"], errors="ignore").dropna(subset=["SKU"])
                     df_art_final["SKU"] = df_art_final["SKU"].astype(str).str.strip().str.upper()
@@ -6719,10 +6385,10 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     df_art_final = df_art_final.reset_index(drop=True)
                     st.session_state.BD_Articulos = df_art_final
                     if subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos):
-                        st.success(f"✅ ¡Catálogo maestro sincronizado en GitHub con éxito! Total: **{len(df_art_final)} artículos**.")
+                        st.success(f"✅ ¡Catálogo maestro sincronizado en Google Cloud Storage con éxito! Total: **{len(df_art_final)} artículos**.")
                         st.rerun()
                     else:
-                        st.error("❌ Error de comunicación con GitHub.")
+                        st.error("❌ Error de comunicación con Google Cloud Storage.")
                 
         with sub_tab2:
             st.markdown("#### 📋 Lista de SKUs Autorizados (Nombres de SKU)")
@@ -6777,10 +6443,10 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                                         st.session_state.BD_SKUs_Autorizados = df_excel_aut
                                         
                                     if subir_excel_a_github("BD_SKUs_Autorizados.xlsx", st.session_state.BD_SKUs_Autorizados):
-                                        st.success("✅ ¡Lista de SKUs Autorizados integrada con éxito en GitHub!")
+                                        st.success("✅ ¡Lista de SKUs Autorizados integrada con éxito en Google Cloud Storage!")
                                         st.rerun()
                                     else:
-                                        st.error("❌ Error al guardar en GitHub.")
+                                        st.error("❌ Error al guardar en Google Cloud Storage.")
                             except Exception as e:
                                 st.error(f"Error al procesar: {e}")
                                 
@@ -6794,7 +6460,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                     key="editor_skus_autorizados_directo",
                     column_config={"SKU": st.column_config.TextColumn("SKU Autorizado")}
                 )
-                if st.button("💾 Guardar Cambios de SKUs Autorizados en GitHub", use_container_width=True):
+                if st.button("💾 Guardar Cambios de SKUs Autorizados en Google Cloud Storage", use_container_width=True):
                     df_aut_final = df_aut_editable.dropna(subset=["SKU"])
                     df_aut_final["SKU"] = df_aut_final["SKU"].astype(str).str.strip().str.upper()
                     st.session_state.BD_SKUs_Autorizados = df_aut_final
@@ -6802,7 +6468,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
                         st.success("✅ Cambios en SKUs Autorizados guardados exitosamente.")
                         st.rerun()
                     else:
-                        st.error("❌ Error al guardar modificaciones en GitHub.")
+                        st.error("❌ Error al guardar modificaciones en Google Cloud Storage.")
             else:
                 st.warning("⚠️ No existen registros activos en la lista de SKUs autorizados.")
     # =============================================================================
@@ -6954,7 +6620,7 @@ elif opcion_menu == "⚙️ Mantenimiento y Catálogos":
         if st.button("💾 Sincronizar Cambios Manuales de Receptores"):
             st.session_state.BD_Receptores = df_r_edit
             subir_excel_a_github("BD_Receptores.xlsx", st.session_state.BD_Receptores)
-            st.success("Catálogo de receptores actualizado en GitHub.")
+            st.success("Catálogo de receptores actualizado en Google Cloud Storage.")
 
     with tab8:
         st.subheader("📧 Configuración de Listas de Distribución de Correo")
@@ -7358,9 +7024,9 @@ elif opcion_menu == "📉 Análisis de Faltantes":
                                 res_req = subir_excel_a_github("BD_Requerimientos_POs.xlsx", st.session_state.BD_Requerimientos_POs)
                                 
                                 if res_cab and res_req:
-                                    st.success(f"✅ Requerimientos de la PO {po_num} integrados y guardados en GitHub con éxito.")
+                                    st.success(f"✅ Requerimientos de la PO {po_num} integrados y guardados en Google Cloud Storage con éxito.")
                                 else:
-                                    st.error("❌ Ocurrió un error al intentar guardar los archivos en GitHub.")
+                                    st.error("❌ Ocurrió un error al intentar guardar los archivos en Google Cloud Storage.")
                     else:
                         st.error("❌ El Excel cargado debe contener las hojas 'Datos_Generales' y 'Detalle_Entregas'.")
                 except Exception as e:

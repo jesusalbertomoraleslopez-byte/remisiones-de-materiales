@@ -3,3 +3,11 @@ __pycache__/
 *.pyo
 *.pyd
 .DS_Store
+
+# Bases de datos y archivos operativos (Persistencia exclusiva en Google Cloud Storage - GCP)
+*.xlsx
+BD_*.xlsx
+consecutivo_override.txt
+
+# Fotografias y catalogos de articulos (Persistencia exclusiva en Google Cloud Storage - GCP)
+imagenes_articulos/
