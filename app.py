@@ -786,20 +786,23 @@ def subir_imagen_a_github(file_path):
     if not os.path.exists(file_path):
         return False
 
+    gcs_ok = False
     # Sincronizar con Google Cloud Storage
     try:
         import gcs_sync
-        gcs_sync.push_image_to_gcs(file_path)
+        gcs_ok = gcs_sync.push_image_to_gcs(file_path)
     except Exception as _egcs_img:
         print(f"[GCS] Error subiendo imagen {file_path}: {_egcs_img}")
 
-    if not obtener_secret("github_token"):
-        return True
+    token = obtener_secret("github_token")
+    if not token:
+        # En Google Cloud Run, la persistencia primaria se gestiona automáticamente vía Google Cloud Storage
+        return gcs_ok or True
     try:
         with open(file_path, "rb") as f:
             base64_content = base64.b64encode(f.read()).decode("utf-8")
         
-        GITHUB_TOKEN = obtener_secret("github_token")
+        GITHUB_TOKEN = token
         quoted_path = urllib.parse.quote(file_path.replace("\\", "/"))
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{quoted_path}"
         headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
@@ -849,7 +852,7 @@ def descargar_imagen_desde_github(file_path):
 
 
 def eliminar_imagen_de_github(file_path):
-    """Elimina la imagen localmente y en el repositorio de GitHub."""
+    """Elimina la imagen localmente, en GCS y en el repositorio de GitHub."""
     import os
     import urllib.parse
     if os.path.exists(file_path):
@@ -858,6 +861,13 @@ def eliminar_imagen_de_github(file_path):
         except Exception as e:
             st.error(f"⚠️ Error al borrar imagen local {file_path}: {e}")
             
+    # Sincronizar eliminación en Google Cloud Storage
+    try:
+        import gcs_sync
+        gcs_sync.delete_image_from_gcs(file_path)
+    except Exception as _egcs_del:
+        print(f"[GCS] Error eliminando imagen de GCS: {_egcs_del}")
+
     if not obtener_secret("github_token"):
         return True
     try:
@@ -5666,16 +5676,19 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                     except Exception:
                         paste_result = None
 
-                    nueva_imagen_data = None
-                    img_ext = ".png"
+                    state_img_key = f"st_pending_img_{sku_sel}"
+                    state_ext_key = f"st_pending_ext_{sku_sel}"
+
                     if file_uploaded:
-                        nueva_imagen_data = Image.open(file_uploaded)
+                        st.session_state[state_img_key] = Image.open(file_uploaded)
                         _, ext = os.path.splitext(file_uploaded.name)
-                        if ext.lower() in [".png", ".jpg", ".jpeg"]:
-                            img_ext = ext.lower()
+                        st.session_state[state_ext_key] = ext.lower() if ext.lower() in [".png", ".jpg", ".jpeg"] else ".png"
                     elif paste_result is not None and getattr(paste_result, 'image_data', None) is not None:
-                        nueva_imagen_data = paste_result.image_data
-                        img_ext = ".png"
+                        st.session_state[state_img_key] = paste_result.image_data
+                        st.session_state[state_ext_key] = ".png"
+
+                    nueva_imagen_data = st.session_state.get(state_img_key, None)
+                    img_ext = st.session_state.get(state_ext_key, ".png")
 
                     if nueva_imagen_data is not None:
                         st.write("---")
@@ -5700,20 +5713,24 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                                     nueva_imagen_data.save(nuevo_path)
 
                                     if subir_imagen_a_github(nuevo_path):
+                                        st.session_state.pop(state_img_key, None)
+                                        st.session_state.pop(state_ext_key, None)
                                         obtener_skus_con_imagen.clear()
                                         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
                                             if sku_sel not in st.session_state.BD_Articulos['SKU'].astype(str).str.strip().tolist():
                                                 n_art = pd.DataFrame([{'SKU': sku_sel, 'Nombre': sku_sel, 'Calibre_Espesor': None, 'Dimensiones_Pieza': None, 'Acabado_Superficial': 'Ansi 61', 'SKU_Cliente': sku_sel}])
                                                 st.session_state.BD_Articulos = pd.concat([st.session_state.BD_Articulos, n_art], ignore_index=True)
                                                 subir_excel_a_github("BD_Articulos.xlsx", st.session_state.BD_Articulos)
-                                        st.success("¡Imagen guardada y sincronizada correctamente en GitHub!")
+                                        st.success("¡Imagen guardada y sincronizada correctamente en el repositorio / bucket!")
                                         st.rerun()
                                     else:
-                                        st.error("Error al sincronizar la imagen con el repositorio de GitHub.")
+                                        st.error("Error al sincronizar la imagen con el almacenamiento (GCS/GitHub).")
                                 except Exception as ex_save:
                                     st.error(f"Error al guardar el archivo localmente: {ex_save}")
                         with c_cancel:
                             if st.button("❌ Descartar", use_container_width=True, key=f"btn_discard_img_{sku_sel}"):
+                                st.session_state.pop(state_img_key, None)
+                                st.session_state.pop(state_ext_key, None)
                                 st.rerun()
             else:
                 st.info("👆 Seleccione un SKU de la lista desplegable o escriba un código en el recuadro para comenzar a cargar su fotografía.")
