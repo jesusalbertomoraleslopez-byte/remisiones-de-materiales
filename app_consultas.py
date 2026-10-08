@@ -7,6 +7,7 @@ import io
 import requests
 import urllib.parse
 from PIL import Image
+from pathlib import Path
 import glob
 
 import openpyxl
@@ -929,7 +930,10 @@ df_pos_req = cargar_excel_desde_github("BD_Requerimientos_POs.xlsx")
 # --- RENDERIZADO DEL BANNER OFICIAL ESCALADO A 0.8X (80%) ---
 c_banner1, c_banner2, c_banner3 = st.columns([0.1, 0.8, 0.1])
 with c_banner2:
-    if os.path.exists("REMISIONES APP.png"):
+    _banner_path = Path(__file__).resolve().parent / "REMISIONES APP.png"
+    if _banner_path.exists():
+        st.image(str(_banner_path), use_container_width=True)
+    elif os.path.exists("REMISIONES APP.png"):
         st.image("REMISIONES APP.png", use_container_width=True)
     else:
         try:

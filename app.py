@@ -282,11 +282,15 @@ components.html("""
 """, height=0)
 
 # Renderizado de Banner Corporativo Adaptable
-try:
-    banner_img = Image.open("REMISIONES APP.png")
-    st.image(banner_img, use_container_width=True)
-except FileNotFoundError:
-    st.warning("⚠️ Cargando interfaz gráfica del banner superior corporativo...")
+_banner_path = Path(__file__).resolve().parent / "REMISIONES APP.png"
+if _banner_path.exists():
+    st.image(str(_banner_path), use_container_width=True)
+else:
+    try:
+        banner_img = Image.open("REMISIONES APP.png")
+        st.image(banner_img, use_container_width=True)
+    except Exception:
+        st.warning("⚠️ Cargando interfaz gráfica del banner superior corporativo...")
 
 # Slogan de Resultados / Transformación Principal
 st.markdown('<p style="text-align: center; font-size: 16px; font-weight: bold; color: #EC2024; font-family: \'Montserrat\', sans-serif; margin-top: 15px; text-transform: uppercase; letter-spacing: 1px;">SOLUCIONES QUE TRANSFORMAN TU EMPRESA</p>', unsafe_allow_html=True)
