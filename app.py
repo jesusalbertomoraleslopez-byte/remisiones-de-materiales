@@ -354,26 +354,42 @@ def clean_po_val(val):
     # De lo contrario, dejarlo limpio pero como está
     return val_str
 
+@st.cache_data(ttl=180, max_entries=5, show_spinner=False)
+def _construir_mapa_imagenes_local():
+    """Construye un índice en memoria de las imágenes locales en O(1) para evitar llamadas repetitivas a glob."""
+    import os
+    mapa = {}
+    valid_exts = ('.png', '.jpg', '.jpeg', '.webp')
+    if os.path.exists("imagenes_articulos"):
+        for f in os.listdir("imagenes_articulos"):
+            if f.lower().endswith(valid_exts):
+                sku_key = f.split("(")[0].strip() if "(" in f else os.path.splitext(f)[0].strip()
+                if sku_key:
+                    full_p = f"imagenes_articulos/{f}"
+                    mapa[sku_key] = full_p
+                    mapa[sku_key.upper()] = full_p
+    return mapa
+
 def resolver_ruta_imagen_sku(sku: str):
-    """Resuelve la ruta local de la imagen de un SKU de forma instantánea sin latencia de red."""
+    """Resuelve la ruta local de la imagen de un SKU en O(1) sin latencia de disco ni de red."""
     if not sku:
         return None
     sku_str = str(sku).strip()
-    import glob
-    os.makedirs("imagenes_articulos", exist_ok=True)
-    matching = glob.glob(f"imagenes_articulos/{sku_str}(*.*") + [f for f in glob.glob(f"imagenes_articulos/{sku_str}.*") if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
-    if matching:
-        return matching[0]
+    mapa = _construir_mapa_imagenes_local()
+    ruta = mapa.get(sku_str) or mapa.get(sku_str.upper())
+    if ruta and os.path.exists(ruta):
+        return ruta
     try:
         import gcs_sync
         path_gcs = gcs_sync.find_and_download_sku_image(sku_str)
         if path_gcs and os.path.exists(path_gcs):
+            _construir_mapa_imagenes_local.clear()
             return path_gcs
     except Exception:
         pass
     return None
 
-@st.cache_data(ttl=180, max_entries=20)
+@st.cache_data(ttl=180, max_entries=20, show_spinner=False)
 def cargar_excel_desde_github(file_name):
     """Carga el archivo Excel desde disco local ultrarrápido (sincronizado con Google Cloud Storage)."""
     import os
@@ -399,7 +415,15 @@ def cargar_excel_desde_github(file_name):
     return None
 
 def leer_github_fresco(file_name):
-    """Lee el archivo más fresco desde Google Cloud Storage sin demoras de GitHub."""
+    """Lee el archivo más reciente desde disco local sincronizado o Google Cloud Storage."""
+    if os.path.exists(file_name):
+        try:
+            return pd.read_excel(file_name, sheet_name='Datos_Sistema')
+        except Exception:
+            try:
+                return pd.read_excel(file_name, sheet_name=0)
+            except Exception:
+                pass
     try:
         import gcs_sync
         df_gcs = gcs_sync.read_fresh_excel_from_gcs(file_name)
@@ -407,27 +431,22 @@ def leer_github_fresco(file_name):
             return df_gcs
     except Exception:
         pass
-    if os.path.exists(file_name):
-        try:
-            return pd.read_excel(file_name, sheet_name='Datos_Sistema')
-        except Exception:
-            return pd.read_excel(file_name, sheet_name=0)
     return None
 
 def subir_excel_a_github(file_name, dataframe_to_save):
-    """Guarda el archivo localmente y lo sincroniza de inmediato con Google Cloud Storage (100% GCP)."""
-    # 1. Guardar localmente
+    """Guarda el archivo localmente al instante y lo sincroniza en segundo plano con Google Cloud Storage."""
+    # 1. Guardar localmente de forma inmediata
     try:
         with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
             dataframe_to_save.to_excel(writer, index=False, sheet_name='Datos_Sistema')
     except Exception as e:
         st.error(f"⚠️ Error al guardar archivo localmente {file_name}: {e}")
         
-    # 2. Sincronizar inmediatamente con Google Cloud Storage (Persistencia Cloud Run)
-    gcs_ok = False
+    # 2. Sincronizar en segundo plano con Google Cloud Storage para respuesta instantánea al operador
     try:
+        import threading
         import gcs_sync
-        gcs_ok = gcs_sync.push_excel_to_gcs(file_name)
+        threading.Thread(target=gcs_sync.push_excel_to_gcs, args=(file_name,), daemon=True).start()
     except Exception as _egcs_up:
         print(f"[GCS] Error al sincronizar {file_name}: {_egcs_up}")
 
@@ -436,25 +455,17 @@ def subir_excel_a_github(file_name, dataframe_to_save):
     except Exception:
         pass
 
-    return gcs_ok or True
+    return True
 
-@st.cache_data(ttl=180, max_entries=5)
+@st.cache_data(ttl=180, max_entries=5, show_spinner=False)
 def obtener_skus_con_imagen():
     """Obtiene el conjunto de SKUs que tienen una imagen asociada localmente o en Google Cloud Storage."""
     import os
-    skus = set()
-    valid_exts = ('.png', '.jpg', '.jpeg', '.webp')
-    
-    # 1. Escaneo local ultrarrápido
-    if os.path.exists("imagenes_articulos"):
-        for f in os.listdir("imagenes_articulos"):
-            if f.lower().endswith(valid_exts):
-                sku = f.split("(")[0].strip() if "(" in f else os.path.splitext(f)[0].strip()
-                if sku:
-                    skus.add(sku)
+    mapa = _construir_mapa_imagenes_local()
+    skus = set(mapa.keys())
                 
-    # 2. Si local tiene pocos archivos, sincronizar con GCS
-    if len(skus) < 10:
+    # Si local aún está descargando en segundo plano, complementar con el índice en memoria de GCS
+    if len(skus) < 20:
         try:
             import gcs_sync
             skus.update(gcs_sync.list_skus_in_gcs())
@@ -547,6 +558,7 @@ def renderizar_explorador_imagenes():
     else:
         st.info("Actualmente no hay imágenes descargadas localmente en la carpeta `imagenes_articulos/`. Haz clic en 'Sincronizar Imágenes con Google Cloud Storage' para descargar las imágenes del almacenamiento central.")
 
+@st.cache_data(ttl=180, max_entries=10, show_spinner=False)
 def generar_pdf_catalogo_articulos(df_articulos):
     import io
     import os
@@ -704,6 +716,12 @@ def subir_imagen_a_github(file_path):
     if not os.path.exists(file_path):
         return False
 
+    try:
+        _construir_mapa_imagenes_local.clear()
+        obtener_skus_con_imagen.clear()
+    except Exception:
+        pass
+
     gcs_ok = False
     try:
         import gcs_sync
@@ -735,6 +753,12 @@ def eliminar_imagen_de_github(file_path):
             os.remove(file_path)
         except Exception as e:
             st.error(f"⚠️ Error al borrar imagen local {file_path}: {e}")
+
+    try:
+        _construir_mapa_imagenes_local.clear()
+        obtener_skus_con_imagen.clear()
+    except Exception:
+        pass
 
     try:
         import gcs_sync
@@ -2115,13 +2139,6 @@ def sincronizar_estatus_tarimas(auto_save=True):
             
     return corregidas
 
-# --- Corrección automática de Estatus de Tarimas ---
-if "BD_Tarimas" in st.session_state and "BD_Datos_Generales_Remision" in st.session_state:
-    try:
-        sincronizar_estatus_tarimas(auto_save=True)
-    except Exception:
-        pass
-
 # --- Catálogo Operativo de Líderes ---
 if "BD_Lideres" not in st.session_state:
     df_git_lideres = cargar_excel_desde_github("BD_Lideres.xlsx")
@@ -2141,25 +2158,34 @@ if "BD_Receptores" not in st.session_state:
             {"ID_Receptor": "REC-02", "Nombre_Receptor": "EQM", "Direccion": "Calle Inde 714, 35079 Gómez Palacio, Durango", "Estatus": "Activo"}
         ])
 
-# --- Migración automática: Renombrar COVISA → EQM en todas las bases de datos ---
-bds_a_migrar = {
-    "BD_Receptores": "BD_Receptores.xlsx",
-    "BD_Datos_Generales_Remision": "BD_Datos_Generales_Remision.xlsx",
-    "BD_Tarimas": "BD_Tarimas.xlsx"
-}
+# --- Corrección automática y migración inicial (ejecutada una sola vez por sesión) ---
+if "init_housekeeping_done" not in st.session_state:
+    if "BD_Tarimas" in st.session_state and "BD_Datos_Generales_Remision" in st.session_state:
+        try:
+            sincronizar_estatus_tarimas(auto_save=True)
+        except Exception:
+            pass
 
-for bd_key, bd_file in bds_a_migrar.items():
-    if bd_key in st.session_state and not st.session_state[bd_key].empty:
-        df = st.session_state[bd_key]
-        has_covisa = False
-        for col in df.columns:
-            if df[col].dtype == object:
-                if df[col].astype(str).str.contains("COVISA|Covisa|covisa", case=False, na=False).any():
-                    has_covisa = True
-                    df[col] = df[col].apply(lambda x: str(x).replace("COVISA", "EQM").replace("Covisa", "EQM").replace("covisa", "EQM") if pd.notna(x) else x)
-        if has_covisa:
-            st.session_state[bd_key] = df
-            subir_excel_a_github(bd_file, st.session_state[bd_key])
+    bds_a_migrar = {
+        "BD_Receptores": "BD_Receptores.xlsx",
+        "BD_Datos_Generales_Remision": "BD_Datos_Generales_Remision.xlsx",
+        "BD_Tarimas": "BD_Tarimas.xlsx"
+    }
+
+    for bd_key, bd_file in bds_a_migrar.items():
+        if bd_key in st.session_state and not st.session_state[bd_key].empty:
+            df = st.session_state[bd_key]
+            has_covisa = False
+            for col in df.columns:
+                if df[col].dtype == object:
+                    if df[col].astype(str).str.contains("COVISA|Covisa|covisa", case=False, na=False).any():
+                        has_covisa = True
+                        df[col] = df[col].apply(lambda x: str(x).replace("COVISA", "EQM").replace("Covisa", "EQM").replace("covisa", "EQM") if pd.notna(x) else x)
+            if has_covisa:
+                st.session_state[bd_key] = df
+                subir_excel_a_github(bd_file, st.session_state[bd_key])
+
+    st.session_state["init_housekeeping_done"] = True
 
 # --- Función Auxiliar y Consecutivo Dinámico de Tarimas (TPM) ---
 def obtener_siguiente_consecutivo_tpm():
@@ -5335,23 +5361,34 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                     st.write("##### Cargar / Reemplazar Imagen")
                     file_uploaded = st.file_uploader("Subir archivo de imagen (PNG, JPG, JPEG):", type=["png", "jpg", "jpeg"], key=f"file_uploader_{sku_sel}")
 
-                    paste_result = None
+                    paste_data_url = None
                     try:
-                        from streamlit_paste_button import paste_image_button as pbutton
-                        paste_result = pbutton("📋 Pegar captura de pantalla desde el portapapeles", key=f"paste_button_{sku_sel}")
+                        _paste_dir = Path(__file__).resolve().parent / "components" / "paste_box"
+                        if _paste_dir.exists():
+                            if "_sigrama_paste_comp" not in st.session_state:
+                                st.session_state["_sigrama_paste_comp"] = components.declare_component("sigrama_paste_box", path=str(_paste_dir))
+                            paste_data_url = st.session_state["_sigrama_paste_comp"](key="sigrama_paste_box_fixed", default=None)
                     except Exception:
-                        paste_result = None
+                        paste_data_url = None
 
                     state_img_key = f"st_pending_img_{sku_sel}"
                     state_ext_key = f"st_pending_ext_{sku_sel}"
+                    last_paste_hash_key = f"st_last_paste_hash_{sku_sel}"
 
                     if file_uploaded:
                         st.session_state[state_img_key] = Image.open(file_uploaded)
                         _, ext = os.path.splitext(file_uploaded.name)
                         st.session_state[state_ext_key] = ext.lower() if ext.lower() in [".png", ".jpg", ".jpeg"] else ".png"
-                    elif paste_result is not None and getattr(paste_result, 'image_data', None) is not None:
-                        st.session_state[state_img_key] = paste_result.image_data
-                        st.session_state[state_ext_key] = ".png"
+                    elif paste_data_url and isinstance(paste_data_url, str) and ";base64," in paste_data_url:
+                        paste_hash = hash(paste_data_url)
+                        if st.session_state.get(last_paste_hash_key) != paste_hash:
+                            try:
+                                _, b64_part = paste_data_url.split(";base64,", 1)
+                                st.session_state[state_img_key] = Image.open(io.BytesIO(base64.b64decode(b64_part)))
+                                st.session_state[state_ext_key] = ".png"
+                                st.session_state[last_paste_hash_key] = paste_hash
+                            except Exception:
+                                pass
 
                     nueva_imagen_data = st.session_state.get(state_img_key, None)
                     img_ext = st.session_state.get(state_ext_key, ".png")
