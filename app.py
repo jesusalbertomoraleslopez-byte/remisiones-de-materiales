@@ -5361,37 +5361,206 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                     st.write("##### Cargar / Reemplazar Imagen")
                     file_uploaded = st.file_uploader("Subir archivo de imagen (PNG, JPG, JPEG):", type=["png", "jpg", "jpeg"], key=f"file_uploader_{sku_sel}")
 
-                    paste_data_url = None
-                    try:
-                        _paste_dir = Path(__file__).resolve().parent / "components" / "paste_box"
-                        if _paste_dir.exists():
-                            if "_sigrama_paste_comp" not in st.session_state:
-                                st.session_state["_sigrama_paste_comp"] = components.declare_component("sigrama_paste_box", path=str(_paste_dir))
-                            paste_data_url = st.session_state["_sigrama_paste_comp"](key="sigrama_paste_box_fixed", default=None)
-                    except Exception:
-                        paste_data_url = None
+                    # Campo oculto para recibir pegado Base64 como fallback
+                    hidden_paste_key = f"st_hidden_paste_{sku_sel}"
+                    pasted_b64 = st.text_input(
+                        "hidden_paste_b64",
+                        value="",
+                        key=hidden_paste_key,
+                        label_visibility="collapsed",
+                    )
+                    st.markdown(
+                        """
+                        <style>
+                        div[data-testid="stTextInput"]:has(input[aria-label="hidden_paste_b64"]) {
+                            display: none !important;
+                            height: 0px !important;
+                            margin: 0px !important;
+                            padding: 0px !important;
+                        }
+                        </style>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                    # Zona de pegado interactiva (HTML + JS puro, 100% compatible con Cloud Run sin iframes externos ni timeouts)
+                    paste_box_template = """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <style>
+                            * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+                            body { background: transparent; padding: 2px; overflow: hidden; }
+                            .paste-box {
+                                border: 2px dashed #EC2024;
+                                background-color: #FFF5F5;
+                                border-radius: 8px;
+                                padding: 12px 10px;
+                                text-align: center;
+                                cursor: pointer;
+                                transition: all 0.2s ease-in-out;
+                                display: flex;
+                                flex-direction: column;
+                                align-items: center;
+                                justify-content: center;
+                                gap: 6px;
+                            }
+                            .paste-box:hover, .paste-box:focus {
+                                background-color: #FEE2E2;
+                                border-color: #B91C1C;
+                            }
+                            .btn-paste {
+                                background-color: #EC2024;
+                                color: #FFFFFF;
+                                border: none;
+                                border-radius: 6px;
+                                padding: 8px 18px;
+                                font-size: 13px;
+                                font-weight: 700;
+                                cursor: pointer;
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 6px;
+                                transition: background 0.15s;
+                            }
+                            .btn-paste:hover { background-color: #B91C1C; }
+                            .paste-title { font-size: 12.5px; font-weight: 700; color: #111; }
+                            .paste-sub { font-size: 11px; color: #64748B; }
+                        </style>
+                    </head>
+                    <body>
+                        <div id="pasteZone" class="paste-box" tabindex="0" title="Haz clic aquí y presiona Ctrl + V">
+                            <button type="button" id="btnPaste" class="btn-paste">📋 Pegar desde el Portapapeles</button>
+                            <div class="paste-title">o haz clic aquí y presiona <kbd style="background:#E2E8F0; padding:2px 6px; border-radius:4px;">Ctrl + V</kbd></div>
+                            <div id="statusNotice" class="paste-sub">Compatible con recortes (Win + Shift + S) y copias de imágenes</div>
+                        </div>
+
+                        <script>
+                            const pasteZone = document.getElementById('pasteZone');
+                            const btnPaste = document.getElementById('btnPaste');
+                            const statusNotice = document.getElementById('statusNotice');
+
+                            function handleFileBlob(blob) {
+                                if (!blob || !blob.type.startsWith('image/')) {
+                                    if (statusNotice) statusNotice.innerHTML = '<span style="color:#B91C1C; font-weight:bold;">⚠️ El contenido no es una imagen válida.</span>';
+                                    return;
+                                }
+                                if (statusNotice) statusNotice.innerHTML = '<span style="color:#166534; font-weight:bold;">⏳ Cargando imagen en la aplicación...</span>';
+
+                                // Método 1: Inyección directa en el componente file_uploader de Streamlit
+                                try {
+                                    const pDoc = window.parent.document;
+                                    const fInput = pDoc.querySelector('input[data-testid="stFileUploaderDropzoneInput"], input[type="file"]');
+                                    if (fInput) {
+                                        const dt = new DataTransfer();
+                                        dt.items.add(new File([blob], "__SKU_SEL__.png", { type: blob.type || "image/png" }));
+                                        fInput.files = dt.files;
+                                        fInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                        if (statusNotice) statusNotice.innerHTML = '<span style="color:#166534; font-weight:bold;">✅ ¡Imagen pegada con éxito!</span>';
+                                        return;
+                                    }
+                                } catch (e) {
+                                    console.warn('File input inject fallback:', e);
+                                }
+
+                                // Método 2: Inyección Base64 en campo oculto
+                                const reader = new FileReader();
+                                reader.onload = function(evt) {
+                                    const dataUrl = evt.target.result;
+                                    try {
+                                        const pDoc = window.parent.document;
+                                        const hiddenInp = pDoc.querySelector('input[aria-label="hidden_paste_b64"]');
+                                        if (hiddenInp) {
+                                            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                                            if (nativeSetter) {
+                                                nativeSetter.call(hiddenInp, dataUrl);
+                                            } else {
+                                                hiddenInp.value = dataUrl;
+                                            }
+                                            hiddenInp.dispatchEvent(new Event('input', { bubbles: true }));
+                                            hiddenInp.dispatchEvent(new Event('change', { bubbles: true }));
+                                            if (statusNotice) statusNotice.innerHTML = '<span style="color:#166534; font-weight:bold;">✅ ¡Imagen cargada y lista para guardar!</span>';
+                                        }
+                                    } catch (err) {
+                                        console.error('Hidden input fallback error:', err);
+                                    }
+                                };
+                                reader.readAsDataURL(blob);
+                            }
+
+                            function onPaste(e) {
+                                const items = (e.clipboardData || window.clipboardData)?.items;
+                                if (items) {
+                                    for (let i = 0; i < items.length; i++) {
+                                        if (items[i].type.indexOf('image') !== -1) {
+                                            const blob = items[i].getAsFile();
+                                            if (blob) {
+                                                e.preventDefault();
+                                                handleFileBlob(blob);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            pasteZone.addEventListener('paste', onPaste);
+                            try {
+                                window.parent.document.addEventListener('paste', onPaste);
+                            } catch (e) {}
+
+                            pasteZone.addEventListener('click', function() {
+                                pasteZone.focus();
+                            });
+
+                            btnPaste.addEventListener('click', async function(e) {
+                                e.stopPropagation();
+                                pasteZone.focus();
+                                if (navigator.clipboard && navigator.clipboard.read) {
+                                    try {
+                                        const items = await navigator.clipboard.read();
+                                        for (const item of items) {
+                                            const imgType = item.types.find(t => t.startsWith('image/'));
+                                            if (imgType) {
+                                                const blob = await item.getType(imgType);
+                                                handleFileBlob(blob);
+                                                return;
+                                            }
+                                        }
+                                    } catch (clipErr) {
+                                        console.log('Clipboard permission info:', clipErr);
+                                    }
+                                }
+                                if (statusNotice) statusNotice.innerHTML = '<span style="color:#EC2024; font-weight:bold;">👉 Haz clic aquí y presiona Ctrl + V en tu teclado</span>';
+                            });
+                        </script>
+                    </body>
+                    </html>
+                    """
+                    components.html(paste_box_template.replace("__SKU_SEL__", str(sku_sel)), height=115)
 
                     state_img_key = f"st_pending_img_{sku_sel}"
                     state_ext_key = f"st_pending_ext_{sku_sel}"
-                    last_paste_hash_key = f"st_last_paste_hash_{sku_sel}"
 
                     if file_uploaded:
                         st.session_state[state_img_key] = Image.open(file_uploaded)
                         _, ext = os.path.splitext(file_uploaded.name)
                         st.session_state[state_ext_key] = ext.lower() if ext.lower() in [".png", ".jpg", ".jpeg"] else ".png"
-                    elif paste_data_url and isinstance(paste_data_url, str) and ";base64," in paste_data_url:
-                        paste_hash = hash(paste_data_url)
-                        if st.session_state.get(last_paste_hash_key) != paste_hash:
-                            try:
-                                _, b64_part = paste_data_url.split(";base64,", 1)
-                                st.session_state[state_img_key] = Image.open(io.BytesIO(base64.b64decode(b64_part)))
-                                st.session_state[state_ext_key] = ".png"
-                                st.session_state[last_paste_hash_key] = paste_hash
-                            except Exception:
-                                pass
+                    elif pasted_b64 and isinstance(pasted_b64, str) and ";base64," in pasted_b64:
+                        try:
+                            _, b64_part = pasted_b64.split(";base64,", 1)
+                            st.session_state[state_img_key] = Image.open(io.BytesIO(base64.b64decode(b64_part)))
+                            st.session_state[state_ext_key] = ".png"
+                        except Exception as e_b64:
+                            st.error(f"Error procesando imagen del portapapeles: {e_b64}")
 
                     nueva_imagen_data = st.session_state.get(state_img_key, None)
                     img_ext = st.session_state.get(state_ext_key, ".png")
+
+                    if nueva_imagen_data is None:
+                        st.info("💡 **Para asociar una fotografía:** Sube un archivo con el botón de arriba, arrastra una imagen, o presiona **Ctrl + V** para pegarla desde tu portapapeles. Al detectarla, aparecerá aquí abajo la vista previa y el botón para guardar y sincronizar.")
+
 
                     if nueva_imagen_data is not None:
                         st.write("---")
@@ -5418,6 +5587,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                                     if subir_imagen_a_github(nuevo_path):
                                         st.session_state.pop(state_img_key, None)
                                         st.session_state.pop(state_ext_key, None)
+                                        st.session_state.pop(hidden_paste_key, None)
                                         obtener_skus_con_imagen.clear()
                                         if "BD_Articulos" in st.session_state and not st.session_state.BD_Articulos.empty:
                                             if sku_sel not in st.session_state.BD_Articulos['SKU'].astype(str).str.strip().tolist():
@@ -5434,6 +5604,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                             if st.button("❌ Descartar", use_container_width=True, key=f"btn_discard_img_{sku_sel}"):
                                 st.session_state.pop(state_img_key, None)
                                 st.session_state.pop(state_ext_key, None)
+                                st.session_state.pop(hidden_paste_key, None)
                                 st.rerun()
             else:
                 st.info("👆 Seleccione un SKU de la lista desplegable o escriba un código en el recuadro para comenzar a cargar su fotografía.")
