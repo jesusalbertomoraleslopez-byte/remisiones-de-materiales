@@ -111,13 +111,65 @@ st.markdown("""
         filter: grayscale(1) invert(1) brightness(1.2) contrast(1.2) !important;
     }
 
-    /* Botones de navegación en barra lateral */
-    [data-testid="stSidebar"] div[role="radiogroup"] label {
-        color: #FFFFFF !important;
-        font-size: 14px !important;
+    /* Menú Lateral Estilo Google Workspace (Píldoras Material Design 3) */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {
+        display: none !important;
     }
-    [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-        color: #EC2024 !important;
+    [data-testid="stSidebar"] div[role="radiogroup"] {
+        background-color: transparent !important;
+        border: none !important;
+        border-radius: 0px !important;
+        padding: 2px 0 !important;
+        gap: 3px !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label {
+        color: #CBD5E1 !important;
+        padding: 9px 18px !important;
+        border-radius: 24px !important;
+        transition: all 0.18s ease-in-out !important;
+        margin: 1px 0 !important;
+        background: transparent !important;
+        border: 1px solid transparent !important;
+        cursor: pointer !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] label,
+    [data-testid="stSidebar"] div[role="radiogroup"] label p,
+    [data-testid="stSidebar"] div[role="radiogroup"] label span,
+    [data-testid="stSidebar"] div[role="radiogroup"] label div {
+        font-size: 15px !important;
+        font-family: 'Questrial', sans-serif !important;
+        font-weight: 500 !important;
+        line-height: 1.35 !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover p,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover span {
+        color: #FFFFFF !important;
+        background-color: rgba(255, 255, 255, 0.08) !important;
+        border-radius: 24px !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"],
+    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"] p,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"] span,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) span {
+        background-color: rgba(236, 32, 36, 0.22) !important;
+        border: 1px solid rgba(236, 32, 36, 0.55) !important;
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+        border-radius: 24px !important;
+    }
+
+    /* Botón Google Workspace 'Redactar / Nuevo' (FAB Pill) */
+    div.stButton > button[key="btn_google_fab_remisiones"] {
+        border-radius: 20px !important;
+        padding: 10px 20px !important;
+        font-size: 14.5px !important;
+        font-weight: 700 !important;
+        box-shadow: 0 4px 14px rgba(236, 32, 36, 0.35) !important;
+        border: 1px solid rgba(236, 32, 36, 0.8) !important;
+        margin-bottom: 8px !important;
     }
 
     /* Estilos para inputs de contraseña en barra lateral */
@@ -3117,27 +3169,56 @@ is_super = (super_pass_input == "SigramaMetales2025")
 if is_super:
     st.sidebar.success("⚡ Modo Superusuario Activo")
 
-st.sidebar.title("🧭 Navegación")
-lista_modulos = [
-    "📊 Dashboard e Históricos",
-    "📅 Movimientos del Día",
-    "🔍 Centro de Consultas", 
-    "📦 Módulo Tarimas", 
-    "🚚 Módulo Remisiones",
-    "📦 Catálogo de Artículos",
-    "🏭 Industria 4.0",
-    "📖 Manual de Operación",
-    "🏢 Reporte por Receptor",
-    "🏁 Cierre de Proyecto",
-    "🕰️ Carga Histórica",
-    "📉 Análisis de Faltantes",
-    "📋 Consulta por Lote SKU"
+# --- NAVEGACIÓN ESTILO GOOGLE WORKSPACE ---
+if st.sidebar.button("➕ Nueva Remisión", key="btn_google_fab_remisiones", use_container_width=True, type="primary"):
+    st.session_state["remisiones_google_nav"] = "🚚 Remisiones"
+    st.rerun()
+
+st.sidebar.markdown("<p style='font-family: \"Montserrat\", sans-serif; font-size: 11px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 10px; margin-bottom: 6px;'>Menú Principal:</p>", unsafe_allow_html=True)
+
+MENU_MAP_REMIS = {
+    "📊 Resumen": "📊 Dashboard e Históricos",
+    "📅 Diario": "📅 Movimientos del Día",
+    "🔍 Consultas": "🔍 Centro de Consultas",
+    "📦 Tarimas": "📦 Módulo Tarimas",
+    "🚚 Remisiones": "🚚 Módulo Remisiones",
+    "📋 Catálogo": "📦 Catálogo de Artículos",
+    "🏭 Industria": "🏭 Industria 4.0",
+    "📖 Manual": "📖 Manual de Operación",
+    "🏢 Receptores": "🏢 Reporte por Receptor",
+    "🏁 Cierre": "🏁 Cierre de Proyecto",
+    "🕰️ Histórico": "🕰️ Carga Histórica",
+    "📉 Faltantes": "📉 Análisis de Faltantes",
+    "🏷️ Lotes": "📋 Consulta por Lote SKU",
+    "⚙️ Ajustes": "⚙️ Mantenimiento y Catálogos"
+}
+
+google_items_remis = [
+    "📊 Resumen",
+    "📅 Diario",
+    "🔍 Consultas",
+    "📦 Tarimas",
+    "🚚 Remisiones",
+    "📋 Catálogo",
+    "🏭 Industria",
+    "📖 Manual",
+    "🏢 Receptores",
+    "🏁 Cierre",
+    "🕰️ Histórico",
+    "📉 Faltantes",
+    "🏷️ Lotes"
 ]
-
 if is_admin or is_super:
-    lista_modulos.append("⚙️ Mantenimiento y Catálogos")
+    google_items_remis.append("⚙️ Ajustes")
 
-opcion_menu = st.sidebar.radio("Seleccione un Módulo:", lista_modulos)
+curr_nav = st.session_state.get("remisiones_google_nav", "📊 Resumen")
+if curr_nav not in google_items_remis:
+    curr_nav = google_items_remis[0]
+idx_nav = google_items_remis.index(curr_nav)
+
+sel_remis = st.sidebar.radio("Navegación:", google_items_remis, index=idx_nav, key="radio_remis_google", label_visibility="collapsed")
+st.session_state["remisiones_google_nav"] = sel_remis
+opcion_menu = MENU_MAP_REMIS.get(sel_remis, "📊 Dashboard e Históricos")
 
 # Slogan de Resultados en el Cierre de la Barra Lateral
 st.sidebar.markdown("""
