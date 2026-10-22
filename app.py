@@ -3015,7 +3015,7 @@ def generar_pdf_anexo_tarimas(lista_tarimas_id, df_detalles_remision):
         sub_det = df_detalles_remision[df_detalles_remision['ID_Tarima'] == t_id]
         tabla_anexo = [[Paragraph("PO ASOCIADA", style_b), Paragraph("SKU / PRODUCTO", style_b), Paragraph("CANTIDAD", style_b)]]
         for _, s_row in sub_det.iterrows():
-            tabla_anexo.append([Paragraph(str(s_row['PO']), style_t), Paragraph(str(s_row['SKU']), style_t), Paragraph(str(safe_int_cantidad(s_row.get('Cantidad', 0))), style_t)])
+            tabla_anexo.append([Paragraph(str(s_row.get('PO', s_row.get('po', s_row.get('Po', '')))), style_t), Paragraph(str(s_row.get('SKU', s_row.get('sku', s_row.get('Sku', '')))), style_t), Paragraph(str(safe_int_cantidad(s_row.get('Cantidad', s_row.get('cantidad', 0)))), style_t)])
             
         t_det = Table(tabla_anexo, colWidths=[2.5 * inch, 2.5 * inch, 2.5 * inch])
         t_det.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor("#757575")), ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#F5F5F5")), ('GRID', (0,0), (-1,-1), 1, colors.white), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
