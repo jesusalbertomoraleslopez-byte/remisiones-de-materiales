@@ -5444,7 +5444,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
 
                     # Campo oculto para recibir pegado Base64 como fallback
                     hidden_paste_key = f"st_hidden_paste_{sku_sel}"
-                    pasted_b64 = st.text_input(
+                    pasted_b64 = st.text_area(
                         "hidden_paste_b64",
                         value="",
                         key=hidden_paste_key,
@@ -5453,18 +5453,31 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                     st.markdown(
                         """
                         <style>
-                        div[data-testid="stTextInput"]:has(input[aria-label="hidden_paste_b64"]) {
-                            display: none !important;
-                            height: 0px !important;
-                            margin: 0px !important;
-                            padding: 0px !important;
+                        div[data-testid="stTextArea"]:has(textarea[aria-label="hidden_paste_b64"]) {
+                            position: absolute !important;
+                            opacity: 0 !important;
+                            height: 1px !important;
+                            width: 1px !important;
+                            pointer-events: none !important;
+                            overflow: hidden !important;
+                            z-index: -999 !important;
                         }
                         </style>
                         """,
                         unsafe_allow_html=True
                     )
 
-                    # Zona de pegado interactiva (HTML + JS puro, 100% compatible con Cloud Run sin iframes externos ni timeouts)
+                    # Botón nativo de 1 clic (si está disponible en el entorno)
+                    try:
+                        from streamlit_paste_button import paste_image_button as pbutton
+                        p_res = pbutton("📋 Pegar Captura Directa (1 Clic)", key=f"paste_btn_pbi_{sku_sel}")
+                        if p_res and getattr(p_res, 'image_data', None) is not None:
+                            st.session_state[f"st_pending_img_{sku_sel}"] = p_res.image_data
+                            st.session_state[f"st_pending_ext_{sku_sel}"] = ".png"
+                    except Exception:
+                        pass
+
+                    # Zona de pegado interactiva (HTML + JS puro, procesa Base64 directamente sin causar error en file_uploader)
                     paste_box_template = """
                     <!DOCTYPE html>
                     <html>
@@ -5527,44 +5540,36 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                                     if (statusNotice) statusNotice.innerHTML = '<span style="color:#B91C1C; font-weight:bold;">⚠️ El contenido no es una imagen válida.</span>';
                                     return;
                                 }
-                                if (statusNotice) statusNotice.innerHTML = '<span style="color:#166534; font-weight:bold;">⏳ Cargando imagen en la aplicación...</span>';
+                                if (statusNotice) statusNotice.innerHTML = '<span style="color:#166534; font-weight:bold;">⏳ Procesando imagen pegada...</span>';
 
-                                // Método 1: Inyección directa en el componente file_uploader de Streamlit
-                                try {
-                                    const pDoc = window.parent.document;
-                                    const fInput = pDoc.querySelector('input[data-testid="stFileUploaderDropzoneInput"], input[type="file"]');
-                                    if (fInput) {
-                                        const dt = new DataTransfer();
-                                        dt.items.add(new File([blob], "__SKU_SEL__.png", { type: blob.type || "image/png" }));
-                                        fInput.files = dt.files;
-                                        fInput.dispatchEvent(new Event('change', { bubbles: true }));
-                                        if (statusNotice) statusNotice.innerHTML = '<span style="color:#166534; font-weight:bold;">✅ ¡Imagen pegada con éxito!</span>';
-                                        return;
-                                    }
-                                } catch (e) {
-                                    console.warn('File input inject fallback:', e);
-                                }
-
-                                // Método 2: Inyección Base64 en campo oculto
                                 const reader = new FileReader();
                                 reader.onload = function(evt) {
                                     const dataUrl = evt.target.result;
                                     try {
                                         const pDoc = window.parent.document;
-                                        const hiddenInp = pDoc.querySelector('input[aria-label="hidden_paste_b64"]');
+                                        const hiddenInp = pDoc.querySelector('textarea[aria-label="hidden_paste_b64"]') ||
+                                                         pDoc.querySelector('input[aria-label="hidden_paste_b64"]');
                                         if (hiddenInp) {
-                                            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-                                            if (nativeSetter) {
-                                                nativeSetter.call(hiddenInp, dataUrl);
+                                            hiddenInp.focus();
+                                            const isTA = hiddenInp.tagName.toLowerCase() === 'textarea';
+                                            const proto = isTA ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+                                            const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+                                            if (setter) {
+                                                setter.call(hiddenInp, dataUrl);
                                             } else {
                                                 hiddenInp.value = dataUrl;
                                             }
                                             hiddenInp.dispatchEvent(new Event('input', { bubbles: true }));
                                             hiddenInp.dispatchEvent(new Event('change', { bubbles: true }));
-                                            if (statusNotice) statusNotice.innerHTML = '<span style="color:#166534; font-weight:bold;">✅ ¡Imagen cargada y lista para guardar!</span>';
+                                            hiddenInp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                                            hiddenInp.dispatchEvent(new Event('blur', { bubbles: true }));
+                                            hiddenInp.blur();
+                                            if (statusNotice) statusNotice.innerHTML = '<span style="color:#166534; font-weight:bold;">✅ ¡Imagen pegada! Cargando vista previa...</span>';
+                                        } else {
+                                            console.error("Campo hidden_paste_b64 no encontrado en parent");
                                         }
                                     } catch (err) {
-                                        console.error('Hidden input fallback error:', err);
+                                        console.error('Error enviando imagen a Streamlit:', err);
                                     }
                                 };
                                 reader.readAsDataURL(blob);
@@ -5578,6 +5583,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
                                             const blob = items[i].getAsFile();
                                             if (blob) {
                                                 e.preventDefault();
+                                                e.stopPropagation();
                                                 handleFileBlob(blob);
                                                 return;
                                             }
@@ -5588,7 +5594,7 @@ elif opcion_menu == "📦 Catálogo de Artículos":
 
                             pasteZone.addEventListener('paste', onPaste);
                             try {
-                                window.parent.document.addEventListener('paste', onPaste);
+                                window.parent.document.addEventListener('paste', onPaste, true);
                             } catch (e) {}
 
                             pasteZone.addEventListener('click', function() {
