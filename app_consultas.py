@@ -928,35 +928,24 @@ df_pos_cab = cargar_excel_desde_github("BD_POs_Cabecera.xlsx")
 df_pos_req = cargar_excel_desde_github("BD_Requerimientos_POs.xlsx")
 
 # --- RENDERIZADO DEL BANNER OFICIAL ESCALADO A 0.8X (80%) ---
-c_banner1, c_banner2, c_banner3 = st.columns([0.1, 0.8, 0.1])
-with c_banner2:
-    _banner_path = Path(__file__).resolve().parent / "REMISIONES APP.png"
-    if _banner_path.exists():
-        st.image(str(_banner_path), use_container_width=True)
-    elif os.path.exists("REMISIONES APP.png"):
-        st.image("REMISIONES APP.png", use_container_width=True)
-    else:
-        try:
-            url_b = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}/REMISIONES%20APP.png"
-            res_b = requests.get(url_b, timeout=5)
-            if res_b.status_code == 200:
-                with open("REMISIONES APP.png", "wb") as f_b:
-                    f_b.write(res_b.content)
-                st.image("REMISIONES APP.png", use_container_width=True)
-            else:
-                st.markdown("""
-                <div class="sgp-header">
-                    <h2>APLICACIÓN DE REMISIONES — SIGRAMA METALES</h2>
-                    <p>Planta Metales Diagonal | Consulta de Piezas, Planos, Ubicación en Tarimas e Historial de Envíos</p>
-                </div>
-                """, unsafe_allow_html=True)
-        except Exception:
-            st.markdown("""
-            <div class="sgp-header">
-                <h2>APLICACIÓN DE REMISIONES — SIGRAMA METALES</h2>
-                <p>Planta Metales Diagonal | Consulta de Piezas, Planos, Ubicación en Tarimas e Historial de Envíos</p>
-            </div>
-            """, unsafe_allow_html=True)
+# Encabezado Ejecutivo Oficial de Consulta de Piezas
+st.markdown('''
+<div class="sgp-header" style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border-left: 5px solid #EC2024; padding: 14px 22px; border-radius: 10px; margin-bottom: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h2 style="color: #FFFFFF; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 20px; margin: 0; letter-spacing: 0.5px;">
+                🔍 CONSULTA DE PIEZAS — CATÁLOGO Y TRAZABILIDAD SGP
+            </h2>
+            <p style="color: #94A3B8; font-size: 13px; margin: 4px 0 0 0;">
+                Industria SIGRAMA &bull; Planta Metales Diagonal &bull; Ficha Técnica, Plano / Fotografía y Existencias en Planta
+            </p>
+        </div>
+        <div style="background: rgba(236, 32, 36, 0.15); border: 1px solid #EC2024; color: #FFFFFF; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase;">
+            SGP 4.0
+        </div>
+    </div>
+</div>
+''', unsafe_allow_html=True)
 
 # Listas de SKUs
 skus_con_foto = sorted([s for s in set(df_articulos['SKU'].dropna().astype(str).str.strip().str.upper()) if s not in ['', 'NAN', 'NONE', 'N/A']]) if not df_articulos.empty and 'SKU' in df_articulos.columns else []
@@ -968,341 +957,333 @@ if not df_skus_aut.empty and 'SKU' in df_skus_aut.columns:
 skus_todos = sorted([s for s in skus_todos_set if s not in ['', 'NAN', 'NONE', 'N/A']])
 
 # Pestañas Principales
-tab_sgp_piezas, tab_proyectos_po, tab_bitacora_global = st.tabs([
-    "🧩 Consulta de Piezas y Fotografías",
-    "📌 Consulta por Proyecto / PO",
-    "📜 Bitácora e Historial Global"
-])
+if "sgp_sku_idx" not in st.session_state:
+    st.session_state["sgp_sku_idx"] = 0
 
-# =============================================================================
-# PESTAÑA 1: CONSULTA DE PIEZAS ESTILO SGP (SENCILLO Y DIRECTO)
-# =============================================================================
-with tab_sgp_piezas:
-    # --- BARRA DE CONTROL Y NAVEGACIÓN SUPERIOR (SGP) ---
-    if "sgp_sku_idx" not in st.session_state:
+lista_skus_activas = skus_con_foto if skus_con_foto else skus_todos
+
+def sgp_first(): st.session_state["sgp_sku_idx"] = 0
+def sgp_prev(): 
+    if st.session_state["sgp_sku_idx"] > 0: st.session_state["sgp_sku_idx"] -= 1
+def sgp_next(): 
+    if st.session_state["sgp_sku_idx"] < len(lista_skus_activas) - 1: st.session_state["sgp_sku_idx"] += 1
+def sgp_last(): st.session_state["sgp_sku_idx"] = len(lista_skus_activas) - 1
+
+def on_sgp_select():
+    sel = st.session_state.get("sgp_select_sku_key")
+    if sel in lista_skus_activas:
+        st.session_state["sgp_sku_idx"] = lista_skus_activas.index(sel)
+
+idx_curr = max(0, min(st.session_state["sgp_sku_idx"], len(lista_skus_activas) - 1)) if lista_skus_activas else 0
+
+# BARRA SUPERIOR DE BOTONES NAVEGADORES (SGP STYLE)
+st.markdown("#### ⚡ Barra de Navegación de Piezas")
+c_btn1, c_btn2, c_sel, c_btn3, c_btn4, c_clear, c_print = st.columns([1, 1, 3.5, 1, 1, 1.2, 1.2])
+
+with c_btn1: st.button("⏮️ Primero", use_container_width=True, on_click=sgp_first, key="sgp_btn_first")
+with c_btn2: st.button("◀️ Anterior", use_container_width=True, on_click=sgp_prev, key="sgp_btn_prev")
+
+with c_sel:
+    sku_nav_input = st.selectbox(
+        f"Pieza {idx_curr+1} de {len(lista_skus_activas)}:",
+        options=lista_skus_activas,
+        index=idx_curr,
+        key="sgp_select_sku_key",
+        on_change=on_sgp_select,
+        label_visibility="collapsed"
+    )
+
+with c_btn3: st.button("Siguiente ▶️", use_container_width=True, on_click=sgp_next, key="sgp_btn_next")
+with c_btn4: st.button("Último ⏭️", use_container_width=True, on_click=sgp_last, key="sgp_btn_last")
+
+with c_clear:
+    if st.button("🧹 Limpiar", use_container_width=True, key="sgp_btn_clear"):
         st.session_state["sgp_sku_idx"] = 0
+        if "sgp_select_sku_key" in st.session_state: del st.session_state["sgp_select_sku_key"]
+        st.rerun()
 
-    lista_skus_activas = skus_con_foto if skus_con_foto else skus_todos
+with c_print:
+    components.html("""
+    <button onclick="window.parent.print()" style="
+        background-color: #EC2024; color: white; border: none; padding: 7px 12px;
+        font-size: 13px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%;
+        font-family: 'Montserrat', sans-serif; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    ">🖨️ Imprimir</button>
+    """, height=38)
 
-    def sgp_first(): st.session_state["sgp_sku_idx"] = 0
-    def sgp_prev(): 
-        if st.session_state["sgp_sku_idx"] > 0: st.session_state["sgp_sku_idx"] -= 1
-    def sgp_next(): 
-        if st.session_state["sgp_sku_idx"] < len(lista_skus_activas) - 1: st.session_state["sgp_sku_idx"] += 1
-    def sgp_last(): st.session_state["sgp_sku_idx"] = len(lista_skus_activas) - 1
+sku_actual = lista_skus_activas[idx_curr] if lista_skus_activas else None
 
-    def on_sgp_select():
-        sel = st.session_state.get("sgp_select_sku_key")
-        if sel in lista_skus_activas:
-            st.session_state["sgp_sku_idx"] = lista_skus_activas.index(sel)
+# --- PANEL PRINCIPAL DE LA PIEZA (ESTILO SGP Y JERARQUÍA VISUAL DE CLASE MUNDIAL) ---
+if sku_actual:
+    spec_dict = {'nombre': 'No especificado', 'calibre': 'N/A', 'dims': 'N/A', 'acabado': 'N/A'}
+    if not df_articulos.empty and 'SKU' in df_articulos.columns:
+        df_m = df_articulos[df_articulos['SKU'].astype(str).str.strip().str.upper() == sku_actual]
+        if not df_m.empty:
+            r_m = df_m.iloc[0]
+            spec_dict['nombre'] = str(r_m.get('Nombre', 'No especificado'))
+            spec_dict['calibre'] = str(r_m.get('Calibre_Espesor', 'N/A'))
+            spec_dict['dims'] = str(r_m.get('Dimensiones_Pieza', 'N/A'))
+            spec_dict['acabado'] = str(r_m.get('Acabado_Superficial', 'N/A'))
 
-    idx_curr = max(0, min(st.session_state["sgp_sku_idx"], len(lista_skus_activas) - 1)) if lista_skus_activas else 0
+    # --- PRE-CÁLCULO DE MÉTRICAS Y TABLA PARA MANTENER LAS MÉTRICAS DE STOCK EN PRIMER PLANO ---
+    pzs_disp, pzs_rem, pzs_tot, tar_tot = 0, 0, 0, 0
+    df_sub_det = pd.DataFrame()
+    rem_date_map = {}
+    
+    if not df_detalle.empty:
+        df_sub_det = df_detalle[df_detalle['SKU'].astype(str).str.strip().str.upper() == sku_actual].copy()
+        if not df_sub_det.empty:
+            if not df_tarimas.empty:
+                if 'Planta_Origen' not in df_tarimas.columns:
+                    df_tarimas['Planta_Origen'] = "Planta 1 - Sigrama Diagonal"
+                cols_tar = [c for c in ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus'] if c in df_tarimas.columns]
+                df_sub_det = pd.merge(df_sub_det, df_tarimas[cols_tar], on="ID_Tarima", how="left")
+            else:
+                df_sub_det['Planta_Origen'] = "Planta 1 - Sigrama Diagonal"
+                df_sub_det['Fecha_Creacion'] = "N/A"
+                df_sub_det['Creado_Por'] = "N/A"
+                df_sub_det['Ubicacion_Actual'] = "Planta 1 - Sigrama Diagonal"
+                df_sub_det['Estatus'] = "Disponible"
 
-    # BARRA SUPERIOR DE BOTONES NAVEGADORES (SGP STYLE)
-    st.markdown("#### ⚡ Barra de Navegación de Piezas")
-    c_btn1, c_btn2, c_sel, c_btn3, c_btn4, c_clear, c_print = st.columns([1, 1, 3.5, 1, 1, 1.2, 1.2])
+            df_sub_det['Planta_Origen'] = df_sub_det['Planta_Origen'].fillna("Planta 1 - Sigrama Diagonal")
+            df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].fillna("Planta 1 - Sigrama Diagonal").replace({"Metales": "Planta 1 - Sigrama Diagonal"})
+            df_sub_det['Estatus'] = df_sub_det['Estatus'].fillna("Disponible")
+            df_sub_det['Cantidad'] = pd.to_numeric(df_sub_det['Cantidad'], errors='coerce').fillna(0).astype(int)
 
-    with c_btn1: st.button("⏮️ Primero", use_container_width=True, on_click=sgp_first, key="sgp_btn_first")
-    with c_btn2: st.button("◀️ Anterior", use_container_width=True, on_click=sgp_prev, key="sgp_btn_prev")
+            rem_map = {}
+            folio_map = {}
+            if not df_remisiones.empty:
+                import ast
+                for _, r_row in df_remisiones.iterrows():
+                    fol = str(r_row.get('Folio_Remision', '')).strip()
+                    fec_raw = r_row.get('Fecha_Hora_Salida', '')
+                    fec = normalizar_fecha_display(fec_raw)
+                    rec = str(r_row.get('Nombre_Receptor', '')).strip()
+                    dir_rec = str(r_row.get('Direccion_Receptor', '')).strip()
+                    asoc = r_row.get('Tarimas_Asociadas', '')
+                    if isinstance(asoc, str):
+                        try: asoc = ast.literal_eval(asoc)
+                        except Exception: asoc = [asoc]
+                    if isinstance(asoc, list):
+                        for t_id in asoc:
+                            t_str = str(t_id).strip()
+                            rem_map[t_str] = f"Remisión {fol} ({fec}) ➡️ {rec} [{dir_rec}]"
+                            folio_map[t_str] = fol
+                            rem_date_map[t_str] = fec_raw
 
-    with c_sel:
-        sku_nav_input = st.selectbox(
-            f"Pieza {idx_curr+1} de {len(lista_skus_activas)}:",
-            options=lista_skus_activas,
-            index=idx_curr,
-            key="sgp_select_sku_key",
-            on_change=on_sgp_select,
-            label_visibility="collapsed"
-        )
+            df_sub_det['Detalle_Remision'] = df_sub_det['ID_Tarima'].astype(str).str.strip().map(lambda x: rem_map.get(x, "En Planta / Almacén"))
+            df_sub_det['Numero_Remision'] = df_sub_det['ID_Tarima'].astype(str).str.strip().map(lambda x: folio_map.get(x, "N/A"))
 
-    with c_btn3: st.button("Siguiente ▶️", use_container_width=True, on_click=sgp_next, key="sgp_btn_next")
-    with c_btn4: st.button("Último ⏭️", use_container_width=True, on_click=sgp_last, key="sgp_btn_last")
+            # Mapeo de SKU Cliente desde BD_Articulos o BD_Requerimientos_POs
+            map_sku_cli = {}
+            if not df_articulos.empty and 'SKU' in df_articulos.columns and 'SKU_Cliente' in df_articulos.columns:
+                map_sku_cli = dict(zip(df_articulos['SKU'].astype(str).str.strip().str.upper(), df_articulos['SKU_Cliente'].astype(str).str.strip()))
+            
+            df_sub_det['SKU_Cliente'] = df_sub_det['SKU'].astype(str).str.strip().str.upper().map(lambda x: map_sku_cli.get(x, "N/A"))
 
-    with c_clear:
-        if st.button("🧹 Limpiar", use_container_width=True, key="sgp_btn_clear"):
-            st.session_state["sgp_sku_idx"] = 0
-            if "sgp_select_sku_key" in st.session_state: del st.session_state["sgp_select_sku_key"]
-            st.rerun()
+            # Mapeo de ID Interno PO desde BD_POs_Cabecera
+            map_po_int = {}
+            if 'df_pos_cab' in locals() and not df_pos_cab.empty and 'PO' in df_pos_cab.columns and 'ID_Interno' in df_pos_cab.columns:
+                map_po_int = dict(zip(df_pos_cab['PO'].astype(str).str.strip().str.upper(), df_pos_cab['ID_Interno'].astype(str).str.strip()))
 
-    with c_print:
-        components.html("""
-        <button onclick="window.parent.print()" style="
-            background-color: #EC2024; color: white; border: none; padding: 7px 12px;
-            font-size: 13px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%;
-            font-family: 'Montserrat', sans-serif; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        ">🖨️ Imprimir</button>
-        """, height=38)
+            df_sub_det['ID_Interno'] = df_sub_det['PO'].astype(str).str.strip().str.upper().map(lambda x: map_po_int.get(x, "N/A"))
 
-    sku_actual = lista_skus_activas[idx_curr] if lista_skus_activas else None
+            def get_latest_dt(row):
+                t_id = str(row.get('ID_Tarima', '')).strip()
+                d_rem = rem_date_map.get(t_id)
+                d_emp = row.get('Fecha_Creacion')
+                dt_rem = pd.to_datetime(d_rem, format='mixed', dayfirst=True, errors='coerce') if d_rem else pd.NaT
+                dt_emp = pd.to_datetime(d_emp, format='mixed', dayfirst=True, errors='coerce') if d_emp else pd.NaT
+                if pd.notna(dt_rem) and pd.notna(dt_emp): return max(dt_rem, dt_emp)
+                if pd.notna(dt_rem): return dt_rem
+                if pd.notna(dt_emp): return dt_emp
+                return pd.Timestamp.min
 
-    # --- PANEL PRINCIPAL DE LA PIEZA (ESTILO SGP Y JERARQUÍA VISUAL DE CLASE MUNDIAL) ---
-    if sku_actual:
-        spec_dict = {'nombre': 'No especificado', 'calibre': 'N/A', 'dims': 'N/A', 'acabado': 'N/A'}
-        if not df_articulos.empty and 'SKU' in df_articulos.columns:
-            df_m = df_articulos[df_articulos['SKU'].astype(str).str.strip().str.upper() == sku_actual]
-            if not df_m.empty:
-                r_m = df_m.iloc[0]
-                spec_dict['nombre'] = str(r_m.get('Nombre', 'No especificado'))
-                spec_dict['calibre'] = str(r_m.get('Calibre_Espesor', 'N/A'))
-                spec_dict['dims'] = str(r_m.get('Dimensiones_Pieza', 'N/A'))
-                spec_dict['acabado'] = str(r_m.get('Acabado_Superficial', 'N/A'))
+            df_sub_det['_dt_ult_mov'] = df_sub_det.apply(get_latest_dt, axis=1)
+            df_sub_det = df_sub_det.sort_values(by='_dt_ult_mov', ascending=False)
+            
+            if 'Fecha_Creacion' in df_sub_det.columns:
+                df_sub_det['Fecha_Creacion'] = df_sub_det['Fecha_Creacion'].apply(normalizar_fecha_display)
 
-        # --- PRE-CÁLCULO DE MÉTRICAS Y TABLA PARA MANTENER LAS MÉTRICAS DE STOCK EN PRIMER PLANO ---
-        pzs_disp, pzs_rem, pzs_tot, tar_tot = 0, 0, 0, 0
-        df_sub_det = pd.DataFrame()
-        rem_date_map = {}
-        
-        if not df_detalle.empty:
-            df_sub_det = df_detalle[df_detalle['SKU'].astype(str).str.strip().str.upper() == sku_actual].copy()
-            if not df_sub_det.empty:
-                if not df_tarimas.empty:
-                    if 'Planta_Origen' not in df_tarimas.columns:
-                        df_tarimas['Planta_Origen'] = "Planta 1 - Sigrama Diagonal"
-                    cols_tar = [c for c in ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus'] if c in df_tarimas.columns]
-                    df_sub_det = pd.merge(df_sub_det, df_tarimas[cols_tar], on="ID_Tarima", how="left")
-                else:
-                    df_sub_det['Planta_Origen'] = "Planta 1 - Sigrama Diagonal"
-                    df_sub_det['Fecha_Creacion'] = "N/A"
-                    df_sub_det['Creado_Por'] = "N/A"
-                    df_sub_det['Ubicacion_Actual'] = "Planta 1 - Sigrama Diagonal"
-                    df_sub_det['Estatus'] = "Disponible"
+            pzs_disp = df_sub_det[df_sub_det['Estatus'] == 'Disponible']['Cantidad'].sum()
+            pzs_rem = df_sub_det[df_sub_det['Estatus'] == 'Remesada']['Cantidad'].sum()
+            pzs_tot = df_sub_det['Cantidad'].sum()
+            tar_tot = df_sub_det['ID_Tarima'].nunique()
 
-                df_sub_det['Planta_Origen'] = df_sub_det['Planta_Origen'].fillna("Planta 1 - Sigrama Diagonal")
-                df_sub_det['Ubicacion_Actual'] = df_sub_det['Ubicacion_Actual'].fillna("Planta 1 - Sigrama Diagonal").replace({"Metales": "Planta 1 - Sigrama Diagonal"})
-                df_sub_det['Estatus'] = df_sub_det['Estatus'].fillna("Disponible")
-                df_sub_det['Cantidad'] = pd.to_numeric(df_sub_det['Cantidad'], errors='coerce').fillna(0).astype(int)
+    # --- OPTIMIZACIÓN DE JERARQUÍA VISUAL: MÉTRICAS CRÍTICAS DE STOCK EN PRIMER PLANO ---
+    st.markdown(f"""
+    <div style="display: flex; gap: 12px; margin: 10px 0 16px 0;">
+        <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #10B981; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #059669;">{pzs_disp:,} PZS</div>
+            <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">📦 Disponibles en Planta</div>
+        </div>
+        <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #2563EB; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #2563EB;">{pzs_rem:,} PZS</div>
+            <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">🚚 Remesadas (Enviadas)</div>
+        </div>
+        <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #EC2024; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #EC2024;">{pzs_tot:,} PZS</div>
+            <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">🏗️ Total Piezas Registradas</div>
+        </div>
+        <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #D97706; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #D97706;">{tar_tot}</div>
+            <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">📊 Tarimas Físicas</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-                rem_map = {}
-                folio_map = {}
-                if not df_remisiones.empty:
-                    import ast
-                    for _, r_row in df_remisiones.iterrows():
-                        fol = str(r_row.get('Folio_Remision', '')).strip()
-                        fec_raw = r_row.get('Fecha_Hora_Salida', '')
-                        fec = normalizar_fecha_display(fec_raw)
-                        rec = str(r_row.get('Nombre_Receptor', '')).strip()
-                        dir_rec = str(r_row.get('Direccion_Receptor', '')).strip()
-                        asoc = r_row.get('Tarimas_Asociadas', '')
-                        if isinstance(asoc, str):
-                            try: asoc = ast.literal_eval(asoc)
-                            except Exception: asoc = [asoc]
-                        if isinstance(asoc, list):
-                            for t_id in asoc:
-                                t_str = str(t_id).strip()
-                                rem_map[t_str] = f"Remisión {fol} ({fec}) ➡️ {rec} [{dir_rec}]"
-                                folio_map[t_str] = fol
-                                rem_date_map[t_str] = fec_raw
+    col_sgp_left, col_sgp_right = st.columns([1.1, 1.2])
 
-                df_sub_det['Detalle_Remision'] = df_sub_det['ID_Tarima'].astype(str).str.strip().map(lambda x: rem_map.get(x, "En Planta / Almacén"))
-                df_sub_det['Numero_Remision'] = df_sub_det['ID_Tarima'].astype(str).str.strip().map(lambda x: folio_map.get(x, "N/A"))
-
-                # Mapeo de SKU Cliente desde BD_Articulos o BD_Requerimientos_POs
-                map_sku_cli = {}
-                if not df_articulos.empty and 'SKU' in df_articulos.columns and 'SKU_Cliente' in df_articulos.columns:
-                    map_sku_cli = dict(zip(df_articulos['SKU'].astype(str).str.strip().str.upper(), df_articulos['SKU_Cliente'].astype(str).str.strip()))
-                
-                df_sub_det['SKU_Cliente'] = df_sub_det['SKU'].astype(str).str.strip().str.upper().map(lambda x: map_sku_cli.get(x, "N/A"))
-
-                # Mapeo de ID Interno PO desde BD_POs_Cabecera
-                map_po_int = {}
-                if 'df_pos_cab' in locals() and not df_pos_cab.empty and 'PO' in df_pos_cab.columns and 'ID_Interno' in df_pos_cab.columns:
-                    map_po_int = dict(zip(df_pos_cab['PO'].astype(str).str.strip().str.upper(), df_pos_cab['ID_Interno'].astype(str).str.strip()))
-
-                df_sub_det['ID_Interno'] = df_sub_det['PO'].astype(str).str.strip().str.upper().map(lambda x: map_po_int.get(x, "N/A"))
-
-                def get_latest_dt(row):
-                    t_id = str(row.get('ID_Tarima', '')).strip()
-                    d_rem = rem_date_map.get(t_id)
-                    d_emp = row.get('Fecha_Creacion')
-                    dt_rem = pd.to_datetime(d_rem, format='mixed', dayfirst=True, errors='coerce') if d_rem else pd.NaT
-                    dt_emp = pd.to_datetime(d_emp, format='mixed', dayfirst=True, errors='coerce') if d_emp else pd.NaT
-                    if pd.notna(dt_rem) and pd.notna(dt_emp): return max(dt_rem, dt_emp)
-                    if pd.notna(dt_rem): return dt_rem
-                    if pd.notna(dt_emp): return dt_emp
-                    return pd.Timestamp.min
-
-                df_sub_det['_dt_ult_mov'] = df_sub_det.apply(get_latest_dt, axis=1)
-                df_sub_det = df_sub_det.sort_values(by='_dt_ult_mov', ascending=False)
-                
-                if 'Fecha_Creacion' in df_sub_det.columns:
-                    df_sub_det['Fecha_Creacion'] = df_sub_det['Fecha_Creacion'].apply(normalizar_fecha_display)
-
-                pzs_disp = df_sub_det[df_sub_det['Estatus'] == 'Disponible']['Cantidad'].sum()
-                pzs_rem = df_sub_det[df_sub_det['Estatus'] == 'Remesada']['Cantidad'].sum()
-                pzs_tot = df_sub_det['Cantidad'].sum()
-                tar_tot = df_sub_det['ID_Tarima'].nunique()
-
-        # --- OPTIMIZACIÓN DE JERARQUÍA VISUAL: MÉTRICAS CRÍTICAS DE STOCK EN PRIMER PLANO ---
+    with col_sgp_left:
         st.markdown(f"""
-        <div style="display: flex; gap: 12px; margin: 10px 0 16px 0;">
-            <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #10B981; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #059669;">{pzs_disp:,} PZS</div>
-                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">📦 Disponibles en Planta</div>
+        <div class="sgp-card">
+            <div class="sgp-label" style="text-align:center;">NÚMERO DE PARTE / PLANO</div>
+            <div class="sgp-sku-title">{sku_actual}</div>
+            <div style="margin-bottom: 12px;">
+                <div class="sgp-label">DESCRIPCIÓN COMERCIAL:</div>
+                <div class="sgp-value" style="color: #F8FAFC;">{spec_dict['nombre']}</div>
             </div>
-            <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #2563EB; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #2563EB;">{pzs_rem:,} PZS</div>
-                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">🚚 Remesadas (Enviadas)</div>
+            <div style="display: flex; gap: 15px; margin-bottom: 12px;">
+                <div style="flex:1;">
+                    <div class="sgp-label">CALIBRE / ESPESOR:</div>
+                    <div class="sgp-value">{spec_dict['calibre']}</div>
+                </div>
+                <div style="flex:1;">
+                    <div class="sgp-label">ACABADO / MATERIAL:</div>
+                    <div class="sgp-value" style="color: #EC2024;">{spec_dict['acabado']}</div>
+                </div>
             </div>
-            <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #EC2024; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #EC2024;">{pzs_tot:,} PZS</div>
-                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">🏗️ Total Piezas Registradas</div>
-            </div>
-            <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-top: 4px solid #D97706; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #D97706;">{tar_tot}</div>
-                <div style="font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px;">📊 Tarimas Físicas</div>
+            <div>
+                <div class="sgp-label">DIMENSIONES PIEZA:</div>
+                <div class="sgp-value">{spec_dict['dims']}</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        col_sgp_left, col_sgp_right = st.columns([1.1, 1.2])
+    with col_sgp_right:
+        img_sku = obtener_imagen_sku(sku_actual)
+        img_path_local = None
+        if img_sku:
+            st.image(img_sku, caption=f"Plano / Fotografía de Pieza {sku_actual}", use_container_width=True)
+            matching_local = glob.glob(f"imagenes_articulos/{sku_actual}(*.*")
+            if matching_local: img_path_local = matching_local[0]
+        else:
+            st.info(f"📷 *Sin imagen fotográfica asignada para la pieza {sku_actual} en catálogo.*")
 
-        with col_sgp_left:
-            st.markdown(f"""
-            <div class="sgp-card">
-                <div class="sgp-label" style="text-align:center;">NÚMERO DE PARTE / PLANO</div>
-                <div class="sgp-sku-title">{sku_actual}</div>
-                <div style="margin-bottom: 12px;">
-                    <div class="sgp-label">DESCRIPCIÓN COMERCIAL:</div>
-                    <div class="sgp-value" style="color: #F8FAFC;">{spec_dict['nombre']}</div>
-                </div>
-                <div style="display: flex; gap: 15px; margin-bottom: 12px;">
-                    <div style="flex:1;">
-                        <div class="sgp-label">CALIBRE / ESPESOR:</div>
-                        <div class="sgp-value">{spec_dict['calibre']}</div>
-                    </div>
-                    <div style="flex:1;">
-                        <div class="sgp-label">ACABADO / MATERIAL:</div>
-                        <div class="sgp-value" style="color: #EC2024;">{spec_dict['acabado']}</div>
-                    </div>
-                </div>
-                <div>
-                    <div class="sgp-label">DIMENSIONES PIEZA:</div>
-                    <div class="sgp-value">{spec_dict['dims']}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+    st.write("")
 
-        with col_sgp_right:
-            img_sku = obtener_imagen_sku(sku_actual)
-            img_path_local = None
-            if img_sku:
-                st.image(img_sku, caption=f"Plano / Fotografía de Pieza {sku_actual}", use_container_width=True)
-                matching_local = glob.glob(f"imagenes_articulos/{sku_actual}(*.*")
-                if matching_local: img_path_local = matching_local[0]
-            else:
-                st.info(f"📷 *Sin imagen fotográfica asignada para la pieza {sku_actual} en catálogo.*")
+    # --- SECCIÓN DE DESGLOSE DE TARIMAS E HISTORIAL CON REPORTES EJECTUTIVOS ---
+    with st.expander(f"📜 VER HISTORIAL Y UBICACIÓN FÍSICA DE LA PIEZA `{sku_actual}`", expanded=True):
+        if df_sub_det.empty:
+            st.info(f"ℹ️ El SKU **{sku_actual}** está registrado en el catálogo master, pero **aún no cuenta con tarimas físicamente registradas en planta**.")
+        else:
+            cols_mostrar = ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus', 'Cantidad', 'SKU_Cliente', 'Proyecto', 'PO', 'ID_Interno', 'Numero_Remision', 'Parcialidad', 'Descripcion', 'Detalle_Remision']
+            df_tabla_export = df_sub_det[[c for c in cols_mostrar if c in df_sub_det.columns]].copy()
+            df_tabla_export = df_tabla_export.rename(columns={
+                'ID_Tarima': 'ID Tarima (TPM)',
+                'Planta_Origen': 'Planta Origen',
+                'Fecha_Creacion': 'Fecha Empaque',
+                'Creado_Por': 'Líder Empaque',
+                'Ubicacion_Actual': 'Ubicación Actual',
+                'Estatus': 'Estatus Tarima',
+                'Cantidad': 'Piezas',
+                'SKU_Cliente': 'SKU Cliente',
+                'ID_Interno': 'ID Interno PO',
+                'Numero_Remision': 'Número de Remisión',
+                'Descripcion': 'Descripción Proyecto',
+                'Detalle_Remision': 'Estatus de Remisión / Destino'
+            })
 
-        st.write("")
+            st.dataframe(df_tabla_export, use_container_width=True, hide_index=True)
 
-        # --- SECCIÓN DE DESGLOSE DE TARIMAS E HISTORIAL CON REPORTES EJECTUTIVOS ---
-        with st.expander(f"📜 VER HISTORIAL Y UBICACIÓN FÍSICA DE LA PIEZA `{sku_actual}`", expanded=True):
-            if df_sub_det.empty:
-                st.info(f"ℹ️ El SKU **{sku_actual}** está registrado en el catálogo master, pero **aún no cuenta con tarimas físicamente registradas en planta**.")
-            else:
-                cols_mostrar = ['ID_Tarima', 'Planta_Origen', 'Fecha_Creacion', 'Creado_Por', 'Ubicacion_Actual', 'Estatus', 'Cantidad', 'SKU_Cliente', 'Proyecto', 'PO', 'ID_Interno', 'Numero_Remision', 'Parcialidad', 'Descripcion', 'Detalle_Remision']
-                df_tabla_export = df_sub_det[[c for c in cols_mostrar if c in df_sub_det.columns]].copy()
-                df_tabla_export = df_tabla_export.rename(columns={
-                    'ID_Tarima': 'ID Tarima (TPM)',
-                    'Planta_Origen': 'Planta Origen',
-                    'Fecha_Creacion': 'Fecha Empaque',
-                    'Creado_Por': 'Líder Empaque',
-                    'Ubicacion_Actual': 'Ubicación Actual',
-                    'Estatus': 'Estatus Tarima',
-                    'Cantidad': 'Piezas',
-                    'SKU_Cliente': 'SKU Cliente',
-                    'ID_Interno': 'ID Interno PO',
-                    'Numero_Remision': 'Número de Remisión',
-                    'Descripcion': 'Descripción Proyecto',
-                    'Detalle_Remision': 'Estatus de Remisión / Destino'
-                })
-
-                st.dataframe(df_tabla_export, use_container_width=True, hide_index=True)
-
-                c_dl1, c_dl2, c_dl3 = st.columns(3)
+            c_dl1, c_dl2, c_dl3 = st.columns(3)
+            
+            xl_bytes = generar_excel_consulta_inventario(sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export)
+            with c_dl1:
+                st.download_button(
+                    label=f"📥 Descargar Registro Excel ({sku_actual}.xlsx)",
+                    data=xl_bytes,
+                    file_name=f"Consulta_Inventario_{sku_actual}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_dl_excel_sgp"
+                )
                 
-                xl_bytes = generar_excel_consulta_inventario(sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export)
-                with c_dl1:
-                    st.download_button(
-                        label=f"📥 Descargar Registro Excel ({sku_actual}.xlsx)",
-                        data=xl_bytes,
-                        file_name=f"Consulta_Inventario_{sku_actual}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="btn_dl_excel_sgp"
-                    )
-                    
-                pdf_bytes = generar_pdf_consulta_reportlab("Pieza SGP", sku_actual, df_tabla_export, spec_info=spec_dict, img_local_path=img_path_local)
-                with c_dl2:
-                    st.download_button(
-                        label=f"📄 Descargar PDF Oficial de Impresión ({sku_actual}.pdf)",
-                        data=pdf_bytes,
-                        file_name=f"Reporte_SGP_Pieza_{sku_actual}.pdf",
-                        mime="application/pdf",
-                        key="btn_dl_pdf_sgp"
-                    )
-
-                # 3. Borrador EML con Excel + PDF Adjuntos e Imágenes Inline Redimensionadas Físicamente
-                inline_images_eml = {}
-                if os.path.exists("logo_sigrama.png"):
-                    try:
-                        im_logo = Image.open("logo_sigrama.png")
-                        t_w = 110
-                        t_h = int(t_w * (im_logo.height / im_logo.width))
-                        im_logo_small = im_logo.resize((t_w, t_h), Image.Resampling.LANCZOS)
-                        buf_logo = io.BytesIO()
-                        im_logo_small.save(buf_logo, format="PNG")
-                        inline_images_eml['logo_sigrama_cid'] = buf_logo.getvalue()
-                    except Exception: pass
-
-                if img_path_local and os.path.exists(img_path_local):
-                    try:
-                        im_piece = Image.open(img_path_local)
-                        p_aspect = im_piece.height / im_piece.width
-                        max_w, max_h = 240, 120
-                        calc_w = max_w
-                        calc_h = int(max_w * p_aspect)
-                        if calc_h > max_h:
-                            calc_h = max_h
-                            calc_w = int(max_h / p_aspect)
-                        im_piece_small = im_piece.resize((calc_w, calc_h), Image.Resampling.LANCZOS)
-                        buf_piece = io.BytesIO()
-                        im_piece_small.save(buf_piece, format="PNG")
-                        inline_images_eml['foto_sku_cid'] = buf_piece.getvalue()
-                    except Exception: pass
-
-                has_logo_cid = 'logo_sigrama_cid' in inline_images_eml
-                has_img_cid = 'foto_sku_cid' in inline_images_eml
-
-                cuerpo_eml_html = generar_html_correo_sku(
-                    sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export,
-                    has_logo_cid=has_logo_cid, has_img_cid=has_img_cid
+            pdf_bytes = generar_pdf_consulta_reportlab("Pieza SGP", sku_actual, df_tabla_export, spec_info=spec_dict, img_local_path=img_path_local)
+            with c_dl2:
+                st.download_button(
+                    label=f"📄 Descargar PDF Oficial de Impresión ({sku_actual}.pdf)",
+                    data=pdf_bytes,
+                    file_name=f"Reporte_SGP_Pieza_{sku_actual}.pdf",
+                    mime="application/pdf",
+                    key="btn_dl_pdf_sgp"
                 )
-                adjuntos_eml = {
-                    f"Reporte_Inventario_{sku_actual}.xlsx": xl_bytes,
-                    f"Reporte_Impresion_{sku_actual}.pdf": pdf_bytes
-                }
-                dest_cc_sku = "bryan.mancinas@sigrama.com.mx; cruz.carreon@sigrama.com.mx; jesus.morales@sigrama.com.mx; jose.fernandez@sigrama.com.mx; luis.quintana@sigrama.com.mx"
-                eml_bytes = generar_archivo_eml(
-                    dest_to="",
-                    dest_cc=dest_cc_sku,
-                    subject=f"Reporte de Inventario e Historial - SKU: {sku_actual} - Industria Sigrama",
-                    body_html=cuerpo_eml_html,
-                    adjuntos_dict=adjuntos_eml,
-                    inline_images_dict=inline_images_eml
+
+            # 3. Borrador EML con Excel + PDF Adjuntos e Imágenes Inline Redimensionadas Físicamente
+            inline_images_eml = {}
+            if os.path.exists("logo_sigrama.png"):
+                try:
+                    im_logo = Image.open("logo_sigrama.png")
+                    t_w = 110
+                    t_h = int(t_w * (im_logo.height / im_logo.width))
+                    im_logo_small = im_logo.resize((t_w, t_h), Image.Resampling.LANCZOS)
+                    buf_logo = io.BytesIO()
+                    im_logo_small.save(buf_logo, format="PNG")
+                    inline_images_eml['logo_sigrama_cid'] = buf_logo.getvalue()
+                except Exception: pass
+
+            if img_path_local and os.path.exists(img_path_local):
+                try:
+                    im_piece = Image.open(img_path_local)
+                    p_aspect = im_piece.height / im_piece.width
+                    max_w, max_h = 240, 120
+                    calc_w = max_w
+                    calc_h = int(max_w * p_aspect)
+                    if calc_h > max_h:
+                        calc_h = max_h
+                        calc_w = int(max_h / p_aspect)
+                    im_piece_small = im_piece.resize((calc_w, calc_h), Image.Resampling.LANCZOS)
+                    buf_piece = io.BytesIO()
+                    im_piece_small.save(buf_piece, format="PNG")
+                    inline_images_eml['foto_sku_cid'] = buf_piece.getvalue()
+                except Exception: pass
+
+            has_logo_cid = 'logo_sigrama_cid' in inline_images_eml
+            has_img_cid = 'foto_sku_cid' in inline_images_eml
+
+            cuerpo_eml_html = generar_html_correo_sku(
+                sku_actual, spec_dict, pzs_disp, pzs_rem, pzs_tot, tar_tot, df_tabla_export,
+                has_logo_cid=has_logo_cid, has_img_cid=has_img_cid
+            )
+            adjuntos_eml = {
+                f"Reporte_Inventario_{sku_actual}.xlsx": xl_bytes,
+                f"Reporte_Impresion_{sku_actual}.pdf": pdf_bytes
+            }
+            dest_cc_sku = "bryan.mancinas@sigrama.com.mx; cruz.carreon@sigrama.com.mx; jesus.morales@sigrama.com.mx; jose.fernandez@sigrama.com.mx; luis.quintana@sigrama.com.mx"
+            eml_bytes = generar_archivo_eml(
+                dest_to="",
+                dest_cc=dest_cc_sku,
+                subject=f"Reporte de Inventario e Historial - SKU: {sku_actual} - Industria Sigrama",
+                body_html=cuerpo_eml_html,
+                adjuntos_dict=adjuntos_eml,
+                inline_images_dict=inline_images_eml
+            )
+            with c_dl3:
+                st.download_button(
+                    label=f"📩 Descargar Borrador Correo (.eml)",
+                    data=eml_bytes,
+                    file_name=f"Correo_Reporte_Inventario_{sku_actual}.eml",
+                    mime="message/rfc822",
+                    key="btn_dl_eml_sku"
                 )
-                with c_dl3:
-                    st.download_button(
-                        label=f"📩 Descargar Borrador Correo (.eml)",
-                        data=eml_bytes,
-                        file_name=f"Correo_Reporte_Inventario_{sku_actual}.eml",
-                        mime="message/rfc822",
-                        key="btn_dl_eml_sku"
-                    )
 
 # =============================================================================
 # PESTAÑA 2: BÚSQUEDA POR PROYECTO O PO
 # =============================================================================
-with tab_proyectos_po:
-    st.markdown("### 📌 Búsqueda de Inventario por Proyecto u Orden de Compra (PO)")
+
+# =============================================================================
+# VISTA SECUNDARIA: BÚSQUEDA POR PROYECTO O PO (EXPANDIBLE)
+# =============================================================================
+with st.expander("📌 Búsqueda de Inventario por Proyecto u Orden de Compra (PO)", expanded=False):
     col_proj_sel, col_po_sel = st.columns(2)
     
     with col_proj_sel:
@@ -1334,8 +1315,11 @@ with tab_proyectos_po:
 # =============================================================================
 # PESTAÑA 3: BITÁCORA E HISTORIAL GLOBAL
 # =============================================================================
-with tab_bitacora_global:
-    st.markdown("### 📜 Bitácora e Historial Global de Movimientos")
+
+# =============================================================================
+# VISTA SECUNDARIA: BITÁCORA E HISTORIAL GLOBAL (EXPANDIBLE)
+# =============================================================================
+with st.expander("📜 Bitácora e Historial Global de Movimientos", expanded=False):
     if not df_actividad.empty:
         q_search = st.text_input("🔍 Buscar en historial (SKU, TPM-XXXX, Remisión, Usuario, PO):", key="sgp_log_search")
         df_log_f = df_actividad.copy()
