@@ -5171,43 +5171,66 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                 folios_str = ", ".join(folios_lista)
                 key_suffix = f"{len(selected_rows)}_{folios_lista[0]}"
                 
-                # --- PREPARACIÓN DE ADJUNTOS EN SEGUNDO PLANO ---
-                adjuntos_dict = {}
+                # --- PREPARACIÓN DE ADJUNTOS EN SEGUNDO PLANO (CON CACHE DE SESIÓN) ---
+                cache_key = f"doc_download_cache_{key_suffix}"
+                if cache_key not in st.session_state:
+                    adjuntos_dict = {}
+                    pdf_single_bytes = None
+                    xlsx_single_bytes = None
+                    
+                    # 1. Remisiones por separado en PDF
+                    for row_dict in selected_rows:
+                        f_rem = row_dict['Folio_Remision']
+                        t_rem_asoc = row_dict['Tarimas_Asociadas']
+                        if isinstance(t_rem_asoc, str):
+                            try:
+                                t_rem_asoc_list = ast.literal_eval(t_rem_asoc)
+                            except Exception:
+                                t_rem_asoc_list = [t_rem_asoc]
+                        else:
+                            t_rem_asoc_list = t_rem_asoc if isinstance(t_rem_asoc, list) else []
+                            
+                        df_det_rem = st.session_state.BD_Detalle_Tarimas[
+                            st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(t_rem_asoc_list)
+                        ]
+                        pdf_rem_bytes = generar_pdf_remision_general(row_dict, df_det_rem)
+                        adjuntos_dict[f"Remision_{f_rem}.pdf"] = pdf_rem_bytes
+                        if len(selected_rows) == 1:
+                            pdf_single_bytes = pdf_rem_bytes
+                            xlsx_single_bytes = generar_excel_remision(row_dict, df_det).getvalue()
+                    
+                    # 2. Las etiquetas se agrupan en un archivo ZIP
+                    label_pdfs = {}
+                    for idx_tarima in tarimas_lista:
+                        t_row_match = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == idx_tarima]
+                        if not t_row_match.empty:
+                            # Generamos el PDF de la etiqueta en memoria
+                            pdf_etiqueta = generar_pdf_etiqueta(idx_tarima).getvalue()
+                            label_pdfs[f"Etiqueta_{idx_tarima}.pdf"] = pdf_etiqueta
+                    
+                    # Comprimir todas las etiquetas en un ZIP en memoria
+                    if label_pdfs:
+                        zip_buffer = io.BytesIO()
+                        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                            for filename, file_bytes in label_pdfs.items():
+                                zip_file.writestr(filename, file_bytes)
+                        zip_buffer.seek(0)
+                        adjuntos_dict["Etiquetas_Tarimas.zip"] = zip_buffer
+                    
+                    eml_body = generar_cuerpo_correo_html(selected_rows, df_det)
+                    
+                    st.session_state[cache_key] = {
+                        "adjuntos_dict": adjuntos_dict,
+                        "pdf_single_bytes": pdf_single_bytes,
+                        "xlsx_single_bytes": xlsx_single_bytes,
+                        "eml_body": eml_body
+                    }
                 
-                # 1. Remisiones por separado en PDF
-                for row_dict in selected_rows:
-                    f_rem = row_dict['Folio_Remision']
-                    t_rem_asoc = row_dict['Tarimas_Asociadas']
-                    if isinstance(t_rem_asoc, str):
-                        try:
-                            t_rem_asoc_list = ast.literal_eval(t_rem_asoc)
-                        except Exception:
-                            t_rem_asoc_list = [t_rem_asoc]
-                    else:
-                        t_rem_asoc_list = t_rem_asoc if isinstance(t_rem_asoc, list) else []
-                        
-                    df_det_rem = st.session_state.BD_Detalle_Tarimas[
-                        st.session_state.BD_Detalle_Tarimas['ID_Tarima'].isin(t_rem_asoc_list)
-                    ]
-                    adjuntos_dict[f"Remision_{f_rem}.pdf"] = generar_pdf_remision_general(row_dict, df_det_rem)
-                
-                # 2. Las etiquetas se agrupan en un archivo ZIP
-                label_pdfs = {}
-                for idx_tarima in tarimas_lista:
-                    t_row_match = st.session_state.BD_Tarimas[st.session_state.BD_Tarimas['ID_Tarima'] == idx_tarima]
-                    if not t_row_match.empty:
-                        # Generamos el PDF de la etiqueta en memoria
-                        pdf_etiqueta = generar_pdf_etiqueta(idx_tarima).getvalue()
-                        label_pdfs[f"Etiqueta_{idx_tarima}.pdf"] = pdf_etiqueta
-                
-                # Comprimir todas las etiquetas en un ZIP en memoria
-                if label_pdfs:
-                    zip_buffer = io.BytesIO()
-                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                        for filename, file_bytes in label_pdfs.items():
-                            zip_file.writestr(filename, file_bytes)
-                    zip_buffer.seek(0)
-                    adjuntos_dict["Etiquetas_Tarimas.zip"] = zip_buffer
+                cached_data = st.session_state[cache_key]
+                adjuntos_dict = cached_data["adjuntos_dict"]
+                pdf_single_bytes = cached_data["pdf_single_bytes"]
+                xlsx_single_bytes = cached_data["xlsx_single_bytes"]
+                eml_body = cached_data["eml_body"]
 
                 # --- CONFIGURAR CORREO ---
                 cfg_emails = obtener_emails_config()
@@ -5221,22 +5244,24 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                     if len(selected_rows) == 1:
                         row_dict = selected_rows[0]
                         r_sel = row_dict['Folio_Remision']
-                        st.download_button(
-                            label="📄 Descargar Reporte Oficial (PDF)", 
-                            data=generar_pdf_remision_general(row_dict, df_det), 
-                            file_name=f"Remision_{r_sel}.pdf", 
-                            key=f"btn_dl_rem_pdf_{r_sel}",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                        st.download_button(
-                            label="📥 Descargar Reporte Oficial (Excel)", 
-                            data=generar_excel_remision(row_dict, df_det).getvalue(), 
-                            file_name=f"Remision_{r_sel}.xlsx", 
-                            key=f"btn_dl_rem_xlsx_{r_sel}",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
-                        )
+                        if pdf_single_bytes:
+                            st.download_button(
+                                label="📄 Descargar Reporte Oficial (PDF)", 
+                                data=pdf_single_bytes, 
+                                file_name=f"Remision_{r_sel}.pdf", 
+                                key=f"btn_dl_rem_pdf_{r_sel}",
+                                mime="application/pdf",
+                                use_container_width=True
+                            )
+                        if xlsx_single_bytes:
+                            st.download_button(
+                                label="📥 Descargar Reporte Oficial (Excel)", 
+                                data=xlsx_single_bytes, 
+                                file_name=f"Remision_{r_sel}.xlsx", 
+                                key=f"btn_dl_rem_xlsx_{r_sel}",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                use_container_width=True
+                            )
                     else:
                         st.info("💡 Selección múltiple. Descargas individuales (PDF/Excel) no disponibles.")
                 
@@ -5253,7 +5278,6 @@ elif opcion_menu == "🚚 Módulo Remisiones":
                     else:
                         eml_subject = f"Envío de Remisiones {folios_str} - Industria Sigrama"
                     
-                    eml_body = generar_cuerpo_correo_html(selected_rows, df_det)
                     eml_bytes = generar_archivo_eml(eml_to, eml_cc, eml_subject, eml_body, adjuntos_dict)
                     
                     st.download_button(
