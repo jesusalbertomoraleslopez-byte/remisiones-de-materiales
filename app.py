@@ -2347,14 +2347,16 @@ def generar_pdf_reporte_filtrado(filtros_dict, df_resultado_piezas):
     story.append(t_header_filtros)
     
     datos_panel_filtros = [
-        [Paragraph("ORDEN DE COMPRA (PO):", style_normal_bold), Paragraph(str(filtros_dict['PO']), style_normal_text),
-         Paragraph("SKU / PRODUCTO:", style_normal_bold), Paragraph(str(filtros_dict['SKU']), style_normal_text)],
-        [Paragraph("PROYECTO INTERNO:", style_normal_bold), Paragraph(str(filtros_dict['Proyecto']), style_normal_text),
-         Paragraph("ID TARIMA:", style_normal_bold), Paragraph(str(filtros_dict['Tarima']), style_normal_text)],
-        [Paragraph("PARCIALIDAD:", style_normal_bold), Paragraph(str(filtros_dict['Parcialidad']), style_normal_text),
-         Paragraph("ESTATUS ENVÍO:", style_normal_bold), Paragraph(str(filtros_dict['Estatus']), style_normal_text)],
-        [Paragraph("DESCRIPCIÓN DE PROYECTO:", style_normal_bold), Paragraph(str(filtros_dict['Descripcion']), style_normal_text),
-         Paragraph("TOTAL PIEZAS EN SELECCIÓN:", style_normal_bold), Paragraph(f"<b>{int(df_resultado_piezas['Cantidad'].sum()):,} PZS</b>", style_normal_bold)]
+        [Paragraph("ORDEN DE COMPRA (PO):", style_normal_bold), Paragraph(str(filtros_dict.get('PO', 'Todas')), style_normal_text),
+         Paragraph("SKU / PRODUCTO:", style_normal_bold), Paragraph(str(filtros_dict.get('SKU', 'Todos')), style_normal_text)],
+        [Paragraph("PROYECTO INTERNO:", style_normal_bold), Paragraph(str(filtros_dict.get('Proyecto', 'Todos')), style_normal_text),
+         Paragraph("ID TARIMA:", style_normal_bold), Paragraph(str(filtros_dict.get('Tarima', 'Todas')), style_normal_text)],
+        [Paragraph("PARCIALIDAD:", style_normal_bold), Paragraph(str(filtros_dict.get('Parcialidad', 'Todas')), style_normal_text),
+         Paragraph("ESTATUS ENVÍO:", style_normal_bold), Paragraph(str(filtros_dict.get('Estatus', 'Todos')), style_normal_text)],
+        [Paragraph("PROYECTO COMERCIAL:", style_normal_bold), Paragraph(str(filtros_dict.get('Descripcion', 'Todos')), style_normal_text),
+         Paragraph("FOLIO DE REMISIÓN:", style_normal_bold), Paragraph(str(filtros_dict.get('Remision', 'Todos')), style_normal_text)],
+        [Paragraph("TOTAL PIEZAS EN SELECCIÓN:", style_normal_bold), Paragraph(f"<b>{int(df_resultado_piezas['Cantidad'].sum()):,} PZS</b>", style_normal_bold),
+         Paragraph("", style_normal_bold), Paragraph("", style_normal_text)]
     ]
     
     t_panel = Table(datos_panel_filtros, colWidths=[2.0 * inch, 1.75 * inch, 2.0 * inch, 1.75 * inch])
@@ -3412,96 +3414,225 @@ if opcion_menu == "📊 Dashboard e Históricos":
 # =============================================================================
 elif opcion_menu == "🔍 Centro de Consultas":
     st.title("🔍 Reporte Detallado de Inventario por Pieza")
-    st.markdown("Utilice los selectores inferiores para filtrar de forma granular el inventario consolidado:")
+    st.markdown("Utilice los selectores múltiples para filtrar de forma granular el inventario consolidado:")
     
     if not st.session_state.BD_Detalle_Tarimas.empty:
         # Cruce relacional para anexar estatus de envío desde el catálogo de tarimas
         df_maestro_piezas = pd.merge(st.session_state.BD_Detalle_Tarimas, 
                                      st.session_state.BD_Tarimas[['ID_Tarima', 'Estatus', 'Fecha_Creacion']], 
                                      on='ID_Tarima', how='left')
-        df_maestro_piezas['Estatus_Envio'] = df_maestro_piezas['Estatus'].apply(lambda x: "Remesado" if x == "Remesada" else "No Remesado")
         
-        # Cuadrícula interactiva de 4 columnas en paralelo
-        c_filt1, c_filt2, c_filt3, c_filt4 = st.columns(4)
-        with c_filt1:
-            opc_po = ["Todos"] + df_maestro_piezas['PO'].dropna().unique().tolist()
-            f_po = st.selectbox("Orden de Compra (PO):", opc_po, key="query_po_filter_u")
-            opc_sku = ["Todos"] + df_maestro_piezas['SKU'].dropna().unique().tolist()
-            f_sku = st.selectbox("SKU / Producto:", opc_sku, key="query_sku_filter_u")
-        with c_filt2:
-            opc_proy = ["Todos"] + df_maestro_piezas['Proyecto'].dropna().unique().tolist()
-            f_proy = st.selectbox("Proyecto Interno:", opc_proy, key="query_proy_filter_u")
-            opc_tar = ["Todos"] + df_maestro_piezas['ID_Tarima'].dropna().unique().tolist()
-            f_tar = st.selectbox("ID Tarima:", opc_tar, key="query_tar_filter_u")
-        with c_filt3:
-            opc_parc = ["Todos"] + df_maestro_piezas['Parcialidad'].dropna().unique().tolist()
-            f_parc = st.selectbox("Parcialidad:", opc_parc, key="query_parc_filter_u")
-        with c_filt4:
-            opc_desc = ["Todos"] + df_maestro_piezas['Descripcion'].dropna().unique().tolist()
-            f_desc = st.selectbox("Descripción de Proyecto:", opc_desc, key="query_desc_filter_u")
-            f_est = st.selectbox("Estatus de Envío:", ["Todos", "Remesado", "No Remesado"], key="query_est_filter_u")
+        # Mapeo de remisiones para enriquecimiento previo a filtrado
+        mapa_remisiones_ui = {}
+        if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
+            import ast
+            for _, rem_row in st.session_state.BD_Datos_Generales_Remision.iterrows():
+                folio_rem = str(rem_row.get('Folio_Remision', 'N/A')).strip()
+                t_val = rem_row.get('Tarimas_Asociadas', [])
+                receptor = str(rem_row.get('Nombre_Receptor', 'N/A')).strip()
+                fecha_salida = rem_row.get('Fecha_Hora_Salida', 'N/A')
+                t_list = []
+                if isinstance(t_val, str):
+                    try:
+                        t_list = ast.literal_eval(t_val)
+                    except Exception:
+                        t_list = [t_val]
+                elif isinstance(t_val, list):
+                    t_list = t_val
+                for t in t_list:
+                    mapa_remisiones_ui[str(t).strip()] = {
+                        "Receptor": receptor, 
+                        "Fecha_Salida": str(fecha_salida).split()[0] if fecha_salida else "N/A",
+                        "Folio_Remision": folio_rem
+                    }
+        
+        # Mapeo de Catálogo Maestro de POs (BD_POs_Cabecera) para extraer Proyecto Comercial limpio
+        mapa_pos_info = {}
+        if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+            import re
+            for _, row_po in st.session_state.BD_POs_Cabecera.iterrows():
+                raw_po = str(row_po.get('PO', '')).strip().upper()
+                norm_po = re.sub(r'[^\w]', '', raw_po)
+                nom_proy = str(row_po.get('Proyecto', '')).strip()
+                if not nom_proy or nom_proy.lower() in ['nan', 'none']:
+                    nom_proy = str(row_po.get('Texto_Etiqueta', '')).strip()
+                if not nom_proy or nom_proy.lower() in ['nan', 'none']:
+                    nom_proy = "Sin Proyecto Asignado"
+                
+                info_po = {
+                    "PO_Oficial": raw_po,
+                    "Proyecto_Comercial": nom_proy,
+                    "ID_Interno": str(row_po.get('ID_Interno', '')).strip() if 'ID_Interno' in row_po else ""
+                }
+                if raw_po:
+                    mapa_pos_info[raw_po] = info_po
+                if norm_po:
+                    mapa_pos_info[norm_po] = info_po
+
+        # Columnas calculadas en memoria
+        import re
+        folios_col = []
+        receptores_col = []
+        fechas_envio_col = []
+        estatus_envio_col = []
+        proyectos_com_col = []
+
+        for _, row in df_maestro_piezas.iterrows():
+            t_id = str(row.get('ID_Tarima', '')).strip()
+            t_estatus = str(row.get('Estatus', '')).strip()
+            info_rem = mapa_remisiones_ui.get(t_id, {})
             
-        # Ejecución de la cascada de filtrado
+            # Folio y datos de remisión
+            if t_estatus == 'Remesada' and info_rem:
+                fol = info_rem.get('Folio_Remision', 'N/A')
+                rec = info_rem.get('Receptor', 'N/A')
+                f_sal = info_rem.get('Fecha_Salida', 'N/A')
+                if "RIO" in rec.upper():
+                    est_env = "Remesado (Planta Río - Sin Pintar)"
+                else:
+                    est_env = "Remesado (Cliente)"
+            else:
+                fol = "Pendiente en Almacén"
+                rec = "En Planta Diagonal"
+                f_sal = "Pendiente"
+                est_env = "No Remesado / En Almacén"
+                
+            folios_col.append(fol)
+            receptores_col.append(rec)
+            fechas_envio_col.append(f_sal)
+            estatus_envio_col.append(est_env)
+            
+            # Proyecto Comercial desde BD_POs_Cabecera
+            po_str = str(row.get('PO', '')).strip().upper()
+            po_clean = re.sub(r'[^\w]', '', po_str)
+            po_match = mapa_pos_info.get(po_str) or mapa_pos_info.get(po_clean)
+            if po_match and po_match["Proyecto_Comercial"] not in ["Sin Proyecto Asignado", ""]:
+                proy_com = po_match["Proyecto_Comercial"]
+            else:
+                proy_desc = str(row.get('Descripcion', '')).strip()
+                proy_com = proy_desc if proy_desc and proy_desc.lower() not in ['nan', 'none'] else "Sin Proyecto Asignado"
+            proyectos_com_col.append(proy_com)
+
+        df_maestro_piezas['Número de Remisión'] = folios_col
+        df_maestro_piezas['Enviado a (Receptor)'] = receptores_col
+        df_maestro_piezas['Fecha de Envío'] = fechas_envio_col
+        df_maestro_piezas['Estatus_Envio'] = estatus_envio_col
+        df_maestro_piezas['Proyecto_Comercial'] = proyectos_com_col
+
+        # Lista completa y ordenada de Proyectos Internos (INT-0001 a INT-XXXX)
+        proyectos_existentes = set()
+        for p in df_maestro_piezas['Proyecto'].dropna().astype(str).unique():
+            p_clean = p.strip()
+            if p_clean and p_clean.lower() != 'nan':
+                proyectos_existentes.add(p_clean)
+        if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
+            for p in st.session_state.BD_POs_Cabecera.get('ID_Interno', pd.Series(dtype=object)).dropna().astype(str).unique():
+                p_clean = p.strip()
+                if p_clean and p_clean.lower() != 'nan':
+                    proyectos_existentes.add(p_clean)
+
+        def _sort_int_key(s):
+            m = re.search(r'\d+', str(s))
+            return int(m.group(0)) if m else 999999
+
+        opc_proy_int = sorted(list(proyectos_existentes), key=_sort_int_key)
+
+        # Opciones para cada uno de los 8 filtros
+        opc_po = sorted([str(x) for x in df_maestro_piezas['PO'].dropna().unique() if str(x).strip() and str(x).lower() != 'nan'])
+        opc_parc = sorted([str(x) for x in df_maestro_piezas['Parcialidad'].dropna().unique() if str(x).strip() and str(x).lower() != 'nan'])
+        opc_proy_com = sorted([str(x) for x in df_maestro_piezas['Proyecto_Comercial'].dropna().unique() if str(x).strip() and str(x).lower() != 'nan'])
+        opc_sku = sorted([str(x) for x in df_maestro_piezas['SKU'].dropna().unique() if str(x).strip() and str(x).lower() != 'nan'])
+        opc_tar = sorted([str(x) for x in df_maestro_piezas['ID_Tarima'].dropna().unique() if str(x).strip() and str(x).lower() != 'nan'], key=_sort_int_key)
+        
+        # Folios de remisión ordenados numéricamente
+        folios_unicos = set(df_maestro_piezas['Número de Remisión'].dropna().unique())
+        folios_sin_pend = [f for f in folios_unicos if f != "Pendiente en Almacén"]
+        opc_rem = sorted(folios_sin_pend, key=_sort_int_key)
+        if "Pendiente en Almacén" in folios_unicos:
+            opc_rem = ["Pendiente en Almacén"] + opc_rem
+            
+        opc_estatus = ["Remesado (Cliente)", "Remesado (Planta Río - Sin Pintar)", "No Remesado / En Almacén"]
+
+        # Interfaz de Filtros: 2 Filas de 4 Columnas con multiselect
+        st.markdown("#### 🎛️ Filtros Avanzados de Búsqueda (Multiselección)")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            f_po = st.multiselect("1. Orden de Compra (PO):", options=opc_po, default=[], placeholder="Todas las POs...", key="q_po_ms_u")
+            f_sku = st.multiselect("5. SKU / Producto:", options=opc_sku, default=[], placeholder="Todos los SKUs...", key="q_sku_ms_u")
+        with c2:
+            f_proy = st.multiselect("2. Proyecto Interno (INT):", options=opc_proy_int, default=[], placeholder="Todos los INT...", key="q_proy_ms_u")
+            f_tar = st.multiselect("6. ID Tarima:", options=opc_tar, default=[], placeholder="Todas las tarimas...", key="q_tar_ms_u")
+        with c3:
+            f_parc = st.multiselect("3. Parcialidad:", options=opc_parc, default=[], placeholder="Todas las parcialidades...", key="q_parc_ms_u")
+            f_rem = st.multiselect("7. Folio de Remisión:", options=opc_rem, default=[], placeholder="Todos los folios...", key="q_rem_ms_u")
+        with c4:
+            f_desc = st.multiselect("4. Proyecto Comercial (PO):", options=opc_proy_com, default=[], placeholder="Todos (META, RENO, etc.)...", key="q_desc_ms_u")
+            f_est = st.multiselect("8. Estatus de Envío:", options=opc_estatus, default=[], placeholder="Todos los estatus...", key="q_est_ms_u")
+
+        # Cascada de Filtrado Eficiente y Normalizada
         df_resultado = df_maestro_piezas.copy()
-        if f_po != "Todos": df_resultado = df_resultado[df_resultado['PO'] == f_po]
-        if f_sku != "Todos": df_resultado = df_resultado[df_resultado['SKU'] == f_sku]
-        if f_proy != "Todos": df_resultado = df_resultado[df_resultado['Proyecto'] == f_proy]
-        if f_tar != "Todos": df_resultado = df_resultado[df_resultado['ID_Tarima'] == f_tar]
-        if f_parc != "Todos": df_resultado = df_resultado[df_resultado['Parcialidad'] == f_parc]
-        if f_desc != "Todos": df_resultado = df_resultado[df_resultado['Descripcion'] == f_desc]
-        if f_est != "Todos": df_resultado = df_resultado[df_resultado['Estatus_Envio'] == f_est]
+
+        if f_po:
+            f_po_clean = {re.sub(r'[^\w]', '', str(x)).upper() for x in f_po}
+            df_resultado = df_resultado[
+                df_resultado['PO'].astype(str).isin(f_po) |
+                df_resultado['PO'].astype(str).apply(lambda x: re.sub(r'[^\w]', '', x).upper()).isin(f_po_clean)
+            ]
+
+        if f_proy:
+            df_resultado = df_resultado[df_resultado['Proyecto'].astype(str).isin(f_proy)]
+
+        if f_parc:
+            df_resultado = df_resultado[df_resultado['Parcialidad'].astype(str).isin(f_parc)]
+
+        if f_desc:
+            df_resultado = df_resultado[df_resultado['Proyecto_Comercial'].astype(str).isin(f_desc)]
+
+        if f_sku:
+            df_resultado = df_resultado[df_resultado['SKU'].astype(str).isin(f_sku)]
+
+        if f_tar:
+            df_resultado = df_resultado[df_resultado['ID_Tarima'].astype(str).isin(f_tar)]
+
+        if f_rem:
+            df_resultado = df_resultado[df_resultado['Número de Remisión'].astype(str).isin(f_rem)]
+
+        if f_est:
+            df_resultado = df_resultado[df_resultado['Estatus_Envio'].astype(str).isin(f_est)]
         
         if not df_resultado.empty:
-            df_rep = df_resultado[["ID_Tarima", "PO", "Proyecto", "Parcialidad", "Descripcion", "SKU", "Cantidad", "Estatus_Envio", "Fecha_Creacion"]].copy()
-            
-            # Enriquecer con Receptor, Folio de Remisión y Fecha de Envío
-            mapa_remisiones_ui = {}
-            if "BD_Datos_Generales_Remision" in st.session_state and not st.session_state.BD_Datos_Generales_Remision.empty:
-                import ast
-                for _, rem_row in st.session_state.BD_Datos_Generales_Remision.iterrows():
-                    folio_rem = str(rem_row.get('Folio_Remision', 'N/A')).strip()
-                    t_val = rem_row['Tarimas_Asociadas']
-                    receptor = rem_row.get('Nombre_Receptor', 'N/A')
-                    fecha_salida = rem_row.get('Fecha_Hora_Salida', 'N/A')
-                    t_list = []
-                    if isinstance(t_val, str):
-                        try:
-                            t_list = ast.literal_eval(t_val)
-                        except Exception:
-                            t_list = [t_val]
-                    elif isinstance(t_val, list):
-                        t_list = t_val
-                    for t in t_list:
-                        mapa_remisiones_ui[str(t).strip()] = {
-                            "Receptor": receptor, 
-                            "Fecha_Salida": str(fecha_salida).split()[0] if fecha_salida else "N/A",
-                            "Folio_Remision": folio_rem
-                        }
-            
-            df_rep['Número de Remisión'] = "N/A"
-            df_rep['Enviado a (Receptor)'] = "N/A"
-            df_rep['Fecha de Envío'] = "N/A"
-            for idx, row in df_rep.iterrows():
-                if row['Estatus_Envio'] == 'Remesado':
-                    t_id = str(row['ID_Tarima']).strip()
-                    info = mapa_remisiones_ui.get(t_id, {})
-                    fol_num = info.get("Folio_Remision", "N/A")
-                    df_rep.at[idx, 'Número de Remisión'] = fol_num
-                    df_rep.at[idx, 'Enviado a (Receptor)'] = info.get("Receptor", "N/A")
-                    df_rep.at[idx, 'Fecha de Envío'] = info.get("Fecha_Salida", "N/A")
+            df_rep = df_resultado[[
+                "ID_Tarima", "PO", "Proyecto", "Parcialidad", "Proyecto_Comercial", "Descripcion", 
+                "SKU", "Cantidad", "Estatus_Envio", "Número de Remisión", 
+                "Enviado a (Receptor)", "Fecha de Envío", "Fecha_Creacion"
+            ]].copy()
 
-            cols_export_inv = ["ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", "Descripción de Proyecto Planta Rio", "SKU / Producto", "Cantidad (Pzs)", "Estatus de Envío", "Número de Remisión", "Enviado a (Receptor)", "Fecha de Envío", "Fecha de Ingreso"]
-            df_rep = df_rep[["ID_Tarima", "PO", "Proyecto", "Parcialidad", "Descripcion", "SKU", "Cantidad", "Estatus_Envio", "Número de Remisión", "Enviado a (Receptor)", "Fecha de Envío", "Fecha_Creacion"]]
+            cols_export_inv = [
+                "ID Tarima", "Orden de Compra (PO)", "Proyecto Interno", "Parcialidad", 
+                "Proyecto Comercial (PO)", "Descripción Planta Río", "SKU / Producto", 
+                "Cantidad (Pzs)", "Estatus de Envío", "Número de Remisión", 
+                "Enviado a (Receptor)", "Fecha de Envío", "Fecha de Ingreso"
+            ]
             df_rep.columns = cols_export_inv
             
             # Normalizar tipos para evitar error pyarrow.lib.ArrowInvalid al serializar DataFrame mixto
             for col in cols_export_inv:
-                if col in df_rep.columns:
+                if col in df_rep.columns and col != "Cantidad (Pzs)":
                     df_rep[col] = df_rep[col].astype(str)
             df_rep["Cantidad (Pzs)"] = pd.to_numeric(df_rep["Cantidad (Pzs)"], errors='coerce').fillna(0).astype(int)
             
             total_piezas_consulta = int(df_rep['Cantidad (Pzs)'].sum())
-            st.metric("🔢 Total Piezas en Selección:", f"{total_piezas_consulta:,} PZS")
+            total_tarimas_consulta = int(df_rep['ID Tarima'].nunique())
+            piezas_remesadas_consulta = int(df_rep[df_rep['Estatus de Envío'].str.contains('Remesado')]['Cantidad (Pzs)'].sum())
+            piezas_almacen_consulta = total_piezas_consulta - piezas_remesadas_consulta
+
+            # 4 Métricas Clave en Paralelo
+            m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+            m_col1.metric("🔢 Total Piezas:", f"{total_piezas_consulta:,} PZS")
+            m_col2.metric("📦 Tarimas en Selección:", f"{total_tarimas_consulta:,}")
+            m_col3.metric("🚚 Piezas Remesadas:", f"{piezas_remesadas_consulta:,} PZS")
+            m_col4.metric("🏭 Piezas en Almacén:", f"{piezas_almacen_consulta:,} PZS")
+
             st.dataframe(df_rep, use_container_width=True, hide_index=True)
             
             # --- PANEL DE ACCIONES DE DESCARGA MULTIFORMATO ---
@@ -3511,9 +3642,14 @@ elif opcion_menu == "🔍 Centro de Consultas":
             with btn_col1:
                 # Diccionario compilado de filtros para inyectar en el reporte estático
                 filtros_aplicados = {
-                    "PO": f_po, "SKU": f_sku, "Proyecto": f_proy, 
-                    "Tarima": f_tar, "Parcialidad": f_parc, 
-                    "Descripcion": f_desc, "Estatus": f_est
+                    "PO": ", ".join(f_po) if f_po else "Todas", 
+                    "SKU": ", ".join(f_sku) if f_sku else "Todos", 
+                    "Proyecto": ", ".join(f_proy) if f_proy else "Todos", 
+                    "Tarima": ", ".join(f_tar) if f_tar else "Todas", 
+                    "Parcialidad": ", ".join(f_parc) if f_parc else "Todas", 
+                    "Descripcion": ", ".join(f_desc) if f_desc else "Todos", 
+                    "Estatus": ", ".join(f_est) if f_est else "Todos",
+                    "Remision": ", ".join(f_rem) if f_rem else "Todas"
                 }
                 pdf_data = generar_pdf_reporte_filtrado(filtros_aplicados, df_resultado)
                 from datetime import datetime
@@ -3525,40 +3661,40 @@ elif opcion_menu == "🔍 Centro de Consultas":
                     label="📄 Descargar Reporte Oficial en PDF",
                     data=pdf_data,
                     file_name=f"TAR_Lote_de_Tarimas_Separado_{fecha_hora_str}.pdf",
-                    mime="application/pdf"
+                    mime="application/pdf",
+                    key="btn_download_consulta_pdf_ms"
                 )
 
-            
             with btn_col2:
                 # Construcción del reporte de auditoría multi-hoja con openpyxl
                 from openpyxl.styles import Font, PatternFill, Alignment
                 from openpyxl.utils import get_column_letter
 
-                # =============================================================================
-                # SOLUCIÓN DEFINITIVA: REPORTE DE EXCEL BLINDADO CONTRA DATOS VACÍOS
-                # =============================================================================
                 buf_c = io.BytesIO()
         
-                # 1. Creamos los metadatos básicos del reporte
+                # 1. Metadatos del reporte con los 8 filtros auditables
                 df_metadatos = pd.DataFrame([
-                    {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO"},
+                    {"Concepto": "DOCUMENTO", "Valor": "REPORTE CONSOLIDADO DE INVENTARIO Y REMISIONES"},
                     {"Concepto": "EMPRESA", "Valor": "INDUSTRIA SIGRAMA S.A. DE C.V."},
                     {"Concepto": "FECHA DE GENERACIÓN", "Valor": datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
-                    {"Concepto": "FILTRO: ORDEN DE COMPRA (PO)", "Valor": str(f_po)},
-                    {"Concepto": "FILTRO: PROYECTO INTERNO", "Valor": str(f_proy)},
-                    {"Concepto": "FILTRO: PARCIALIDAD", "Valor": str(f_parc)},
-                    {"Concepto": "FILTRO: DESCRIPCIÓN PROYECTO", "Valor": str(f_desc)},
-                    {"Concepto": "FILTRO: SKU / PRODUCTO", "Valor": str(f_sku)},
-                    {"Concepto": "FILTRO: ID TARIMA", "Valor": str(f_tar)},
-                    {"Concepto": "FILTRO: ESTATUS DE ENVÍO", "Valor": str(f_est)},
-                    {"Concepto": "TOTAL PIEZAS EN SELECCIÓN", "Valor": int(total_piezas_consulta)}
+                    {"Concepto": "FILTRO 1: ORDEN DE COMPRA (PO)", "Valor": ", ".join(f_po) if f_po else "Todas"},
+                    {"Concepto": "FILTRO 2: PROYECTO INTERNO (INT)", "Valor": ", ".join(f_proy) if f_proy else "Todos"},
+                    {"Concepto": "FILTRO 3: PARCIALIDAD", "Valor": ", ".join(f_parc) if f_parc else "Todas"},
+                    {"Concepto": "FILTRO 4: PROYECTO COMERCIAL (PO)", "Valor": ", ".join(f_desc) if f_desc else "Todos"},
+                    {"Concepto": "FILTRO 5: SKU / PRODUCTO", "Valor": ", ".join(f_sku) if f_sku else "Todos"},
+                    {"Concepto": "FILTRO 6: ID TARIMA", "Valor": ", ".join(f_tar) if f_tar else "Todas"},
+                    {"Concepto": "FILTRO 7: FOLIO DE REMISIÓN", "Valor": ", ".join(f_rem) if f_rem else "Todos"},
+                    {"Concepto": "FILTRO 8: ESTATUS DE ENVÍO", "Valor": ", ".join(f_est) if f_est else "Todos"},
+                    {"Concepto": "TOTAL PIEZAS EN SELECCIÓN", "Valor": int(total_piezas_consulta)},
+                    {"Concepto": "TOTAL TARIMAS EN SELECCIÓN", "Valor": int(total_tarimas_consulta)},
+                    {"Concepto": "PIEZAS REMESADAS", "Valor": int(piezas_remesadas_consulta)},
+                    {"Concepto": "PIEZAS EN ALMACÉN", "Valor": int(piezas_almacen_consulta)}
                 ])
         
                 # 2. Validamos si hay datos reales en la tabla para exportar
                 if 'df_rep' in locals() and not df_rep.empty:
                     df_exportar_inventario = df_rep.copy()
                 else:
-                    # Si no hay datos, creamos una tabla vacía segura con los encabezados oficiales
                     df_exportar_inventario = pd.DataFrame(columns=cols_export_inv)
                     df_metadatos.loc[len(df_metadatos)] = {"Concepto": "AVISO", "Valor": "No se encontraron registros con los filtros seleccionados."}
         
@@ -3645,11 +3781,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
                         sheet.freeze_panes = "A2"
 
                 writer_c.close()
-                
                 buf_c.seek(0)
-
-
-                
                 
                 st.download_button(
                     label="📥 Generar Reporte de Inventario en Excel (.xlsx)",
