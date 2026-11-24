@@ -368,22 +368,22 @@ def clean_project_val(val):
     
     # Si es puramente un número entero (ej. 3, 15)
     if val_str.isdigit():
-        return f"INT-{int(val_str):03d}"
+        return f"INT-{int(val_str):04d}"
     
     # Si es un número decimal que termina en .0 (ej. 3.0, 15.0)
     try:
         float_val = float(val_str)
         if float_val.is_integer():
-            return f"INT-{int(float_val):03d}"
+            return f"INT-{int(float_val):04d}"
     except ValueError:
         pass
         
-    # Si tiene el patrón INT- seguido de un número (ej. INT-3, INT-03, INT-003)
+    # Si tiene el patrón INT seguido de un número (ej. INT-3, INT-03, INT-003, INT 003, INT003)
     import re
-    match = re.match(r'^INT\s*-\s*(\d+)$', val_str, re.IGNORECASE)
+    match = re.search(r'INT[^\d]*(\d+)', val_str, re.IGNORECASE)
     if match:
         num = int(match.group(1))
-        return f"INT-{num:03d}"
+        return f"INT-{num:04d}"
         
     # De lo contrario, dejarlo como está (ej. LC8, RECHASO)
     return val_str
@@ -3518,16 +3518,17 @@ elif opcion_menu == "🔍 Centro de Consultas":
         df_maestro_piezas['Fecha de Envío'] = fechas_envio_col
         df_maestro_piezas['Estatus_Envio'] = estatus_envio_col
         df_maestro_piezas['Proyecto_Comercial'] = proyectos_com_col
+        df_maestro_piezas['Proyecto'] = df_maestro_piezas['Proyecto'].apply(clean_project_val)
 
         # Lista completa y ordenada de Proyectos Internos (INT-0001 a INT-XXXX)
         proyectos_existentes = set()
         for p in df_maestro_piezas['Proyecto'].dropna().astype(str).unique():
-            p_clean = p.strip()
+            p_clean = clean_project_val(p)
             if p_clean and p_clean.lower() != 'nan':
                 proyectos_existentes.add(p_clean)
         if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
             for p in st.session_state.BD_POs_Cabecera.get('ID_Interno', pd.Series(dtype=object)).dropna().astype(str).unique():
-                p_clean = p.strip()
+                p_clean = clean_project_val(p)
                 if p_clean and p_clean.lower() != 'nan':
                     proyectos_existentes.add(p_clean)
 
