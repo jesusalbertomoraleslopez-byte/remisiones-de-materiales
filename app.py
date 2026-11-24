@@ -3446,28 +3446,50 @@ elif opcion_menu == "🔍 Centro de Consultas":
                         "Folio_Remision": folio_rem
                     }
         
+        # Función canónica para homologar y limpiar nombres de proyectos comerciales
+        def limpiar_nombre_proyecto(texto):
+            if not texto or str(texto).strip().lower() in ['nan', 'none', '']:
+                return 'Sin Asignar'
+            t = str(texto).strip().upper()
+            if 'META' in t: return 'META'
+            if 'RENO 6' in t or 'RENO6' in t: return 'RENO 6'
+            if 'RENO 5' in t or 'RENO5' in t: return 'RENO 5'
+            if 'RENO 4' in t or 'RENO4' in t: return 'RENO 4'
+            if 'AMAZON' in t: return 'AMAZON'
+            if 'CLOUD' in t: return 'CLOUD'
+            if 'TORONTO SIVAGEAR' in t: return 'TORONTO SIVAGEAR'
+            if 'TORONTO' in t: return 'TORONTO'
+            if 'LC8' in t or 'LCB' in t: return 'LC8 / LCB'
+            if 'IRVING' in t: return 'IRVING'
+            if 'SOUTH VALLEY' in t or 'SOURTH VALLEY' in t: return 'SOUTH VALLEY'
+            if 'SIGRAMA LASER' in t: return 'SIGRAMA LASER'
+            if 'PNC' in t: return 'PNC (No Conforme)'
+            if 'SCRAP' in t: return 'SCRAP'
+            if 'RETRABAJO' in t: return 'RETRABAJO PLANTA RIO'
+            if 'PINTURA' in t: return 'PINTURA'
+            t_clean = re.sub(r'^(PROYECTO|PROYECT)\s*', '', t).strip()
+            return t_clean if t_clean else 'Sin Asignar'
+
         # Mapeo de Catálogo Maestro de POs (BD_POs_Cabecera) para extraer Proyecto Comercial limpio
-        mapa_pos_info = {}
+        mapa_pos_digits = {}
+        mapa_pos_int = {}
         if "BD_POs_Cabecera" in st.session_state and not st.session_state.BD_POs_Cabecera.empty:
             import re
             for _, row_po in st.session_state.BD_POs_Cabecera.iterrows():
                 raw_po = str(row_po.get('PO', '')).strip().upper()
-                norm_po = re.sub(r'[^\w]', '', raw_po)
+                norm_po = re.sub(r'\D', '', raw_po)
+                id_int_po = clean_project_val(row_po.get('ID_Interno', ''))
                 nom_proy = str(row_po.get('Proyecto', '')).strip()
                 if not nom_proy or nom_proy.lower() in ['nan', 'none']:
                     nom_proy = str(row_po.get('Texto_Etiqueta', '')).strip()
-                if not nom_proy or nom_proy.lower() in ['nan', 'none']:
-                    nom_proy = "Sin Proyecto Asignado"
+                proy_homologado = limpiar_nombre_proyecto(nom_proy)
                 
-                info_po = {
-                    "PO_Oficial": raw_po,
-                    "Proyecto_Comercial": nom_proy,
-                    "ID_Interno": str(row_po.get('ID_Interno', '')).strip() if 'ID_Interno' in row_po else ""
-                }
-                if raw_po:
-                    mapa_pos_info[raw_po] = info_po
                 if norm_po:
-                    mapa_pos_info[norm_po] = info_po
+                    mapa_pos_digits[norm_po] = proy_homologado
+                if raw_po:
+                    mapa_pos_digits[raw_po] = proy_homologado
+                if id_int_po and id_int_po != 'Sin Asignar':
+                    mapa_pos_int[id_int_po] = proy_homologado
 
         # Columnas calculadas en memoria
         import re
@@ -3502,15 +3524,21 @@ elif opcion_menu == "🔍 Centro de Consultas":
             fechas_envio_col.append(f_sal)
             estatus_envio_col.append(est_env)
             
-            # Proyecto Comercial desde BD_POs_Cabecera
+            # Proyecto Comercial: 1) Dígitos de PO, 2) Código INT-XXXX, 3) Descripción limpia
             po_str = str(row.get('PO', '')).strip().upper()
-            po_clean = re.sub(r'[^\w]', '', po_str)
-            po_match = mapa_pos_info.get(po_str) or mapa_pos_info.get(po_clean)
-            if po_match and po_match["Proyecto_Comercial"] not in ["Sin Proyecto Asignado", ""]:
-                proy_com = po_match["Proyecto_Comercial"]
+            po_digits = re.sub(r'\D', '', po_str)
+            int_code = clean_project_val(row.get('Proyecto', ''))
+            desc_str = str(row.get('Descripcion', '')).strip()
+            
+            if po_digits in mapa_pos_digits and mapa_pos_digits[po_digits] != 'Sin Asignar':
+                proy_com = mapa_pos_digits[po_digits]
+            elif po_str in mapa_pos_digits and mapa_pos_digits[po_str] != 'Sin Asignar':
+                proy_com = mapa_pos_digits[po_str]
+            elif int_code in mapa_pos_int and mapa_pos_int[int_code] != 'Sin Asignar':
+                proy_com = mapa_pos_int[int_code]
             else:
-                proy_desc = str(row.get('Descripcion', '')).strip()
-                proy_com = proy_desc if proy_desc and proy_desc.lower() not in ['nan', 'none'] else "Sin Proyecto Asignado"
+                proy_com = limpiar_nombre_proyecto(desc_str)
+            
             proyectos_com_col.append(proy_com)
 
         df_maestro_piezas['Número de Remisión'] = folios_col
@@ -3624,7 +3652,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
             
             total_piezas_consulta = int(df_rep['Cantidad (Pzs)'].sum())
             total_tarimas_consulta = int(df_rep['ID Tarima'].nunique())
-            piezas_remesadas_consulta = int(df_rep[df_rep['Estatus de Envío'].str.contains('Remesado')]['Cantidad (Pzs)'].sum())
+            piezas_remesadas_consulta = int(df_rep[df_rep['Estatus de Envío'].astype(str).str.startswith('Remesado')]['Cantidad (Pzs)'].sum())
             piezas_almacen_consulta = total_piezas_consulta - piezas_remesadas_consulta
 
             # 4 Métricas Clave en Paralelo
@@ -3708,8 +3736,8 @@ elif opcion_menu == "🔍 Centro de Consultas":
                     df_exportar_inventario = df_exportar_inventario.sort_values(by="ID Tarima", ascending=True)
                     
                     df_temp = df_exportar_inventario.copy()
-                    df_temp['Cant_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if 'Remesado' in str(r['Estatus de Envío']) else 0, axis=1)
-                    df_temp['Cant_No_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if 'Remesado' not in str(r['Estatus de Envío']) else 0, axis=1)
+                    df_temp['Cant_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if str(r['Estatus de Envío']).startswith('Remesado') else 0, axis=1)
+                    df_temp['Cant_No_Remesada'] = df_temp.apply(lambda r: r['Cantidad (Pzs)'] if not str(r['Estatus de Envío']).startswith('Remesado') else 0, axis=1)
                     
                     df_resumen = df_temp.groupby('SKU / Producto').agg({
                         'Orden de Compra (PO)': lambda x: ', '.join(x.astype(str).dropna().unique()),
@@ -3728,8 +3756,8 @@ elif opcion_menu == "🔍 Centro de Consultas":
                     }])
                     df_resumen = pd.concat([df_resumen, total_row], ignore_index=True)
                     
-                    df_remesados = df_exportar_inventario[df_exportar_inventario['Estatus de Envío'].astype(str).str.contains('Remesado', case=False, na=False)].copy()
-                    df_no_remesados = df_exportar_inventario[~df_exportar_inventario['Estatus de Envío'].astype(str).str.contains('Remesado', case=False, na=False)].copy()
+                    df_remesados = df_exportar_inventario[df_exportar_inventario['Estatus de Envío'].astype(str).str.startswith('Remesado')].copy()
+                    df_no_remesados = df_exportar_inventario[~df_exportar_inventario['Estatus de Envío'].astype(str).str.startswith('Remesado')].copy()
                 else:
                     df_resumen = pd.DataFrame(columns=["No. SKU", "PO'S", "Cantidad Remesada", "Cantidad No Remesada", "Total Fabricado"])
                     df_remesados = df_exportar_inventario.copy()
