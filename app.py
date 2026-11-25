@@ -3447,28 +3447,33 @@ elif opcion_menu == "🔍 Centro de Consultas":
                     }
         
         # Función canónica para homologar y limpiar nombres de proyectos comerciales
-        def limpiar_nombre_proyecto(texto):
-            if not texto or str(texto).strip().lower() in ['nan', 'none', '']:
-                return 'Sin Asignar'
-            t = str(texto).strip().upper()
-            if 'META' in t: return 'META'
-            if 'RENO 6' in t or 'RENO6' in t: return 'RENO 6'
-            if 'RENO 5' in t or 'RENO5' in t: return 'RENO 5'
-            if 'RENO 4' in t or 'RENO4' in t: return 'RENO 4'
-            if 'AMAZON' in t: return 'AMAZON'
-            if 'CLOUD' in t: return 'CLOUD'
-            if 'TORONTO SIVAGEAR' in t: return 'TORONTO SIVAGEAR'
-            if 'TORONTO' in t: return 'TORONTO'
-            if 'LC8' in t or 'LCB' in t: return 'LC8 / LCB'
-            if 'IRVING' in t: return 'IRVING'
-            if 'SOUTH VALLEY' in t or 'SOURTH VALLEY' in t: return 'SOUTH VALLEY'
-            if 'SIGRAMA LASER' in t: return 'SIGRAMA LASER'
-            if 'PNC' in t: return 'PNC (No Conforme)'
-            if 'SCRAP' in t: return 'SCRAP'
-            if 'RETRABAJO' in t: return 'RETRABAJO PLANTA RIO'
-            if 'PINTURA' in t: return 'PINTURA'
-            t_clean = re.sub(r'^(PROYECTO|PROYECT)\s*', '', t).strip()
-            return t_clean if t_clean else 'Sin Asignar'
+        def limpiar_nombre_proyecto(texto, po_ref=''):
+            comb = f"{str(texto).strip().upper()} {str(po_ref).strip().upper()}"
+            if not comb.strip():
+                return 'Otros'
+            
+            # 1. Proyectos comerciales principales
+            if 'META' in comb: return 'META'
+            if 'RENO 6' in comb or 'RENO6' in comb: return 'RENO 6'
+            if 'RENO 5' in comb or 'RENO5' in comb: return 'RENO 5'
+            if 'RENO 4' in comb or 'RENO4' in comb: return 'RENO 4'
+            if 'AMAZON' in comb: return 'AMAZON'
+            if 'CLOUD' in comb: return 'CLOUD'
+            if 'TORONTO' in comb: return 'TORONTO'  # Integra Toronto y Toronto Sivagear
+            if 'LC8' in comb or 'LCB' in comb: return 'LC8 / LCB'
+            if 'IRVING' in comb: return 'IRVING'
+            if 'SOUTH VALLEY' in comb or 'SOURTH VALLEY' in comb: return 'SOUTH VALLEY'
+            if 'SIGRAMA LASER' in comb: return 'SIGRAMA LASER'
+            
+            # 2. Categorías especiales requeridas explícitamente
+            if 'OTE' in comb: return 'OTE (Órdenes de Trabajo Externas)'
+            if 'PNC' in comb: return 'PNC'
+            if 'URG' in comb: return 'Urgencias'
+            if 'SCRAP' in comb: return 'SCRAP'
+            if 'RETRABAJO' in comb or 'RIO' in comb or 'PINTURA' in comb: return 'Retrabajo / Pintura Río'
+            
+            # 3. Partes mecánicas o piezas aisladas sin proyecto (ej. Puertas, Tapas, Mesta, etc.)
+            return 'Otros'
 
         # Mapeo de Catálogo Maestro de POs (BD_POs_Cabecera) para extraer Proyecto Comercial limpio
         mapa_pos_digits = {}
@@ -3482,7 +3487,7 @@ elif opcion_menu == "🔍 Centro de Consultas":
                 nom_proy = str(row_po.get('Proyecto', '')).strip()
                 if not nom_proy or nom_proy.lower() in ['nan', 'none']:
                     nom_proy = str(row_po.get('Texto_Etiqueta', '')).strip()
-                proy_homologado = limpiar_nombre_proyecto(nom_proy)
+                proy_homologado = limpiar_nombre_proyecto(nom_proy, raw_po)
                 
                 if norm_po:
                     mapa_pos_digits[norm_po] = proy_homologado
@@ -3524,20 +3529,26 @@ elif opcion_menu == "🔍 Centro de Consultas":
             fechas_envio_col.append(f_sal)
             estatus_envio_col.append(est_env)
             
-            # Proyecto Comercial: 1) Dígitos de PO, 2) Código INT-XXXX, 3) Descripción limpia
+            # Proyecto Comercial: 1) OTE/PNC/URG, 2) Dígitos de PO, 3) Código INT-XXXX, 4) Descripción / Otros
             po_str = str(row.get('PO', '')).strip().upper()
             po_digits = re.sub(r'\D', '', po_str)
             int_code = clean_project_val(row.get('Proyecto', ''))
             desc_str = str(row.get('Descripcion', '')).strip()
             
-            if po_digits in mapa_pos_digits and mapa_pos_digits[po_digits] != 'Sin Asignar':
+            if 'OTE' in po_str or 'OTE' in desc_str.upper():
+                proy_com = 'OTE (Órdenes de Trabajo Externas)'
+            elif 'PNC' in po_str or 'PNC' in desc_str.upper():
+                proy_com = 'PNC'
+            elif 'URG' in po_str or 'URG' in desc_str.upper():
+                proy_com = 'Urgencias'
+            elif po_digits in mapa_pos_digits and mapa_pos_digits[po_digits] != 'Otros':
                 proy_com = mapa_pos_digits[po_digits]
-            elif po_str in mapa_pos_digits and mapa_pos_digits[po_str] != 'Sin Asignar':
+            elif po_str in mapa_pos_digits and mapa_pos_digits[po_str] != 'Otros':
                 proy_com = mapa_pos_digits[po_str]
-            elif int_code in mapa_pos_int and mapa_pos_int[int_code] != 'Sin Asignar':
+            elif int_code in mapa_pos_int and mapa_pos_int[int_code] != 'Otros':
                 proy_com = mapa_pos_int[int_code]
             else:
-                proy_com = limpiar_nombre_proyecto(desc_str)
+                proy_com = limpiar_nombre_proyecto(desc_str, po_str)
             
             proyectos_com_col.append(proy_com)
 
@@ -3569,7 +3580,14 @@ elif opcion_menu == "🔍 Centro de Consultas":
         # Opciones para cada uno de los 8 filtros
         opc_po = sorted([str(x) for x in df_maestro_piezas['PO'].dropna().unique() if str(x).strip() and str(x).lower() != 'nan'])
         opc_parc = sorted([str(x) for x in df_maestro_piezas['Parcialidad'].dropna().unique() if str(x).strip() and str(x).lower() != 'nan'])
-        opc_proy_com = sorted([str(x) for x in df_maestro_piezas['Proyecto_Comercial'].dropna().unique() if str(x).strip() and str(x).lower() != 'nan'])
+        categorias_base_proy = [
+            "AMAZON", "CLOUD", "IRVING", "LC8 / LCB", "META", 
+            "OTE (Órdenes de Trabajo Externas)", "Otros", "PNC", 
+            "RENO 4", "RENO 5", "RENO 6", "Retrabajo / Pintura Río", 
+            "SCRAP", "SIGRAMA LASER", "SOUTH VALLEY", "TORONTO", "Urgencias"
+        ]
+        proys_en_datos = set([str(x) for x in df_maestro_piezas['Proyecto_Comercial'].dropna().unique() if str(x).strip() and str(x).lower() != 'nan'])
+        opc_proy_com = sorted(list(proys_en_datos.union(categorias_base_proy)))
         opc_sku = sorted([str(x) for x in df_maestro_piezas['SKU'].dropna().unique() if str(x).strip() and str(x).lower() != 'nan'])
         opc_tar = sorted([str(x) for x in df_maestro_piezas['ID_Tarima'].dropna().unique() if str(x).strip() and str(x).lower() != 'nan'], key=_sort_int_key)
         
